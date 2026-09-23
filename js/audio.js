@@ -10,9 +10,7 @@ export class SoundEngine {
     this.enabled = enabled;
     this.src = src;
     this.ctx = null;
-    this.buffer = null;
     this.source = null;
-    this.startedAt = 0;
     this.free = 0;          // fallback clock when there is no audio
     this.playing = false;
     this.ready = false;
@@ -27,85 +25,104 @@ export class SoundEngine {
     this._cool = 0;
   }
 
-  // Decode ahead of time so playback can start instantly on the first tap.
+  // Stream the song through an <audio> element: it starts faster than
+  // decoding, and browsers reliably allow it once unlocked by a tap.
   async load() {
-    if (this.buffer || this._loading) return;
-    this._loading = true;
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) throw new Error('no webaudio');
-      this.ctx = this.ctx || new AC();
-      const res = await fetch(this.src);
-      if (!res.ok) throw new Error('fetch ' + res.status);
-      const raw = await res.arrayBuffer();
-      this.buffer = await this.ctx.decodeAudioData(raw);
-      this.ready = true;
-    } catch (e) {
-      console.warn('soundtrack unavailable:', e.message);
-      this.ready = false;
+    if (this.el) return;
+    const el = (this.el = new Audio());
+    el.src = this.src;
+    el.preload = 'auto';
+    el.playsInline = true;
+    el.setAttribute('playsinline', '');
+    await new Promise((res) => {
+      const done = () => { el.removeEventListener('canplaythrough', done); el.removeEventListener('error', fail); this.ready = true; res(); };
+      const fail = () => { console.warn('soundtrack unavailable'); res(); };
+      el.addEventListener('canplaythrough', done);
+      el.addEventListener('error', fail);
+      el.load();
+    });
+  }
+
+  // Must run synchronously inside a user gesture (pointerdown / keydown).
+  unlock() {
+    if (this.unlocked) return;
+    this.unlocked = true;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC && !this.ctx) this.ctx = new AC();
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    // play-and-pause inside the gesture so a later play() is allowed
+    if (this.el && !this.playing) {
+      const pr = this.el.play();
+      if (pr && pr.then) pr.then(() => { if (!this.playing) { this.el.pause(); this.el.currentTime = 0; } }).catch(() => {});
     }
-    this._loading = false;
   }
 
   start() {
     if (this.playing) return;
-    if (!this.ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) this.ctx = new AC();
-    }
     const ctx = this.ctx;
-    if (!ctx) { this.playing = true; return; }
-    if (ctx.state === 'suspended') ctx.resume();
-    this.master = ctx.createGain();
-    this.master.gain.value = this.enabled ? 1 : 0;
-    this.master.connect(ctx.destination);
-    // music bus, with an analyser tapped off it
-    this.musicGain = ctx.createGain();
-    this.musicGain.gain.value = 0;
-    this.musicGain.gain.linearRampToValueAtTime(0.92, ctx.currentTime + 2.0);
-    this.analyser = ctx.createAnalyser();
-    this.analyser.fftSize = 512;
-    this.analyser.smoothingTimeConstant = 0.72;
-    this.freq = new Uint8Array(this.analyser.frequencyBinCount);
-    this.musicGain.connect(this.analyser);
-    this.musicGain.connect(this.master);
-    // sfx bus, sat under the music
-    this.sfxBus = ctx.createGain();
-    this.sfxBus.gain.value = 0.34;
-    const verb = ctx.createConvolver();
-    const len = Math.floor(ctx.sampleRate * 2.2);
-    const imp = ctx.createBuffer(2, len, ctx.sampleRate);
-    for (let c = 0; c < 2; c++) {
-      const d = imp.getChannelData(c);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8);
-    }
-    verb.buffer = imp;
-    const vg = ctx.createGain();
-    vg.gain.value = 0.3;
-    this.sfxBus.connect(verb).connect(vg).connect(this.master);
-    this.sfxBus.connect(this.master);
-    if (this.buffer) {
-      const s = ctx.createBufferSource();
-      s.buffer = this.buffer;
-      s.connect(this.musicGain);
-      s.start();
-      this.source = s;
-      this.startedAt = ctx.currentTime;
-    }
     this.playing = true;
+    if (ctx) {
+      if (ctx.state === 'suspended') ctx.resume();
+      this.master = ctx.createGain();
+      this.master.gain.value = 1;
+      this.master.connect(ctx.destination);
+      this.sfxBus = ctx.createGain();
+      this.sfxBus.gain.value = this.enabled ? 0.34 : 0;
+      const verb = ctx.createConvolver();
+      const len = Math.floor(ctx.sampleRate * 2.2);
+      const imp = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let c = 0; c < 2; c++) {
+        const d = imp.getChannelData(c);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8);
+      }
+      verb.buffer = imp;
+      const vg = ctx.createGain();
+      vg.gain.value = 0.3;
+      this.sfxBus.connect(verb).connect(vg).connect(this.master);
+      this.sfxBus.connect(this.master);
+    }
+    if (this.el) {
+      const el = this.el;
+      el.currentTime = 0;
+      el.volume = this.enabled ? 1 : 0;
+      el.muted = !this.enabled;
+      // tap the element for the analyser; if that fails it still plays
+      let same = false;
+      try { same = new URL(el.currentSrc || el.src, location.href).origin === location.origin; } catch (e) { /* ignore */ }
+      if (ctx && !this.analyser && same) {
+        try {
+          const src = ctx.createMediaElementSource(el);
+          this.analyser = ctx.createAnalyser();
+          this.analyser.fftSize = 512;
+          this.analyser.smoothingTimeConstant = 0.72;
+          this.freq = new Uint8Array(this.analyser.frequencyBinCount);
+          src.connect(this.analyser);
+          this.analyser.connect(this.master);
+        } catch (e) { this.analyser = null; }
+      }
+      const pr = el.play();
+      if (pr && pr.catch) pr.catch((e) => { console.warn('play blocked:', e.message); this.blocked = true; });
+      this.source = el;
+    }
+  }
+
+  // Retry from a later tap if the first play() was refused.
+  retry() {
+    if (this.blocked && this.el) { this.blocked = false; this.unlocked = false; this.unlock(); this.el.play().catch(() => { this.blocked = true; }); }
   }
 
   // Song position in seconds. Falls back to a free-running clock.
   get time() {
-    if (this.source && this.ctx && !this.sim) return this.ctx.currentTime - this.startedAt;
+    if (this.source && !this.sim && !this.source.paused) return this.source.currentTime;
+    if (this.source && !this.sim && this.source.currentTime > 0) return this.source.currentTime;
     return this.free;
   }
 
-  get duration() { return this.buffer ? this.buffer.duration : 225.4; }
+  get duration() { return (this.el && this.el.duration) || 225.4; }
 
   update(dt) {
     if (!this.playing) return;
-    if (!this.source || this.sim) this.free += dt;
+    if (!this.source || this.sim || this.blocked || (this.source.paused && this.source.currentTime === 0)) this.free += dt;
     this.pulse = Math.max(0, this.pulse - dt * 3.2);
     this.beat = Math.max(0, this.beat - dt * 2.4);
     if (!this.analyser || this.sim) {
@@ -138,8 +155,8 @@ export class SoundEngine {
 
   setEnabled(on) {
     this.enabled = on;
-    if (!this.ctx) return;
-    if (this.master) this.master.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.05);
+    if (this.el) { this.el.muted = !on; this.el.volume = on ? 1 : 0; }
+    if (this.sfxBus && this.ctx) this.sfxBus.gain.setTargetAtTime(on ? 0.34 : 0, this.ctx.currentTime, 0.05);
   }
 
   // ------------------------------------------------------------------ sfx --

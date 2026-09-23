@@ -68,15 +68,16 @@ function toLow(e) {
   const r = view.getBoundingClientRect();
   return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H];
 }
-view.addEventListener('pointerdown', (e) => { if (story) { const [x, y] = toLow(e); story.pointer('down', x, y); } });
+view.addEventListener('pointerdown', (e) => { if (story) { story.sound.unlock(); story.sound.retry(); const [x, y] = toLow(e); story.pointer('down', x, y); } });
 view.addEventListener('pointermove', (e) => { if (story) { const [x, y] = toLow(e); story.pointer('move', x, y); view.classList.toggle('pointer', story.hoverClickable); } });
 view.addEventListener('pointerup', (e) => { if (story) { const [x, y] = toLow(e); story.pointer('up', x, y); } });
-window.addEventListener('keydown', (e) => { if (story && (e.key === ' ' || e.key === 'Enter')) story.pointer('key', W / 2, H / 2); });
+window.addEventListener('keydown', (e) => { if (story && (e.key === ' ' || e.key === 'Enter')) { story.sound.unlock(); story.pointer('key', W / 2, H / 2); } });
 window.addEventListener('resize', () => resize());
 document.addEventListener('visibilitychange', () => {
   const snd = story && story.sound;
   if (!snd || !snd.ctx) return;
-  if (document.hidden) snd.ctx.suspend(); else if (snd.enabled) snd.ctx.resume();
+  if (document.hidden) { snd.ctx.suspend(); if (snd.el && snd.playing) snd.el.pause(); }
+  else { snd.ctx.resume(); if (snd.el && snd.playing) snd.el.play().catch(() => {}); }
 });
 
 // -------------------------------------------------------------------- boot --

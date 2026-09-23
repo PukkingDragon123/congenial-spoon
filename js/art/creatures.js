@@ -262,13 +262,15 @@ const JELLY_PALS = {
   blue: { rim: [210, 245, 255], body: [130, 200, 245], deep: [70, 130, 210], gon: [180, 240, 255], arm: [150, 210, 250] },
   violet: { rim: [238, 220, 255], body: [184, 146, 248], deep: [120, 80, 206], gon: [222, 176, 255], arm: [198, 164, 250] },
   gold: { rim: [255, 246, 214], body: [252, 204, 136], deep: [214, 134, 74], gon: [255, 224, 156], arm: [250, 212, 154] },
+  nettle: { rim: [255, 236, 200], body: [244, 170, 96], deep: [196, 96, 50], gon: [255, 200, 130], arm: [255, 214, 170], long: true },
 };
 export function renderJelly(size, frame, hue = 'pink') {
   return cached('jelly|' + size + '|' + frame + '|' + hue, () => {
     const ph = (frame / JELLY_FRAMES) * TAU;
     const pulse = Math.pow(Math.max(0, Math.sin(ph)), 1.5);
     const bw = size * (1 - 0.18 * pulse), bh = size * 0.62 * (1 + 0.16 * pulse);
-    const W = Math.ceil(size * 1.4), H = Math.ceil(size * 2.6);
+    const long = (JELLY_PALS[hue] || {}).long;
+    const W = Math.ceil(size * 1.4), H = Math.ceil(size * (long ? 4.6 : 2.6));
     const cx = W / 2, top = Math.round(size * 0.15);
     const buf = new Buf(W, H);
     const pal = JELLY_PALS[hue] || JELLY_PALS.blue;
@@ -283,10 +285,13 @@ export function renderJelly(size, frame, hue = 'pink') {
           const edge = 1 - r;
           let col = pal.body, a = 120 + edge * 30;
           if (edge < 0.18) { col = pal.rim; a = 215; }
-          // four-leaf gonads
-          const gx = x * 1.25, gy = (y + 0.42) * 2.1;
-          const gr = Math.hypot(gx, gy);
-          if (gr < 0.62 && gr > 0.34 && gy > -0.5) { col = pal.gon; a = 150 + 60 * Math.abs(Math.sin(Math.atan2(gy, gx) * 2)); }
+          // four soft glowing petals (solid lobes, no rings, so no faces)
+          for (let q = 0; q < 4; q++) {
+            const an = Math.PI / 4 + q * Math.PI / 2;
+            const px2 = Math.cos(an) * 0.3, py2 = -0.46 + Math.sin(an) * 0.16;
+            const d = Math.hypot((x - px2) / 0.2, (y - py2) / 0.13);
+            if (d < 1) { col = mixRGB(col, pal.gon, 0.8 * (1 - d * d)); a = Math.max(a, 150 + 60 * (1 - d)); }
+          }
           if (y > -0.05) { col = pal.deep; a = 170; }
           buf.set(px, py, col, a);
         }
@@ -296,7 +301,7 @@ export function renderJelly(size, frame, hue = 'pink') {
     const baseY = top + bh * 1.02;
     for (let k = 0; k < 4; k++) {
       const off = (k - 1.5) * bw * 0.12;
-      const len = size * 1.3;
+      const len = size * (pal.long ? 2.6 : 1.3);
       for (let i = 0; i < len; i++) {
         const t = i / len;
         const x = cx + off + Math.sin(ph * 1 - t * 6 + k) * t * size * 0.16;
@@ -309,7 +314,7 @@ export function renderJelly(size, frame, hue = 'pink') {
     }
     for (let k = 0; k < 9; k++) {
       const x0 = cx + (k / 8 - 0.5) * bw * 0.92;
-      const len = size * (1.6 + hash2(k, 1, 2) * 0.6);
+      const len = size * (1.6 + hash2(k, 1, 2) * 0.6) * (pal.long ? 1.9 : 1);
       for (let i = 0; i < len; i++) {
         const t = i / len;
         const x = x0 + Math.sin(ph - t * 5 + k * 0.7) * t * size * 0.2;

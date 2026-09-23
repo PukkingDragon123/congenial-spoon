@@ -188,7 +188,7 @@ function drawSide(R, C, ox, f, p) {
       const sw = 0.3 * Math.sin(ph + (i ? 0 : Math.PI)) * moving;
       tx = sx + Math.sin(sw) * (C.ua + C.fa - 3) * f; ty = sy + Math.cos(sw) * (C.ua + C.fa - 3);
     }
-    const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, f > 0 ? -1 : 1);
+    const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, f > 0 ? 1 : -1);
     const r0 = C.girl ? 1.9 : 2.5, r1 = C.girl ? 1.5 : 2.0, r2 = C.girl ? 1.3 : 1.7;
     R.capsule(sx, sy, ex, ey, r0, r1, MAT.skin, sh);
     R.capsule(ex, ey, wx, wy, r1, r2, MAT.skin, sh);

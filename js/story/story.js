@@ -49,6 +49,10 @@ export class Story {
     this.lyricQueue = (CONFIG.lyrics || []).map(([t, text, band]) => ({ t, text, band: band || 'high' }));
     this.lyrics = [];
     this.waveAcc = 0;
+    this.goal = null;
+    this.pearls = 0;
+    this.floaters = [];
+    this.hud = false;
     this.stage.cam.x = this.camX;
     aq.couple.mode = 'walk';
     this.stage.coupleX = CX - 330;
@@ -97,16 +101,18 @@ export class Story {
     if (debug) {
       await this.mainReady;
       this.post.p.blur = 0; this.post.p.dim = 0;
-      const jump = { jelly: 8, reef: 38, heart: 55, bottle: 90, letter: 110, question: 136, finale: 151 };
+      const jump = { tank: 8, reef: 37, jelly: 71, bottle: 99, letter: 110, question: 136, finale: 151 };
       this.songOffset = jump[debug] ?? 0;
       this.sound.start();
       this.showSpeaker = CONFIG.sound;
-      const order = ['jelly', 'reef', 'heart', 'bottle', 'letter', 'question', 'finale'];
+      const order = ['tank', 'reef', 'jelly', 'bottle', 'letter', 'question', 'finale'];
       const from = Math.max(0, order.indexOf(debug));
-      if (from >= 2) this.enterMainTank();
-      if (from <= 0) await this.jellyScene();
-      if (from <= 1) { if (from === 1) this.setStage(this.rooms.reef || aq); await this.reefScene(); await this.toMainTank(); }
-      if (from <= 2) await this.heartScene();
+      if (from === 0) this.enterMainTank(true);
+      if (from >= 3) this.enterMainTank();
+      if (from <= 0) await this.mainIntro();
+      if (from <= 1) await this.reefScene();
+      if (from <= 2) await this.jellyScene();
+      if (from === 2 || from < 2) await this.toBottle();
       if (from <= 3) await this.bottleScene();
       if (from <= 4) await this.letterScene();
       if (from <= 5) await this.questionScene();
@@ -115,10 +121,10 @@ export class Story {
     }
     await this.titleScene();
     await this.dive();
-    await this.jellyScene();
+    await this.mainIntro();
     await this.reefScene();
-    await this.toMainTank();
-    await this.heartScene();
+    await this.jellyScene();
+    await this.toBottle();
     await this.bottleScene();
     await this.letterScene();
     await this.questionScene();
@@ -216,35 +222,100 @@ export class Story {
     await this.until(() => tr.covered());
     this.title = null;
     this.fxBack.clear();
+    this.enterMainTank(true);
+    this.hud = true;
     this.stage.sendWave(CX - 700, 1, { speed: 900, amp: 7, width: 220, life: 3 });
     await this.until(() => tr.done);
     this.trans = null;
     this.tween(1.4, (k) => { p.warp = 0.7 * (1 - k); });
   }
 
-  // Intro + first verse in the jellyfish hall.
-  async jellyScene() {
-    const st = this.stage, c = this.aq.couple;
-    this.tween(22, (k) => { this.camX = lerp(CX - 260, CX, k); }, ease.inOutSine);
-    await this.walkTo(CX, 25.5);
-    await this.atSong(27.2);
-    await this.turnToGlass();
-    await this.atSong(31.0);
-    await this.tween(2.4, (k) => { c.hold = k; }, ease.inOutCubic);
-    this.heartPop(st, st.coupleX, st.coupleY - 34);
-    st.startle(st.coupleX, 160, 400, 0.4);
-    await this.atSong(34.5);
-    await this.tween(3.0, (k) => { c.lean = k; }, ease.inOutSine);
+  // ------------------------------------------------------ game layer --
+  // A little objective with a counter; tapping the right creatures fills it.
+  setGoal(label, need = 0, match = null) {
+    this.goal = { label, need, got: 0, match, a: 0, done: false };
+    const G = this.goal;
+    this.tween(0.6, (k) => { G.a = k; });
+    this.sound.sfx('chime');
+  }
+  clearGoal() {
+    const G = this.goal;
+    if (!G) return;
+    this.tween(0.5, (k) => { G.a = 1 - k; }).then(() => { if (this.goal === G) this.goal = null; });
   }
 
-  // Through a bloom of light into the coral reef.
+  // Tap a creature: it reacts, you get a pearl, and it may count to the goal.
+  tapCreature(x, y) {
+    const st = this.stage;
+    let best = null, bd = 1e9;
+    for (const c of st.creatures) {
+      const [sx, sy] = st.toScreen(c.x, c.y - (c.kind === 'crab' ? 5 : 0), c.z);
+      const r = Math.max(9, (c.len || c.size || 16) * 0.45);
+      const d = Math.hypot(sx - x, sy - y);
+      if (d < r && d < bd) { bd = d; best = c; }
+    }
+    if (!best) {
+      // a tap in empty water still makes a splash
+      popRing(this.fx, x, y, { r1: 12, life: 0.4 });
+      for (let i = 0; i < 4; i++) this.fx.add({ kind: 'bubble', x, y, vx: (R() - 0.5) * 30, vy: -20 - R() * 30, drag: 1.5, age: 0, life: 1, r: 1 + (R() * 2 | 0) });
+      this.sound.sfx('escape');
+      return;
+    }
+    best.react(best.x + (R() - 0.5) * 4, best.y + 8, 0.9);
+    if (best.kind === 'crab') best.hop = 1;
+    if (best.kind === 'jelly') best.lit = 1.6;
+    popRing(this.fx, x, y, { r1: 18, col: '#fff6c0' });
+    burstStars(this.fx, x, y, 6, { speed: 40, size: 4 });
+    const G = this.goal;
+    const counts = G && !G.done && G.match && G.match(best) && !best.counted;
+    if (counts) best.counted = true;
+    this.pearls = (this.pearls || 0) + (counts ? 3 : 1);
+    this.floaters.push({ x, y: y - 6, text: counts ? '+3' : '+1', age: 0 });
+    this.sound.sfx(counts ? 'sparkle' : 'pop');
+    if (counts) {
+      G.got++;
+      if (G.got >= G.need) {
+        G.done = true;
+        this.sound.sfx('yes');
+        burstStars(this.fx, this.W / 2, 14, 16, { speed: 70, size: 6 });
+        this.floaters.push({ x: this.W / 2, y: 26, text: 'goal complete!', age: 0, big: true });
+        st.sendWave(st.cam.x - 700, 1, { speed: 800, amp: 6, width: 200 });
+      }
+    }
+  }
+
+  // Put the couple at the big window.
+  enterMainTank(fresh = false) {
+    const aq = this.aq, c = aq.couple;
+    this.camX = fresh ? CX - 300 : CX;
+    this.setStage(aq);
+    aq.coupleX = fresh ? CX - 340 : CX;
+    c.flip = 1; c.moving = 0;
+    if (fresh) { c.mode = 'walk'; c.hold = 0; c.lean = 0; } else { c.mode = 'back'; c.hold = 1; c.lean = 1; }
+  }
+
+  // Chapter 1: the great Buddha tank. Just two people visiting an aquarium.
+  async mainIntro() {
+    const c = this.aq.couple;
+    this.tween(18, (k) => { this.camX = lerp(CX - 300, CX, k); }, ease.inOutSine);
+    await this.atSong(9.0);
+    this.setGoal('say hi to the fish', 5, (k) => k.kind !== 'crab');
+    await this.walkTo(CX, 22);
+    await this.atSong(24);
+    await this.turnToGlass();
+    c.hold = 0; c.lean = 0;
+    await this.atSong(37.4);
+    this.clearGoal();
+  }
+
+  // Chapter 2: the clownfish reef, and a fish party on the first chorus.
   async reefScene() {
     const reef = this.rooms.reef;
     const c = this.aq.couple;
     if (reef && this.stage !== reef) {
-      await this.atSong(38.4);
-      this.sound.sfx('chime');
-      await this.go(reef, new LightBloom(this.W, this.H, 2.6, [190, 245, 255]), () => {
+      await this.atSong(37.8);
+      this.sound.sfx('whoosh');
+      await this.go(reef, new Sweep(this.W, this.H, 2.9), () => {
         this.camX = CX - 220;
         reef.cam.x = this.camX;
         reef.coupleX = CX - 280;
@@ -253,125 +324,64 @@ export class Story {
     }
     const st = this.stage;
     this.tween(12, (k) => { this.camX = lerp(CX - 220, CX + 10, k); }, ease.inOutSine);
-    await this.walkTo(CX - 20, 46.5);
+    this.setGoal('find the clownfish', 3, (k) => k.kind === 'clown');
+    await this.walkTo(CX - 20, 50);
     await this.turnToGlass();
-    // the clownfish come out to look at them
-    if (st.anemones) for (const a of st.anemones) st.startle(a.x, st.floorY(a.z) - 20, 60, 0.6);
-    await this.tween(1.6, (k) => { c.hold = k; }, ease.inOutCubic);
-    await this.atSong(50.5);
-    this.heartPop(st, st.coupleX, st.coupleY - 34);
-    st.sendWave(CX - 600, 1, { speed: 700, amp: 5, width: 180 });
-    this.tween(2.4, (k) => { c.lean = k; }, ease.inOutSine);
-  }
-
-  // Put the couple at the big window, standing hand in hand.
-  enterMainTank() {
-    const aq = this.aq, c = aq.couple;
-    this.camX = CX;
-    this.setStage(aq);
-    aq.coupleX = CX;
-    c.mode = 'back'; c.hold = 1; c.lean = 1; c.flip = 1; c.moving = 0;
-  }
-
-  // A wall of fish sweeps the reef away and reveals the great Buddha tank
-  // right on the lift into the chorus.
-  async toMainTank() {
-    await this.atSong(54.6);
-    this.sound.sfx('whoosh');
-    await this.go(this.aq, new Sweep(this.W, this.H, 2.9), () => this.enterMainTank());
-  }
-
-  // Swirling heart of trevally around the statue.
-  formHeart(fish, cx, cy, cz, s, t0, full = false, center = null) {
-    // a thick outline of nested hearts, each circulating the other way; fish
-    // are spaced by arc length so none bunch up at the tip or the dip
-    const rings = full ? [[1, 0.36], [0.92, 0.33], [0.84, 0.31]] : [[1, 0.46], [0.88, 0.32], [0.76, 0.22]];
-    const MIDY = 0.12; // the heart's visual centre in heart units
-    let idx = 0;
-    const n = fish.length;
-    rings.forEach(([sc, frac], j) => {
-      const cnt = j === rings.length - 1 ? n - idx : Math.round(n * frac);
-      const dir = j % 2 ? -1 : 1;
-      const loops = 0.03 / sc; // laps per second
-      for (let i = 0; i < cnt && idx < n; i++, idx++) {
-        const f = fish[idx];
-        const u0 = i / cnt + j * 0.13;
-        const zo = cz + (j - 1) * 0.012 + Math.sin(u0 * TAU * 3) * 0.008;
-        f.form = (t) => {
-          const [hx, hy] = heartArc(u0 + dir * loops * (t - t0));
-          const [ox, oy] = center ? center(t) : [cx, cy];
-          return [ox + hx * s * sc, oy + (MIDY + (hy - MIDY) * sc) * s, zo];
-        };
-        f.formK = 0;
-      }
-    });
-  }
-
-  releaseForm(fish, burst = 0, from = null) {
-    for (const f of fish) {
-      f.form = null;
-      f.formK = 0;
-      f.faceOverride = 0;
-      f.mode = 'school';
-      if (burst && from) {
-        const dx = f.x - from[0], dy = f.y - from[1];
-        const d = Math.hypot(dx, dy) || 1;
-        f.vx += (dx / d) * burst * (0.6 + R() * 0.6);
-        f.vy += (dy / d) * burst * (0.6 + R() * 0.6);
-        f.flash = 1;
-      }
-    }
-  }
-
-  async heartScene() {
-    const aq = this.aq;
-    // big enough that the Buddha's face shows through the middle
-    const s = Math.min(96, this.W * 0.36);
-    const cx = CX + 34, cy = 146, cz = 0.3;
-    // the minnows rush in on the lift into the chorus...
-    await this.atSong(57.2);
-    this.formHeart(aq.bait, cx, cy, cz, s, aq.t, true);
-    for (const f of aq.bait) f.formFace = 0;
-    const glow = { x: cx, y: cy + 14, z: 0.34, r: Math.round(s * 1.5), col: '#ff5aa0', a: 0, beat: true };
-    aq.glows.push(glow);
-    this.tween(3.4, (k) => { for (const f of aq.bait) f.formK = k; glow.a = 0.5 * k; }, ease.inOutSine);
-    // ... and it lands on the downbeat
-    await this.atSong(60.4);
-    this.sound.sfx('sparkle');
-    this.heartSparkle = { cx, cy, cz, s };
-    aq.sendWave(CX - 800, 1, { speed: 780, amp: 6, width: 200, life: 3 });
-    burstStars(aq.fx, cx, cy, 16, { speed: 70, size: 6 });
+    await this.atSong(60.2);
+    // the chorus hits: everyone dances
     this.chorus = true;
-    // the crabs scuttle over and line up under the heart to wave along
-    await this.atSong(64.0);
-    const crabs = aq.crabs || [];
-    crabs.forEach((k, i) => {
-      const n = crabs.length, u = n > 1 ? i / (n - 1) - 0.5 : 0;
-      k.form = [cx - 6 + u * 320, 0.05 + Math.abs(u) * 0.2];
-    });
-    await this.atSong(70.0);
-    aq.sendWave(CX + 800, -1, { speed: 700, amp: 5, width: 200, life: 3 });
-    await this.atSong(78.0);
-    for (let i = 0; i < 4; i++) this.spawnJelly();
-    await this.atSong(86.0);
+    for (const k of st.creatures) if (k.kind === 'crab') { k.state = 'wave'; k.timer = 12; }
+    if (st.anemones) for (const a of st.anemones) st.startle(a.x, st.floorY(a.z) - 20, 70, 0.8);
+    burstStars(this.fx, this.W / 2, this.H * 0.35, 20, { speed: 90, size: 6 });
+    st.sendWave(CX - 600, 1, { speed: 700, amp: 6, width: 180 });
+    await this.atSong(71.2);
     this.chorus = false;
-    this.heartSparkle = null;
-    this.releaseForm(aq.bait, 40, [cx, cy + 14]);
-    for (const k of crabs) { k.form = null; k.react(cx, aq.floorY(0.1), 0.8); }
-    popRing(this.fx, ...aq.toScreen(cx, cy + 10, cz), { r1: 90, life: 0.9, col: '#ffb3d4' });
-    aq.startle(cx, cy, 320, 0.8);
-    this.tween(2, (k) => { glow.a = 0.5 * (1 - k); }).then(() => { aq.glows.splice(aq.glows.indexOf(glow), 1); });
+    this.clearGoal();
+  }
+
+  // Chapter 3: the jellyfish hall. Something softer starts to show.
+  async jellyScene() {
+    const jel = this.rooms.jelly;
+    const c = this.aq.couple;
+    if (jel && this.stage !== jel) {
+      await this.atSong(71.6);
+      this.sound.sfx('chime');
+      await this.go(jel, new LightBloom(this.W, this.H, 2.6, [210, 190, 255]), () => {
+        this.camX = CX - 260;
+        jel.cam.x = this.camX;
+        jel.coupleX = CX - 320;
+        c.hold = 0; c.lean = 0; c.mode = 'walk';
+      });
+    }
+    this.tween(14, (k) => { this.camX = lerp(CX - 260, CX, k); }, ease.inOutSine);
+    this.setGoal('light up the jellies', 5, (k) => k.kind === 'jelly');
+    await this.walkTo(CX, 84);
+    await this.turnToGlass();
+    await this.atSong(88);
+    await this.tween(2.6, (k) => { c.hold = k; }, ease.inOutCubic);
+    await this.atSong(93.5);
+    this.tween(3, (k) => { c.lean = k; }, ease.inOutSine);
+    await this.atSong(98.8);
+    this.clearGoal();
+  }
+
+  // Back to the big tank for the turn: something is sinking...
+  async toBottle() {
+    await this.atSong(99.2);
+    this.sound.sfx('dive');
+    await this.go(this.aq, new BubbleCurtain(this.W, this.H, 2.8), () => this.enterMainTank());
+    this.hud = false;
   }
 
   async bottleScene() {
     const aq = this.aq;
-    await this.atSong(91.0);
+    await this.atSong(101.0);
     const b = (this.bottle = { x: CX - 58, y: aq.yTop - 40, z: 0.05, ang: 0.6, a: 1, base: 196, glow: 0, bob: 0, landed: false });
     const self = this;
     b.draw = (ctx) => self.drawBottle(ctx);
     aq.extras = [b];
     this.sound.sfx('whoosh');
-    await this.tween(7.0, (k) => {
+    await this.tween(6.0, (k) => {
       b.y = lerp(aq.yTop - 40, b.base, ease.outCubic(k));
       b.ang = 0.6 * Math.cos(k * 7) * (1 - k) + 0.1;
       if (R() < 0.5) aq.bubbles.add({ kind: 'bubble', x: b.x + (R() - 0.5) * 8, y: b.y - 6, z: b.z, vx: 0, vy: -20 - R() * 20, age: 0, life: 6, r: R() < 0.7 ? 1 : 2, wob: 8, wobF: 5, ph: R() * TAU, fade: false });
@@ -730,6 +740,9 @@ export class Story {
       if (this.heartSparkle) { this.heartSparkle.cx = x; this.heartSparkle.cy = y; }
     }
     this.updateLyrics(dt);
+    for (const f of this.floaters) f.age += dt;
+    this.floaters = this.floaters.filter((f) => f.age < 1.2);
+    for (const k of st.creatures) if (k.lit) k.lit = Math.max(0, k.lit - dt * 0.6);
     if (this.trans) this.trans.update(dt);
     this.fx.update(dt);
     this.fxBack.update(dt);
@@ -814,8 +827,9 @@ export class Story {
     }
     if (this.tapWait) {
       const tw = this.tapWait;
-      if (type === 'key' || !tw.check || tw.check(x, y)) { this.tapWait = null; tw.res(); }
+      if (type === 'key' || !tw.check || tw.check(x, y)) { this.tapWait = null; tw.res(); return; }
     }
+    if (type === 'down' && this.hud && !this.trans && !this.letter) this.tapCreature(x, y);
   }
 
   escapeNo(px, py) {
@@ -883,7 +897,7 @@ export class Story {
       const lit = Math.abs(cx - x0 - sweep) < 10 * sc;
       drawText(ctx, ch, cx, y + dy, { scale: sc, color: lit ? '#ffffff' : '#d8f0ff', outline: '#0a1a44', shadow: '#ff5a9a', alpha: T.a });
     });
-    drawText(ctx, 'for ' + CONFIG.to, W / 2, y + 9 * sc + 8, { align: 'center', color: '#ffb3d4', outline: '#2a0a24', alpha: T.a });
+    drawText(ctx, CONFIG.subtitle, W / 2, y + 9 * sc + 8, { align: 'center', color: '#ffb3d4', outline: '#2a0a24', alpha: T.a });
   }
 
   drawHint(ctx) {
@@ -973,6 +987,27 @@ export class Story {
     drawText(ctx, fill(CONFIG.finaleSub), this.W / 2, y + 7 * sc + 6, { align: 'center', color: '#ffc4e0', outline: '#2a0a24', alpha: F.a * 0.9 });
   }
 
+  drawHud(ctx) {
+    for (const f of this.floaters) {
+      const k = f.age / 1.2;
+      drawText(ctx, f.text, Math.round(f.x), Math.round(f.y - k * 14), { align: 'center', scale: f.big ? 2 : 1, color: '#fff6c0', outline: '#4a2a00', alpha: 1 - k * k });
+    }
+    if (!this.hud) return;
+    // pearl counter
+    const pill = (x, w, a = 1) => { ctx.globalAlpha = 0.55 * a; ctx.fillStyle = '#04102a'; ctx.fillRect(x, 3, w, 13); ctx.fillRect(x + 1, 2, w - 2, 15); ctx.globalAlpha = 1; };
+    pill(3, textWidth(String(this.pearls)) + 20);
+    const b = bubbleSprite(3);
+    ctx.drawImage(b, 6, 5);
+    drawText(ctx, String(this.pearls), 18, 6, { color: '#ffffff', outline: '#0a2a5c' });
+    const G = this.goal;
+    if (G && G.a > 0) {
+      const txt = G.need ? `${G.done ? '✓ ' : ''}${G.label}  ${Math.min(G.got, G.need)}/${G.need}` : G.label;
+      const tw = textWidth(txt) + 12;
+      pill(Math.round(this.W / 2 - tw / 2), tw, G.a);
+      drawText(ctx, txt, this.W / 2, 6, { align: 'center', color: G.done ? '#b8ffb0' : '#ffffff', outline: '#0a2a5c', alpha: G.a * (G.done ? 1 : 0.85 + 0.15 * Math.sin(this.t * 3)) });
+    }
+  }
+
   draw(ctx) {
     this.fxBack.draw(ctx);
     if (this.title) this.drawTitle(ctx);
@@ -983,6 +1018,7 @@ export class Story {
     if (this.finale) this.drawFinale(ctx);
     if (this.hint) this.drawHint(ctx);
     this.fx.draw(ctx);
+    this.drawHud(ctx);
     if (this.trans) this.trans.draw(ctx);
     if (this.replay) {
       const [x, y, w] = this.replayRect();

@@ -16,14 +16,16 @@ Every beat is pinned to a moment in the track, and the whole tank moves with
 the music: fish bounce and squash on the beat, waves ripple through the
 schools, crabs wave their claws, and the light breathes with the song.
 
-1. **Title** (before the music): the jellyfish hall glows behind the title. Tap to dive in and start the song.
-2. **Dive** (0:05): bubbles swell, then an arched wall of foam rushes up and reveals the hall.
-3. **Jellyfish hall** (intro and first verse): the couple strolls in under drifting, colour-shifting jellies, turns to the glass, holds hands and leans in.
-4. **Coral reef** (0:38): a bloom of light carries them into a bright reef. Clownfish peek out of their anemones and crabs potter about on the sand.
-5. **The Buddha tank** (0:55): a wall of fish sweeps the reef away right on the lift into the chorus. The minnows pour into a swirling heart around the Buddha, and the crabs line up underneath to dance.
-6. **Message in a bottle** (1:31): a bottle sinks to the glass. Tap it, or wait, and a letter unrolls and types itself out over the second verse.
-7. **The words** (2:16): foam rushes up for the big chorus, the minnows spell `I ♥ YOU`, and the question appears with **YES ♥** and **no**. The "no" button runs away.
-8. **Finale**: after "yes", a whale shark glides out of the blue carrying a heart of minnows on its back while the trevally circle it. The couple share a forehead kiss, jellies rise and hearts float up from the sand.
+It plays like a little aquarium game at first, and only turns into a
+confession at the turn of the song.
+
+1. **Title** (before the music): "Beneath the Blue, an aquarium adventure". Tap to dive in and start the song.
+2. **The Buddha tank** (0:05): a wall of foam reveals the great window. Goal: *say hi to the fish*. Tap creatures to make them react and collect pearls.
+3. **Clownfish reef** (0:38): goal: *find the clownfish*. On the first chorus the whole reef throws a fish party.
+4. **Jellyfish hall** (1:12): goal: *light up the jellies*. The couple quietly take each other's hand.
+5. **The turn** (1:39): back at the Buddha tank a bottle sinks to the glass. Tap it and the letter unrolls. This is where the game stops pretending.
+6. **The words** (2:16): foam rushes up for the big chorus, the minnows spell `I ♥ YOU`, and the question appears with **YES ♥** and **no**. The "no" button runs away.
+7. **Finale**: after "yes", a whale shark glides in carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
 Lines of text drift up through the water between the beats, each letter in
 its own bubble. They are in `js/config.js` under `lyrics`.
@@ -61,9 +63,7 @@ npx serve .            # or: python3 -m http.server
 ```
 
 To deploy, publish the folder as-is on GitHub Pages, Netlify or Vercel. There
-is no build step. The song is a commercial track: sharing it privately with
-one person is one thing, but check the rights before posting the page
-publicly.
+is no build step.
 
 ## Tech notes
 
@@ -101,7 +101,7 @@ publicly.
 
 ### Dev helpers
 
-- `?scene=jelly|reef|heart|bottle|letter|question|finale` jumps to a beat.
+- `?scene=tank|reef|jelly|bottle|letter|question|finale` jumps to a beat.
 - `?sim=1` makes the story follow the simulated clock instead of the audio (for headless tests).
 - `?speed=2` runs time faster.
 - `?gl=0` forces the plain-2D fallback renderer (no bloom or blur).

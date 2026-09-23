@@ -12,6 +12,7 @@ export const CONFIG = {
 
   // Title card shown before diving in
   title: 'Beneath the Blue',
+  subtitle: 'an aquarium adventure',
   tapToBegin: 'tap to dive in',
 
   // Written by the fish school in the tank (keep it short: 2-10 characters
@@ -54,18 +55,9 @@ export const CONFIG = {
   // (including the real lyrics, if you have the right to use them).
   //   [ time, text, band ]   band: 'high' (default, open water up top) | 'low'
   lyrics: [
-    [30.0, 'i keep finding you'],
-    [37.0, 'in every blue room'],
-    [44.5, 'the whole ocean moved'],
-    [51.5, 'and i still only saw you'],
-
-    [62.0, 'always'],
-    [69.0, "that's the word"],
-    [76.0, 'for how long'],
-    [82.5, "i'll look at you like this"],
-
-    [96.0, "i'm no good"],
-    [103.0, 'at saying the big things'],
+    // nothing is said until the turn of the song
+    [104.0, "i'm no good"],
+    [109.0, 'at saying the big things'],
 
     [142.0, 'always'],
     [150.5, 'still always'],

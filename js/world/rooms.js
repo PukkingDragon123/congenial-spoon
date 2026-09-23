@@ -315,6 +315,23 @@ export class JellyRoom extends Room {
       j.vx = 0; j.vy = -j.speed;
       this.creatures.push(j);
     }
+    // a few sea nettles trailing long ribbons, and big gentle hero jellies up front
+    for (let i = 0; i < 5; i++) {
+      const z = 0.2 + r() * 0.6;
+      const j = new Creature('jelly', { x: CX + (r() - 0.5) * this.spread, y: top + r() * (bot - top), z, len: z < 0.45 ? 22 : 16, speed: 2 + r() * 2.5, mode: 'rise', anim: 1.8 + r() });
+      j.hue = 'nettle'; j.vx = 0; j.vy = -j.speed;
+      this.creatures.push(j);
+    }
+    for (let i = 0; i < 3; i++) {
+      const j = new Creature('jelly', { x: CX + (i - 1) * this.spread * 0.33 + (r() - 0.5) * 40, y: top + 40 + r() * (bot - top - 80), z: 0.02 + r() * 0.05, len: 40 + ((r() * 2) | 0) * 6, speed: 1.6 + r(), mode: 'rise', anim: 1.6 });
+      j.hue = ['pink', 'violet', 'blue'][i]; j.vx = 0; j.vy = -j.speed;
+      this.creatures.push(j);
+    }
+    // comb jellies: tiny ovals with rainbow shimmer running down their rows
+    this.combs = [];
+    for (let i = 0; i < 12; i++) this.combs.push({ x: CX + (r() - 0.5) * this.spread, y: top + r() * (bot - top), z: 0.1 + r() * 0.7, ph: r() * TAU, s: 3 + ((r() * 3) | 0), vx: (r() - 0.5) * 6, vy: -1 - r() * 2 });
+    const self = this;
+    for (const cb of this.combs) this.decor.push({ get z() { return cb.z; }, draw(ctx) { self.drawComb(ctx, cb); } });
     for (let i = 0; i < 6; i++) this.shafts.push({ x: CX + (i - 2.5) * 150 + (r() - 0.5) * 60, z: 0.5 + r() * 0.4, w: 26 + r() * 30, f: 0.2 + r() * 0.3, ph: r() * TAU });
     this.makeMotes(130, ['#ffffff', '#ffd6f0', '#d8c8ff', '#bff4ff', '#fff2c0'], { rise: 2.5, a: 0.9 });
     // warm the jelly sprites that are on screen at the title
@@ -355,7 +372,36 @@ export class JellyRoom extends Room {
     });
   }
 
-  tick() {
+  drawComb(ctx, c) {
+    const [sx, sy] = this.toScreen(c.x, c.y, c.z);
+    if (sx < -10 || sx > this.W + 10) return;
+    const X = Math.round(sx), Y = Math.round(sy);
+    const s = Math.max(2, Math.round(c.s * (1 - c.z * 0.4)));
+    ctx.globalAlpha = 0.5 * (1 - c.z * 0.5);
+    ctx.fillStyle = '#cfe8ff';
+    ctx.fillRect(X - 1, Y - s, 3, s * 2 + 1);
+    ctx.fillRect(X - 2, Y - s + 1, 5, s * 2 - 1);
+    // eight rows of cilia flashing rainbow in a running wave
+    for (let k = 0; k < s * 2; k++) {
+      const h = (this.t * 240 + k * 45 + c.ph * 57) % 360;
+      ctx.globalAlpha = (0.55 + 0.45 * Math.sin(this.t * 6 - k + c.ph)) * (1 - c.z * 0.4);
+      ctx.fillStyle = `hsl(${h},100%,70%)`;
+      ctx.fillRect(X - 2, Y - s + 1 + k, 1, 1);
+      ctx.fillRect(X + 2, Y - s + 1 + k, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  tick(dt) {
+    for (const c of this.combs || []) {
+      c.x += (c.vx + Math.sin(this.t * 0.4 + c.ph) * 3) * dt;
+      c.y += c.vy * dt;
+      if (c.y < 20 - this.extra) { c.y = this.floorY(c.z); c.x = CX + (R() - 0.5) * this.spread; }
+    }
+    if (R() < dt * 2.5) {
+      const z = R() * 0.8;
+      this.bubbles.add({ kind: 'bubble', x: CX + (R() - 0.5) * this.spread, y: this.floorY(z), z, vx: 0, vy: -(18 + R() * 16), age: 0, life: 14, r: R() < 0.7 ? 1 : 2, wob: 8, wobF: 4, ph: R() * TAU, fade: false });
+    }
     for (const j of this.creatures) {
       if (j.kind === 'jelly' && j.y < 20 - this.extra) {
         j.y = this.floorY(j.z) + 40;
@@ -367,13 +413,14 @@ export class JellyRoom extends Room {
   drawCreature(ctx, c) {
     if (c.kind === 'jelly') {
       const [sx, sy] = this.toScreen(c.x, c.y, c.z);
-      const col = { pink: '#ff7ac8', blue: '#6ad8ff', violet: '#a07aff', gold: '#ffc870' }[c.hue] || '#6ad8ff';
+      const col = { pink: '#ff7ac8', blue: '#6ad8ff', violet: '#a07aff', gold: '#ffc870', nettle: '#ffa860' }[c.hue] || '#6ad8ff';
       const r = Math.round(c.len * 1.1);
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = (0.32 + 0.3 * this.pulse) * (1 - c.z * 0.5);
+      ctx.globalAlpha = Math.min(1, (0.32 + 0.3 * this.pulse + (c.lit || 0) * 0.5) * (1 - c.z * 0.5));
       ctx.drawImage(glowSprite(r, col), Math.round(sx - r), Math.round(sy - r * 0.8));
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
+      c.alpha = 1 - c.z * 0.6;   // far ones melt into the blue
     }
     c.draw(ctx, this);
   }
@@ -393,6 +440,15 @@ export class JellyRoom extends Room {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     this.drawShafts(ctx, this.shafts, '200,180,255', 0.1);
+    // a soft pool of light on the tank floor
+    const [, fy] = this.toScreen(CX, this.floorY(0.5), 0.5);
+    const pool = ctx.createRadialGradient(W / 2, fy, 0, W / 2, fy, W * 0.6);
+    pool.addColorStop(0, `rgba(170,140,255,${0.22 + this.energy * 0.2})`);
+    pool.addColorStop(1, 'rgba(170,140,255,0)');
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = pool;
+    ctx.fillRect(0, 0, W, this.H);
+    ctx.globalCompositeOperation = 'source-over';
     this.drawMotes(ctx);
     this.drawLife(ctx);
     this.drawGlows(ctx);
