@@ -85,4 +85,5 @@ is no build step.
 
 - `?scene=tank|heart|bottle|letter|question|finale` jumps to a beat.
 - `?speed=2` runs time faster.
+- `?gl=0` forces the plain-2D fallback renderer (no bloom or blur).
 - `tools/*.html` are art preview sheets (fish, creatures, environment, couple).

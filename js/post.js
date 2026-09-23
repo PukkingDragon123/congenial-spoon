@@ -81,7 +81,8 @@ export class Post {
     this.canvas = canvas;
     this.p = { blur: 0, bloom: 0.75, warp: 0, dim: 0, fade: 0, vig: 0.55, uiGlow: 0.55, sat: 1, tint: [1, 1, 1], rip: [0.5, 0.5, 0, 0], flash: [1, 1, 1, 0] };
     let gl = null;
-    try { gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, powerPreference: 'high-performance' }); } catch (e) { gl = null; }
+    const noGL = typeof location !== 'undefined' && /[?&]gl=0/.test(location.search);
+    if (!noGL) try { gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, powerPreference: 'high-performance' }); } catch (e) { gl = null; }
     if (gl && this.init(gl)) { this.gl = gl; return; }
     this.gl = null;
     this.ctx = canvas.getContext('2d');
