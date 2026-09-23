@@ -256,6 +256,9 @@ class Room {
     const img = this.couple.render();
     const [cx, cy] = this.toScreen(this.coupleX, this.coupleY, 0);
     const X = Math.round(cx - this.couple.R.ox), Y = Math.round(cy - this.couple.R.oy);
+    // a soft shadow where they stand
+    ctx.fillStyle = 'rgba(0,4,18,0.38)';
+    ctx.beginPath(); ctx.ellipse(Math.round(cx), Math.round(cy) + 1, 22, 2.5, 0, 0, TAU); ctx.fill();
     const fs = this.couple.flip;
     ctx.globalAlpha = 0.28;
     ctx.setTransform(fs, 0, 0, -0.55, Math.round(cx), Math.round(cy) + 1);
