@@ -23,27 +23,27 @@ export const CONFIG = {
   letter: [
     'Dear {to},',
     '',
-    'ok so... every time we stand in front of all this blue,',
-    'i forget the fish exist. no offense to the fish 🐟',
-    "because i'm only ever looking at you 👀",
+    "I'm not good at saying this out loud,",
+    'so I wrote it down instead.',
     '',
-    'you make my whole world feel like this:',
-    'calm, deep, and lowkey glowing ✨',
+    'Every time I am with you, the day feels calmer.',
+    'You make ordinary things feel special,',
+    "and I don't think you even notice.",
     '',
-    "i don't just wanna visit this with you.",
-    'i wanna keep coming back. always 💙',
+    "I'd like to keep going places with you.",
+    'This one, and all the ones after.',
     '',
-    'yours (obviously), {from}',
+    'Love, {from}',
   ],
 
-  question: '{to}, will you be mine? 🥹',
-  yes: 'YES 💙',
+  question: '{to}, will you be mine?',
+  yes: 'yes',
   no: 'no',
-  noEscapes: ['nah', 'bro 😭', 'try again', 'nope 👀', 'pls 🥹'], // what "no" says as it swims away
+  noEscapes: ['nope', 'try again', 'are you sure?', 'hmm', 'okay fine'], // what "no" says as it swims away
 
   // Final card after "yes"
-  finale: '{to} 💙 {from}',
-  finaleSub: "ok it's official now 🥹",
+  finale: '{to} ♥ {from}',
+  finaleSub: 'this is just the beginning',
 
   // Soundtrack. `music` is the file that plays and that the whole piece is
   // timed to; the story follows the song's clock, so swapping the track means
@@ -58,39 +58,29 @@ export const CONFIG = {
   // Each line starts where a sung phrase starts in the track (found by
   // measuring the vocal band of the song), so the words breathe with it.
   lyrics: [
-    // verse one: the walk through the galleries
-    [20.0, 'yo... this place is lowkey beautiful 🌊'],
-    [25.0, "but ngl i'm not even looking at the fish 👀"],
-    [30.0, 'bro even nemo is staring at you 😭'],
-    [34.2, 'remember when we first met? i was so awkward 💀'],
-    [38.0, 'you laughed at me. best day ever tbh 🥹'],
-    [44.0, "ok so... i've been meaning to say something"],
-    [47.0, "my heart's been doing backflips for months 🐬"],
-    [51.0, "ok ok here it goes... don't laugh 😭"],
-    [54.0, '...'],
+    // the walk through the galleries
+    [20.0, "okay, don't laugh"],
+    [25.0, 'I made this for you'],
+    [30.0, 'it took me way too long'],
+    [38.0, 'I wanted it to feel like a day out with you'],
+    [47.0, 'somewhere quiet and blue'],
+    [51.0, "because that's how you make me feel"],
     // the hook
-    [58.0, 'ALWAYS 💙'],
-    [64.0, 'every version of me picks you. every time.'],
-    [72.0, 'always 🫶'],
-    [77.0, 'the fish are literally making a heart rn 😭'],
-    [80.0, 'even the crabs are rooting for us 🦀'],
-    [86.0, '{to} 🥹'],
+    [58.0, 'I really like you'],
+    [64.0, "I have for a while now"],
+    [72.0, 'always'],
+    [80.0, 'the fish helped a little'],
+    [86.0, '{to}'],
     // verse two
-    [94.0, "i'm bad at big speeches bro"],
-    [101.0, 'so i asked the ocean for help 🌊'],
-    [104.0, 'it said: just tell her 👀'],
-    [107.0, 'ok here goes nothing 😭'],
+    [94.0, "there's one more thing"],
+    [101.0, 'I wrote it down'],
     // the big chorus
-    [139.0, 'ALWAYS 💙'],
-    [153.0, 'far away? still you'],
-    [161.0, '5 years from now? still you 🥹'],
-    [167.0, 'always'],
-    [171.0, "it's you. it's always been you 💙"],
+    [139.0, 'always'],
+    [153.0, 'I mean it'],
+    [171.0, "it's you"],
     // outro
-    [178.0, 'yo {to}...'],
-    [185.0, 'thanks for every lil moment 🫶'],
-    [192.0, "here's to a million more 🥂"],
-    [199.0, 'always 💙'],
+    [185.0, 'thank you for being you'],
+    [199.0, 'always'],
   ],
 };
 

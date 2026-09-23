@@ -8,7 +8,7 @@ import { drawText, textWidth, textPixelsBold, wrap, chars, charX, LINE_H } from 
 import { bottleSprite, makePaper, drawRoll, drawSeal, drawBubbleButton, drawSpeaker, Sweep, BubbleCurtain, LightBloom } from './ui.js';
 import { SoundEngine } from '../audio.js';
 
-const WHALE_Z = 0.36;
+const WHALE_Z = 0.62;
 
 export class Story {
   constructor(aq, post, opts = {}) {
@@ -636,9 +636,9 @@ export class Story {
     this.tween(4, (k) => { aq.light = 1 + 0.35 * k; });
     await this.wait(1.2);
     const whale = aq.spawnWhaleShark();
-    whale.x = CX + this.W / 2 + 170;
-    // slower on narrow screens so it stays in view for the chorus
-    whale.speed = clamp(this.W * 0.045, 11, 21);
+    whale.x = CX + this.W / 2 + 60;
+    // a slow, gentle glide in the background
+    whale.speed = clamp(this.W * 0.02, 6, 11);
     whale.vx = -whale.speed;
     this.sound.sfx('chime');
     const s = Math.min(46, this.W * 0.2);
@@ -753,7 +753,7 @@ export class Story {
     if (!C || C.a <= 0) return;
     const st = this.stage;
     const [cx, cy] = st.toScreen(st.coupleX, st.coupleY - 64, 0);
-    const text = 'this could be us but u playin 😭';
+    const text = 'this could be us';
     const tw = textWidth(text);
     const bob = Math.round(Math.sin(this.t * 3) * 1.5);
     let tx = Math.round(cx + 34), ty = Math.round(cy - 34 + bob);

@@ -2,6 +2,7 @@
 import { TAU, clamp, lerp, R } from '../util.js';
 import { glowSprite } from './fx.js';
 import { SPECIES, fishSprite, PITCHES } from '../art/fish.js';
+import { diverSprite, DIVER_FRAMES } from '../art/divers.js';
 import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES, renderJelly, JELLY_FRAMES, renderCrab, CRAB_FRAMES } from '../art/creatures.js';
 
 export const DEPTH_PX = 120; // how many "pixels" of distance one unit of z represents for steering
@@ -9,6 +10,7 @@ export const DEPTH_PX = 120; // how many "pixels" of distance one unit of z repr
 // Which way each sprite is drawn: -1 = nose points left (the default), +1 =
 // nose points right. Used to decide whether a draw gets mirrored.
 const SPRITE_DIR = { ray: 1 };
+const CALM = new Set(['shark', 'reefshark', 'whaleshark', 'ray', 'turtle', 'grouper']);
 const CRAB_HUES = ['red', 'orange', 'purple', 'blue', 'yellow', 'pink', 'teal'];
 
 export function sizeAt(len, z) {
@@ -55,6 +57,8 @@ export class Creature {
     this.live = 0.55 + R() * 0.9;      // how strongly this one answers the music
     this.bnc = 0;
     this.startle = 0;
+    this.calm = CALM.has(kind);
+    if (this.calm) this.live = 0;
   }
 
   // A quick pop + dart away from (x,y): used when something happens nearby.
@@ -147,11 +151,11 @@ export class Creature {
     // liveliness
     this.bob += dt * this.bobF;
     this.startle = Math.max(0, this.startle - dt * 1.8);
-    const want = (aq.pulse || 0) * this.live * 0.5 + this.startle * 0.5;
+    const want = this.calm ? 0 : (aq.pulse || 0) * this.live * 0.5 + this.startle * 0.5;
     this.bnc += (want - this.bnc) * Math.min(1, dt * 9);
     // every so often a fish does a happy little hop, more often on the beat
     this.hopT = Math.max(0, (this.hopT || 0) - dt * 2.2);
-    if (!this.hopT && this.kind !== 'jelly' && R() < dt * (0.04 + (aq.pulse || 0) * 0.25 * this.live)) this.hopT = 1;
+    if (!this.hopT && !this.calm && this.kind !== 'jelly' && R() < dt * (0.04 + (aq.pulse || 0) * 0.25 * this.live)) this.hopT = 1;
     if (this.glint) {
       this.flash = Math.max(0, this.flash - dt * 4);
       if (R() < dt * (Math.abs(this.face) < 0.8 ? 0.35 : 0.018)) this.flash = 1;
@@ -177,7 +181,7 @@ export class Creature {
     let f = this.kind === 'jelly' ? 1 : this.face * (SPRITE_DIR[this.kind] || -1);
     if (this.kind !== 'jelly' && Math.abs(f) < 0.18) f = 0.18 * Math.sign(f || 1);
     const hop = this.hopT > 0 ? -Math.sin((1 - this.hopT) * Math.PI) * (3 + this.len * 0.08) : 0;
-    const lift = Math.sin(this.bob) * (1 + this.len * 0.02) + hop + (aq.waveAt ? aq.waveAt(this.x, this.z) : 0);
+    const lift = Math.sin(this.bob) * (this.calm ? 0.4 : 1 + this.len * 0.02) + hop + (aq.waveAt ? aq.waveAt(this.x, this.z) : 0);
     const X = Math.round(sx), Y = Math.round(sy + lift);
     if (this.glowA > 0.01) {
       const g = glowSprite(7, '#9fe8ff');
@@ -191,7 +195,7 @@ export class Creature {
     // squash and stretch on the beat, plus a little wiggle from the tail
     const e = this.bnc * 0.45;
     const sxs = 1 + e, sys = 1 - e * 0.7;
-    const wig = this.kind === 'jelly' ? 0 : Math.sin(this.phase * 1.6) * 0.06 + (this.hopT > 0 ? -0.18 * Math.sin((1 - this.hopT) * Math.PI) * Math.sign(f) : 0);
+    const wig = this.kind === 'jelly' || this.calm ? 0 : Math.sin(this.phase * 1.6) * 0.06 + (this.hopT > 0 ? -0.18 * Math.sin((1 - this.hopT) * Math.PI) * Math.sign(f) : 0);
     if (f === 1 && e < 0.01 && Math.abs(wig) < 0.01) ctx.drawImage(img, X - img.ox, Y - img.oy);
     else {
       const c = Math.cos(wig), s = Math.sin(wig);
@@ -348,4 +352,72 @@ export class Crab {
     ctx.drawImage(img, -img.ox, -img.oy);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
+}
+
+// The scuba buddies: they paddle around together near the glass, trailing
+// bubbles, and do a happy hop when tapped.
+export class Diver {
+  constructor(kind, o = {}) {
+    this.kind = kind;
+    this.x = o.x ?? 0; this.y = o.y ?? 150; this.z = o.z ?? 0.15;
+    this.dir = o.dir ?? 1;
+    this.face = this.dir;
+    this.speed = o.speed ?? 9;
+    this.lead = o.lead ?? null;      // follow this diver
+    this.off = o.off ?? [-18, 10];
+    this.ph = Math.random() * 4;
+    this.t = Math.random() * 10;
+    this.hopT = 0;
+    this.bubT = Math.random();
+    this.bounds = o.bounds ?? null;
+    this.len = 24;
+  }
+  react() { this.hopT = 1; }
+  update(dt, aq) {
+    this.t += dt;
+    this.hopT = Math.max(0, this.hopT - dt * 1.8);
+    if (this.lead) {
+      const L = this.lead;
+      this.dir = L.dir;
+      const tx = L.x + this.off[0] * L.dir, ty = L.y + this.off[1] + Math.sin(this.t * 0.9) * 3;
+      this.x += (tx - this.x) * Math.min(1, dt * 1.2);
+      this.y += (ty - this.y) * Math.min(1, dt * 1.2);
+    } else {
+      const [xmin, xmax] = this.bounds || aq.xRange(this.z);
+      if (this.x > xmax - 40) this.dir = -1;
+      if (this.x < xmin + 40) this.dir = 1;
+      this.x += this.dir * this.speed * dt;
+      this.y += Math.cos(this.t * 0.7) * 6 * dt;
+    }
+    this.face += Math.max(-dt * 3, Math.min(dt * 3, this.dir - this.face));
+    this.ph += dt * 5;
+    this.bubT -= dt;
+    if (this.bubT <= 0 && aq.bubbles) {
+      this.bubT = 0.8 + Math.random() * 1.2;
+      const img = diverSprite(this.kind, 0);
+      const mx = this.x + (img.mouth[0] - img.ox) * Math.sign(this.face || 1), my = this.y + (img.mouth[1] - img.oy);
+      for (let k = 0; k < 2; k++) aq.bubbles.add({ kind: 'bubble', x: mx, y: my - k * 3, z: this.z, vx: 0, vy: -(18 + Math.random() * 10), age: 0, life: 9, r: k ? 1 : 2, wob: 6, wobF: 5, ph: Math.random() * 6, fade: false });
+    }
+  }
+  draw(ctx, aq) {
+    const [sx, sy] = aq.toScreen(this.x, this.y, this.z);
+    if (sx < -40 || sx > aq.W + 40) return;
+    const img = diverSprite(this.kind, Math.floor(this.ph) % DIVER_FRAMES);
+    const hop = Math.sin(this.hopT * Math.PI) * -8;
+    const bob = Math.sin(this.t * 1.6) * 1.5;
+    const tilt = Math.sin(this.t * 1.1) * 0.08 + (this.hopT > 0 ? Math.sin(this.hopT * Math.PI * 2) * 0.25 : 0);
+    let f = this.face;
+    if (Math.abs(f) < 0.2) f = 0.2 * Math.sign(f || 1);
+    const c = Math.cos(tilt), s = Math.sin(tilt);
+    ctx.setTransform(f * c, f * s, -s, c, Math.round(sx), Math.round(sy + bob + hop));
+    ctx.drawImage(img, -img.ox, -img.oy);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+}
+
+export function addDivers(list, x, y, z, bounds) {
+  const tree = new Diver('tree', { x, y, z, dir: 1, speed: 9, bounds });
+  const bean = new Diver('bean', { x: x - 20, y: y + 10, z: z - 0.01, lead: tree, off: [-22, 12] });
+  list.push(tree, bean);
+  return [tree, bean];
 }

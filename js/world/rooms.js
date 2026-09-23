@@ -5,7 +5,7 @@
 // them the same way.
 import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm } from '../util.js';
 import { CX, tallExtra, genCaustics, genSand, genFormation } from '../art/env.js';
-import { Creature, Crab, School } from './creatures.js';
+import { Creature, Crab, School, addDivers } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
 import { warmLevel, queueVariants } from '../art/fish.js';
@@ -332,6 +332,7 @@ export class JellyRoom extends Room {
     for (let i = 0; i < 12; i++) this.combs.push({ x: CX + (r() - 0.5) * this.spread, y: top + r() * (bot - top), z: 0.1 + r() * 0.7, ph: r() * TAU, s: 3 + ((r() * 3) | 0), vx: (r() - 0.5) * 6, vy: -1 - r() * 2 });
     const self = this;
     for (const cb of this.combs) this.decor.push({ get z() { return cb.z; }, draw(ctx) { self.drawComb(ctx, cb); } });
+    addDivers(this.creatures, CX - 120, 190 - this.extra * 0.3, 0.1, [CX - 260, CX + 260]);
     for (let i = 0; i < 6; i++) this.shafts.push({ x: CX + (i - 2.5) * 150 + (r() - 0.5) * 60, z: 0.5 + r() * 0.4, w: 26 + r() * 30, f: 0.2 + r() * 0.3, ph: r() * TAU });
     this.makeMotes(130, ['#ffffff', '#ffd6f0', '#d8c8ff', '#bff4ff', '#fff2c0'], { rise: 2.5, a: 0.9 });
     // warm the jelly sprites that are on screen at the title
@@ -673,6 +674,7 @@ export class ReefRoom extends Room {
         new School(snap, { radius: 22, sep: 10, speed: 18, path: (t) => [CX + Math.sin(t * 0.12) * 160 * k, 170 + Math.sin(t * 0.3) * 20, 0.45] }),
         new School(bait, { radius: 16, sep: 6, speed: 26, wc: 0.7, wt: 0.5, path: (t) => [CX + Math.sin(t * 0.17 + 1) * 120 * k, 95 + Math.sin(t * 0.4) * 25, 0.62] }),
       ];
+      addDivers(this.creatures, CX + 60, 190, 0.1, [CX - 240, CX + 240]);
       for (let i = 0; i < 6; i++) this.creatures.push(new Crab({ x: X(400), z: 0.06 + r() * 0.3, size: 10 + r() * 4 }));
       for (let i = 0; i < 5; i++) this.shafts.push({ x: CX + (i - 2) * 150 + (r() - 0.5) * 60, z: 0.6, w: 30 + r() * 26, f: 0.25 + r() * 0.3, ph: r() * TAU });
       this.makeMotes(80, ['#ffffff', '#e8fcff', '#cfe8ff'], { rise: 1.5, a: 0.5 });

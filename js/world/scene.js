@@ -6,14 +6,14 @@ import { warmLevel, queueVariants, SPECIES, fishSprite } from '../art/fish.js';
 import { queueWarm } from '../art/budget.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
 import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES } from '../art/creatures.js';
-import { Creature, School, Crab, sizeAt } from './creatures.js';
+import { Creature, School, Crab, sizeAt, addDivers } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { Couple } from '../art/people.js';
 
 export { CX };
 export const CY = 200;
 const FLOOR_NEAR = 294, FLOOR_FAR = 248;
-const WHALE_LEN = 300, WHALE_Z = 0.36;
+const WHALE_LEN = 300, WHALE_Z = 0.62;
 const WHALE_L = sizeAt(WHALE_LEN, WHALE_Z);
 const FOG = [
   { z: 0.74, a: 0.36 },
@@ -75,7 +75,7 @@ export class Aquarium {
 
   // The gentle giant for the ending: glides in from the right, never turns.
   spawnWhaleShark() {
-    const w = new Creature('whaleshark', { x: CX + 720, y: 150, z: WHALE_Z, len: WHALE_LEN, speed: 17, anim: 4, turnRate: 0.4, dir: -1 });
+    const w = new Creature('whaleshark', { x: CX + 720, y: 150, z: WHALE_Z, len: WHALE_LEN, speed: 9, anim: 2, turnRate: 0.3, dir: -1 });
     w.cruiseY = [140, 160];
     w.fixedZ = WHALE_Z;
     w.bounds = [CX - 5000, CX + 5000];
@@ -221,12 +221,12 @@ export class Aquarium {
     for (let i = 0; i < 250; i++) bait.push(add(new Creature('minnow', { x: CX - 400 + (r() - 0.5) * 120, y: 120 + r() * 60, z: 0.2 + r() * 0.3, len: 12 + r() * 3, speed: 34, anim: 12, glint: true, turnRate: 6, vx: 20 })));
     this.baitSchool = new School(bait, { radius: 18, sep: 6, speed: 34, wc: 0.7, wt: 0.5, path: (t) => [CX + Math.sin(t * 0.13 + 2) * 520, 125 + Math.sin(t * 0.31) * 45, 0.32 + Math.sin(t * 0.09) * 0.1] });
     // big cruisers
-    add(new Creature('shark', { x: CX - 500, y: 170, z: 0.52, len: 132, speed: 15, anim: 5, turnRate: 0.9, dir: 1 })).cruiseY = [140, 230];
-    add(new Creature('shark', { x: CX + 420, y: 150, z: 0.66, len: 124, speed: 13, anim: 5, turnRate: 0.9, dir: -1 })).cruiseY = [120, 210];
-    add(new Creature('reefshark', { x: CX + 150, y: 120, z: 0.3, len: 100, speed: 19, anim: 6, turnRate: 1.1, dir: 1 })).cruiseY = [90, 200];
-    add(new Creature('ray', { x: CX - 200, y: 110, z: 0.4, len: 84, speed: 12, anim: 5, turnRate: 0.7, dir: -1 })).cruiseY = [80, 170];
-    add(new Creature('ray', { x: CX + 600, y: 140, z: 0.6, len: 70, speed: 10, anim: 5, turnRate: 0.7, dir: 1 })).cruiseY = [90, 190];
-    add(new Creature('turtle', { x: CX - 700, y: 130, z: 0.3, len: 66, speed: 9, anim: 4, turnRate: 0.8, dir: 1 })).cruiseY = [90, 170];
+    add(new Creature('shark', { x: CX - 500, y: 160, z: 0.74, len: 132, speed: 6, anim: 2.5, turnRate: 0.5, dir: 1 })).cruiseY = [140, 190];
+    add(new Creature('shark', { x: CX + 420, y: 150, z: 0.84, len: 124, speed: 5, anim: 2.5, turnRate: 0.5, dir: -1 })).cruiseY = [120, 170];
+    add(new Creature('reefshark', { x: CX + 150, y: 120, z: 0.62, len: 100, speed: 7, anim: 3, turnRate: 0.6, dir: 1 })).cruiseY = [90, 160];
+    add(new Creature('ray', { x: CX - 200, y: 110, z: 0.55, len: 84, speed: 6, anim: 3, turnRate: 0.5, dir: -1 })).cruiseY = [80, 140];
+    add(new Creature('ray', { x: CX + 600, y: 140, z: 0.75, len: 70, speed: 5, anim: 3, turnRate: 0.5, dir: 1 })).cruiseY = [90, 160];
+    add(new Creature('turtle', { x: CX - 700, y: 130, z: 0.45, len: 66, speed: 5, anim: 2.5, turnRate: 0.5, dir: 1 })).cruiseY = [90, 150];
     for (let i = 0; i < 10; i++) add(new Creature('giant', { x: CX + (r() - 0.5) * 1200, y: 120 + r() * 120, z: 0.1 + r() * 0.2, len: 46 + r() * 8, speed: 20 + r() * 6, anim: 7, glint: true, turnRate: 1.6, dir: r.sign() }));
     // groupers near rock bases
     add(new Creature('grouper', { x: CX - 220, y: 246, z: 0.4, len: 68, speed: 6, mode: 'hover', homeR: 60, anim: 4, turnRate: 1.2 }));
@@ -246,6 +246,7 @@ export class Aquarium {
     // crabs on the sand
     this.crabs = [];
     for (let i = 0; i < 14; i++) this.crabs.push(add(new Crab({ x: CX + (r() - 0.5) * 700, z: 0.04 + r() * 0.3, size: 9 + r() * 4, bounds: [CX - 430, CX + 430] })));
+    addDivers(this.creatures, CX - 200, 200, 0.1, [CX - 460, CX + 300]);
     // a warm halo behind the Buddha
     this.glows.push({ x: CX + 34, y: 150, z: 0.66, r: 70, col: '#ffe2a0', a: 0.16 });
   }
