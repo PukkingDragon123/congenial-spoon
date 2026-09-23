@@ -331,9 +331,20 @@ export function renderJelly(size, frame, hue = 'pink') {
 // Front view, feet on the ground. frame = leg cycle, claw 0 (down) .. 2 (up
 // and waving). Origin (ox, oy) is centre of the feet line.
 export const CRAB_FRAMES = 8;
-const CRAB = ramp(['#2a0804', '#6a160a', '#b02e16', '#e05228', '#ff7c42', '#ffb282', '#ffe2c8'], 7);
-export function renderCrab(S, frame, claw = 0) {
-  return cached(`crab|${S}|${frame}|${claw}`, () => {
+const CRAB_PALS = {
+  red: ['#2a0804', '#6a160a', '#b02e16', '#e05228', '#ff7c42', '#ffb282', '#ffe2c8'],
+  orange: ['#2e1204', '#6e300a', '#b85a14', '#ec8a24', '#ffb04a', '#ffd48a', '#fff0cc'],
+  purple: ['#1a0a2e', '#3e1a6a', '#6a34aa', '#9a5ad8', '#c48cf4', '#e2c4ff', '#f6ecff'],
+  blue: ['#061634', '#0e3470', '#1e5cb4', '#3a8ae6', '#6ab4ff', '#a8d8ff', '#e0f2ff'],
+  yellow: ['#2a2204', '#6a560a', '#b09414', '#e4c828', '#fce458', '#fff29a', '#fffadc'],
+  pink: ['#2e0a1c', '#6e1a44', '#b43676', '#e65aa2', '#ff8cc6', '#ffc0e0', '#fff0f8'],
+  teal: ['#042a28', '#0a5e58', '#14968a', '#26c8b4', '#5aeed8', '#a8fff0', '#e4fffa'],
+};
+const CRAB_RAMPS = {};
+for (const k in CRAB_PALS) CRAB_RAMPS[k] = ramp(CRAB_PALS[k], 7);
+export function renderCrab(S, frame, claw = 0, hue = 'red') {
+  const CRAB = CRAB_RAMPS[hue] || CRAB_RAMPS.red;
+  return cached(`crab|${S}|${frame}|${claw}|${hue}`, () => {
     const W = Math.ceil(S * 1.7) + 4, H = Math.ceil(S * 1.25) + 4;
     const ox = W >> 1, oy = H - 2;
     const lvl = new Float32Array(W * H).fill(-99);

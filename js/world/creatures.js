@@ -9,6 +9,7 @@ export const DEPTH_PX = 120; // how many "pixels" of distance one unit of z repr
 // Which way each sprite is drawn: -1 = nose points left (the default), +1 =
 // nose points right. Used to decide whether a draw gets mirrored.
 const SPRITE_DIR = { ray: 1 };
+const CRAB_HUES = ['red', 'orange', 'purple', 'blue', 'yellow', 'pink', 'teal'];
 
 export function sizeAt(len, z) {
   const L = len * (1 - 0.42 * z);
@@ -148,6 +149,9 @@ export class Creature {
     this.startle = Math.max(0, this.startle - dt * 1.8);
     const want = (aq.pulse || 0) * this.live * 0.5 + this.startle * 0.5;
     this.bnc += (want - this.bnc) * Math.min(1, dt * 9);
+    // every so often a fish does a happy little hop, more often on the beat
+    this.hopT = Math.max(0, (this.hopT || 0) - dt * 2.2);
+    if (!this.hopT && this.kind !== 'jelly' && R() < dt * (0.04 + (aq.pulse || 0) * 0.25 * this.live)) this.hopT = 1;
     if (this.glint) {
       this.flash = Math.max(0, this.flash - dt * 4);
       if (R() < dt * (Math.abs(this.face) < 0.8 ? 0.35 : 0.018)) this.flash = 1;
@@ -172,7 +176,8 @@ export class Creature {
     // mirrored; the ray is drawn nose-right, and the jelly has no facing.
     let f = this.kind === 'jelly' ? 1 : this.face * (SPRITE_DIR[this.kind] || -1);
     if (this.kind !== 'jelly' && Math.abs(f) < 0.18) f = 0.18 * Math.sign(f || 1);
-    const lift = Math.sin(this.bob) * (0.5 + this.len * 0.012) + (aq.waveAt ? aq.waveAt(this.x, this.z) : 0);
+    const hop = this.hopT > 0 ? -Math.sin((1 - this.hopT) * Math.PI) * (3 + this.len * 0.08) : 0;
+    const lift = Math.sin(this.bob) * (1 + this.len * 0.02) + hop + (aq.waveAt ? aq.waveAt(this.x, this.z) : 0);
     const X = Math.round(sx), Y = Math.round(sy + lift);
     if (this.glowA > 0.01) {
       const g = glowSprite(7, '#9fe8ff');
@@ -183,11 +188,14 @@ export class Creature {
       ctx.globalAlpha = 1;
     }
     if (this.alpha < 1) ctx.globalAlpha = this.alpha;
-    const e = this.bnc * 0.3;
-    const sxs = 1 + e, sys = 1 - e * 0.75;
-    if (f === 1 && e < 0.01) ctx.drawImage(img, X - img.ox, Y - img.oy);
+    // squash and stretch on the beat, plus a little wiggle from the tail
+    const e = this.bnc * 0.45;
+    const sxs = 1 + e, sys = 1 - e * 0.7;
+    const wig = this.kind === 'jelly' ? 0 : Math.sin(this.phase * 1.6) * 0.06 + (this.hopT > 0 ? -0.18 * Math.sin((1 - this.hopT) * Math.PI) * Math.sign(f) : 0);
+    if (f === 1 && e < 0.01 && Math.abs(wig) < 0.01) ctx.drawImage(img, X - img.ox, Y - img.oy);
     else {
-      ctx.setTransform(f * sxs, 0, 0, sys, X, Y);
+      const c = Math.cos(wig), s = Math.sin(wig);
+      ctx.setTransform(f * sxs * c, f * sxs * s, -sys * s, sys * c, X, Y);
       ctx.drawImage(img, -img.ox, -img.oy);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
@@ -267,7 +275,8 @@ export class Crab {
   constructor(o = {}) {
     this.kind = 'crab';
     this.x = o.x ?? 0; this.z = o.z ?? 0.3; this.y = 0;
-    this.size = o.size ?? 16;
+    this.size = o.size ?? 11;
+    this.hue = o.hue ?? CRAB_HUES[(R() * CRAB_HUES.length) | 0];
     this.dir = R() < 0.5 ? -1 : 1;
     this.v = 0;
     this.state = 'idle';
@@ -330,8 +339,8 @@ export class Crab {
   draw(ctx, aq) {
     const [sx, sy] = aq.toScreen(this.x, this.y, this.z);
     if (sx < -40 || sx > aq.W + 40) return;
-    const S = Math.max(8, Math.round((this.size * (1 - 0.4 * this.z)) / 2) * 2);
-    const img = renderCrab(S, Math.floor(this.phase) % CRAB_FRAMES, this.claw);
+    const S = Math.max(7, Math.round(this.size * (1 - 0.4 * this.z)));
+    const img = renderCrab(S, Math.floor(this.phase) % CRAB_FRAMES, this.claw, this.hue);
     const e = this.bnc * 0.22;
     const hop = Math.sin(this.hop * Math.PI) * 5;
     const X = Math.round(sx), Y = Math.round(sy - hop + (aq.waveAt ? aq.waveAt(this.x, this.z) * 0.4 : 0));

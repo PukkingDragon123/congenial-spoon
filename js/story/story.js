@@ -189,8 +189,7 @@ export class Story {
   async titleScene() {
     this.title = { a: 0 };
     { const T = this.title; this.tween(1.8, (k) => { if (T.a < 1 && this.title === T && !this.diving) T.a = k; }, ease.outCubic); }
-    await this.wait(1.2);
-    await this.mainReady;
+    await this.wait(0.6);
     this.hint = { text: CONFIG.tapToBegin, y: () => Math.round(this.H * 0.66), a: 0 };
     { const h = this.hint; this.tween(0.8, (k) => { h.a = k; }); }
     this.sound.armed = true; // the next tap starts the song inside the tap itself
@@ -221,6 +220,7 @@ export class Story {
       if (this.title) this.title.a = 1 - clamp(k * 2.6);
     });
     await this.until(() => tr.covered());
+    await this.mainReady;   // usually long done; if not, the foam simply lingers
     this.title = null;
     this.fxBack.clear();
     this.enterMainTank(true);
@@ -898,7 +898,6 @@ export class Story {
       const lit = Math.abs(cx - x0 - sweep) < 10 * sc;
       drawText(ctx, ch, cx, y + dy, { scale: sc, color: lit ? '#ffffff' : '#d8f0ff', outline: '#0a1a44', shadow: '#ff5a9a', alpha: T.a });
     });
-    drawText(ctx, CONFIG.subtitle, W / 2, y + 9 * sc + 8, { align: 'center', color: '#ffb3d4', outline: '#2a0a24', alpha: T.a });
   }
 
   drawHint(ctx) {

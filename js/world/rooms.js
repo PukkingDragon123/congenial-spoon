@@ -670,7 +670,7 @@ export class ReefRoom extends Room {
     step(() => {
       for (let i = 0; i < 6; i++) this.creatures.push(new Creature('tang', { x: CX + (r() - 0.5) * 700 * k, y: 120 + r() * 100, z: 0.2 + r() * 0.5, len: 28 + r() * 4, speed: 14 + r() * 6, anim: 8, turnRate: 2.5, dir: r() < 0.5 ? -1 : 1 }));
       for (let i = 0; i < 6; i++) this.creatures.push(new Creature('butterfly', { x: CX + (r() - 0.5) * 700 * k, y: 150 + r() * 90, z: 0.15 + r() * 0.5, len: 24 + r() * 4, speed: 8, mode: 'hover', homeR: 60, anim: 7, turnRate: 3 }));
-      for (let i = 0; i < 6; i++) this.creatures.push(new Crab({ x: CX + (r() - 0.5) * 500 * k, z: 0.08 + r() * 0.4, size: 16 + r() * 6 }));
+      for (let i = 0; i < 6; i++) this.creatures.push(new Crab({ x: CX + (r() - 0.5) * 500 * k, z: 0.08 + r() * 0.4, size: 10 + r() * 4 }));
       for (let i = 0; i < 5; i++) this.shafts.push({ x: CX + (i - 2) * 190 + (r() - 0.5) * 60, z: 0.6, w: 34 + r() * 30, f: 0.25 + r() * 0.3, ph: r() * TAU });
       this.makeMotes(70, ['#ffffff', '#e8fcff', '#fff6c8'], { rise: 1.5, a: 0.55 });
       for (const [id, L] of [['clown', 20], ['clown', 22], ['clown', 24], ['tang', 26], ['tang', 28], ['butterfly', 24], ['butterfly', 22]]) warmLevel(id, L);

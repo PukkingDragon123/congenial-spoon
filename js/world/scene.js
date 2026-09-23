@@ -245,7 +245,7 @@ export class Aquarium {
     this.bait = bait;
     // crabs on the sand
     this.crabs = [];
-    for (let i = 0; i < 14; i++) this.crabs.push(add(new Crab({ x: CX + (r() - 0.5) * 700, z: 0.04 + r() * 0.3, size: 15 + r() * 7, bounds: [CX - 430, CX + 430] })));
+    for (let i = 0; i < 14; i++) this.crabs.push(add(new Crab({ x: CX + (r() - 0.5) * 700, z: 0.04 + r() * 0.3, size: 9 + r() * 4, bounds: [CX - 430, CX + 430] })));
     // a warm halo behind the Buddha
     this.glows.push({ x: CX + 34, y: 150, z: 0.66, r: 70, col: '#ffe2a0', a: 0.16 });
   }
