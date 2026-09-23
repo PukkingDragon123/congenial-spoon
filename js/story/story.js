@@ -244,7 +244,7 @@ export class Story {
     const st = this.stage;
     let best = null, bd = 1e9;
     for (const c of st.creatures) {
-      const [sx, sy] = st.toScreen(c.x, c.y - (c.kind === 'crab' ? 5 : 0), c.z);
+      const [sx, sy] = st.toScreen(c.x, c.y - (c.hitDY ?? (c.kind === 'crab' ? 5 : 0)), c.z);
       const r = Math.max(9, (c.len || c.size || 16) * 0.45);
       const d = Math.hypot(sx - x, sy - y);
       if (d < r && d < bd) { bd = d; best = c; }
@@ -728,7 +728,7 @@ export class Story {
       const lh = 10 * L.sc;
       const pw = L.w + 18, ph = 7 * L.sc + 9 + (L.lines.length - 1) * lh;
       const px = Math.round(L.x - pw / 2), py = Math.round(L.y - 4 - (L.sc - 1));
-      ctx.globalAlpha = a * 0.5;
+      ctx.globalAlpha = a * 0.66;
       ctx.fillStyle = L.love ? '#06204e' : '#040c26';
       ctx.fillRect(px + 2, py, pw - 4, ph);
       ctx.fillRect(px, py + 2, pw, ph - 4);
@@ -753,7 +753,7 @@ export class Story {
     if (!C || C.a <= 0) return;
     const st = this.stage;
     const [cx, cy] = st.toScreen(st.coupleX, st.coupleY - 64, 0);
-    const text = 'this could be us';
+    const text = 'this could be us 👀';
     const tw = textWidth(text);
     const bob = Math.round(Math.sin(this.t * 3) * 1.5);
     let tx = Math.round(cx + 34), ty = Math.round(cy - 34 + bob);

@@ -6,7 +6,7 @@ import { warmLevel, queueVariants, SPECIES, fishSprite } from '../art/fish.js';
 import { queueWarm } from '../art/budget.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
 import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES } from '../art/creatures.js';
-import { Creature, School, Crab, sizeAt, addDivers } from './creatures.js';
+import { Creature, School, Crab, sizeAt, addBuddy } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { Couple } from '../art/people.js';
 
@@ -246,7 +246,7 @@ export class Aquarium {
     // crabs on the sand
     this.crabs = [];
     for (let i = 0; i < 14; i++) this.crabs.push(add(new Crab({ x: CX + (r() - 0.5) * 700, z: 0.04 + r() * 0.3, size: 9 + r() * 4, bounds: [CX - 430, CX + 430] })));
-    addDivers(this.creatures, CX - 200, 200, 0.1, [CX - 460, CX + 300]);
+    addBuddy(this.creatures, CX - 200, 200, 0.1, [CX - 460, CX + 300]);
     // a warm halo behind the Buddha
     this.glows.push({ x: CX + 34, y: 150, z: 0.66, r: 70, col: '#ffe2a0', a: 0.16 });
   }

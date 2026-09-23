@@ -2,7 +2,7 @@
 import { TAU, clamp, lerp, R } from '../util.js';
 import { glowSprite } from './fx.js';
 import { SPECIES, fishSprite, PITCHES } from '../art/fish.js';
-import { diverSprite, DIVER_FRAMES } from '../art/divers.js';
+import { diverSprite, DIVER_FRAMES, treeSprite, TREE_FRAMES } from '../art/divers.js';
 import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES, renderJelly, JELLY_FRAMES, renderCrab, CRAB_FRAMES } from '../art/creatures.js';
 
 export const DEPTH_PX = 120; // how many "pixels" of distance one unit of z represents for steering
@@ -415,9 +415,42 @@ export class Diver {
   }
 }
 
-export function addDivers(list, x, y, z, bounds) {
-  const tree = new Diver('tree', { x, y, z, dir: 1, speed: 9, bounds });
-  const bean = new Diver('bean', { x: x - 20, y: y + 10, z: z - 0.01, lead: tree, off: [-22, 12] });
-  list.push(tree, bean);
-  return [tree, bean];
+// The bean pup paddles around on its own.
+export function addBuddy(list, x, y, z, bounds) {
+  const bean = new Diver('bean', { x, y, z, dir: 1, speed: 8, bounds });
+  list.push(bean);
+  return bean;
+}
+
+// The tall tree friend stands on the sand and waves at you. Tap him and he
+// hops and waves faster.
+export class TreeFriend {
+  constructor(o = {}) {
+    this.kind = 'treefriend';
+    this.x = o.x ?? 0; this.z = o.z ?? 0.04; this.y = 0;
+    this.len = 50;
+    this.hitDY = 28;
+    this.t = Math.random() * 3;
+    this.hopT = 0;
+    this.excite = 0;
+  }
+  react() { this.hopT = 1; this.excite = 3; }
+  update(dt, aq) {
+    this.excite = Math.max(0, this.excite - dt);
+    this.t += dt * (1 + (this.excite > 0 ? 1.5 : 0));
+    this.hopT = Math.max(0, this.hopT - dt * 2);
+    this.y = aq.floorY(this.z) + 3;
+    this.pulse = aq.pulse || 0;
+  }
+  draw(ctx, aq) {
+    const [sx, sy] = aq.toScreen(this.x, this.y, this.z);
+    if (sx < -40 || sx > aq.W + 40) return;
+    const img = treeSprite(Math.floor(this.t * 3.5) % TREE_FRAMES);
+    const hop = Math.sin(this.hopT * Math.PI) * -9;
+    const sq = this.pulse * 0.06;
+    const sway = Math.sin(this.t * 1.3) * 0.04;
+    ctx.setTransform((1 + sq) * Math.cos(sway), Math.sin(sway), -Math.sin(sway), (1 - sq) * Math.cos(sway), Math.round(sx), Math.round(sy + hop));
+    ctx.drawImage(img, -img.ox, -img.oy);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
 }

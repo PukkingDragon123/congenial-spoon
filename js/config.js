@@ -59,20 +59,20 @@ export const CONFIG = {
   // measuring the vocal band of the song), so the words breathe with it.
   lyrics: [
     // the walk through the galleries
-    [20.0, "okay, don't laugh"],
+    [20.0, "okay, don't laugh 👀"],
     [25.0, 'I made this for you'],
     [30.0, 'it took me way too long'],
     [38.0, 'I wanted it to feel like a day out with you'],
-    [47.0, 'somewhere quiet and blue'],
-    [51.0, "because that's how you make me feel"],
+    [47.0, 'just the two of us'],
+    [51.0, "that's my favourite kind of day"],
     // the hook
     [58.0, 'I really like you'],
-    [64.0, "I have for a while now"],
+    [64.0, 'I have for a while now 👀'],
     [72.0, 'always'],
-    [80.0, 'the fish helped a little'],
+    [80.0, "I hope that's okay"],
     [86.0, '{to}'],
     // verse two
-    [94.0, "there's one more thing"],
+    [94.0, "there's one more thing 👀"],
     [101.0, 'I wrote it down'],
     // the big chorus
     [139.0, 'always'],
