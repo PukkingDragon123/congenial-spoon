@@ -20,7 +20,7 @@ export class Story {
     this.fxBack = new Particles();
     this.sound = new SoundEngine(CONFIG.sound);
     this.camX = CX - 560;
-    this.camY = CY;
+    this.camY = 0; // offset from the aquarium's base camera height
     this.title = null;
     this.hint = null;
     this.letter = null;
@@ -219,7 +219,7 @@ export class Story {
     const s = Math.min(108, this.W * 0.36);
     const cx = CX + 30, cy = 178, cz = 0.3;
     this.formHeart(aq.trev, cx, cy, cz, s, aq.t);
-    const glow = { x: cx, y: cy + 22, z: 0.34, r: Math.round(s * 1.3), col: '#ff5aa0', a: 0 };
+    const glow = { x: cx, y: cy + 22, z: 0.34, r: Math.round(s * 1.3), col: '#ff5aa0', a: 0, beat: true };
     aq.glows.push(glow);
     await this.tween(3.6, (k) => { for (const f of aq.trev) f.formK = k; glow.a = 0.45 * k; }, ease.inOutSine);
     this.sound.sfx('sparkle');
@@ -314,6 +314,8 @@ export class Story {
     c.mode = 'face'; c.hands = 1; c.hold = 0; c.lean = 0; c.hug = 0;
     this.camX = CX; aq.cam.x = CX;
     const words = this.formWords(CONFIG.fishWords);
+    this.trevPath = aq.trevSchool.path;
+    aq.trevSchool.path = (t) => [CX + Math.sin(t * 0.1) * 260, 222 + Math.sin(t * 0.3) * 10, 0.62];
     await this.until(() => sw.done);
     this.trans = null;
     this.sound.level = 2;
@@ -403,6 +405,7 @@ export class Story {
       const wf = this.words.fish;
       this.tween(1.5, (k) => { g.a = 0.3 * (1 - k); for (const f of wf) f.glowA = 1 - k; }).then(() => aq.glows.splice(aq.glows.indexOf(g), 1));
     }
+    if (this.trevPath) aq.trevSchool.path = this.trevPath;
     // hug
     this.tween(1.8, (k) => { c.hug = k; }, ease.inOutCubic);
     this.tween(2, (k) => { p.tint = [1 + 0.05 * k, 1 - 0.02 * k, 1 + 0.02 * k]; p.bloom = 0.75 + 0.25 * k; });
@@ -417,7 +420,7 @@ export class Story {
     const s = Math.min(112, this.W * 0.42);
     const cx = CX + 22, cy = 148, cz = 0.32;
     this.formHeart(aq.trev, cx, cy, cz, s, aq.t, true);
-    const glow = { x: cx, y: cy + 20, z: 0.34, r: Math.round(s * 1.35), col: '#ff4f98', a: 0 };
+    const glow = { x: cx, y: cy + 20, z: 0.34, r: Math.round(s * 1.35), col: '#ff4f98', a: 0, beat: true };
     aq.glows.push(glow);
     this.tween(3.4, (k) => { for (const f of aq.trev) f.formK = k; glow.a = 0.4 * k; }, ease.inOutSine);
     this.heartSparkle = { cx, cy, cz, s };
@@ -460,7 +463,7 @@ export class Story {
     const aq = this.aq;
     // camera: smooth follow with a gentle floating drift
     aq.cam.x += (this.camX + Math.sin(this.t * 0.21) * 3 - aq.cam.x) * Math.min(1, dt * 3);
-    aq.cam.y += (this.camY + Math.sin(this.t * 0.17) * 1.5 - aq.cam.y) * Math.min(1, dt * 3);
+    aq.cam.y += (aq.camY0 + this.camY + Math.sin(this.t * 0.17) * 1.5 - aq.cam.y) * Math.min(1, dt * 3);
     if (this.trans) this.trans.update(dt);
     this.fx.update(dt);
     this.fxBack.update(dt);
@@ -684,7 +687,7 @@ export class Story {
   drawQuestion(ctx) {
     const Q = this.question;
     const str = fill(CONFIG.question);
-    const sc = this.W >= 360 && textWidth(str) * 2 < this.W - 20 ? 2 : 1;
+    const sc = textWidth(str) * 2 < this.W - 20 ? 2 : 1;
     const wt = this.aq.curves.top(0) - 4;
     const y = Math.max(8, Math.round(wt / 2 - (7 * sc) / 2) - 2);
     const t = this.t;

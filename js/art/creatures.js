@@ -1,11 +1,29 @@
 // Non-fish-shaped creatures: eagle ray (3D surface splatted to pixels),
 // sea turtle (implicit shapes + voronoi scutes) and glowing jellyfish.
 import { TAU, clamp, ramp, bayer, hash2, Buf, pointInPoly, mixRGB, smoothstep, fract } from '../util.js';
+import { B, timed } from './budget.js';
 
 const cache = new Map();
+const sizes = new Map(); // kind -> Set of sizes rendered
+// key = kind|size|frame|extra. Over budget, fall back to the nearest cached size.
 const cached = (key, fn) => {
   let c = cache.get(key);
-  if (!c) { c = fn(); cache.set(key, c); }
+  if (c) return c;
+  const [kind, size, ...rest] = key.split('|');
+  if (B.left <= 0) {
+    const set = sizes.get(kind);
+    if (set && set.size) {
+      let best = -1, bd = 1e9;
+      for (const s of set) { const d = Math.abs(s - size); if (d < bd) { bd = d; best = s; } }
+      const fb = cache.get([kind, best, ...rest].join('|'));
+      if (fb) return fb;
+    }
+  }
+  c = timed(fn);
+  cache.set(key, c);
+  let set = sizes.get(kind);
+  if (!set) sizes.set(kind, (set = new Set()));
+  set.add(+size);
   return c;
 };
 

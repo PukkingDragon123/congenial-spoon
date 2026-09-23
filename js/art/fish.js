@@ -2,6 +2,7 @@
 // (profile curves + fin polygons) that is evaluated per output pixel, so any
 // size, pitch and swim frame renders pixel-crisp with consistent shading.
 import { TAU, clamp, smoothstep, fract, curve, pointInPoly, ramp, bayer, fbm, hash2, Buf, hex, mixRGB } from '../util.js';
+import { B, timed, queueWarm } from './budget.js';
 
 const P = (stops, n) => ramp(stops, n);
 
@@ -517,25 +518,45 @@ export function renderFish(id, L, frame, ang = 0, flash = 0) {
 // ------------------------------------------------------------- the cache --
 export const PITCHES = [-0.5, -0.25, 0, 0.25, 0.5];
 const cache = new Map();
+const warmSizes = new Map(); // id -> Set of lengths with every level frame cached
+const K = (id, L, f, p, fl) => id + '|' + L + '|' + f + '|' + p + '|' + fl;
+
+function fallback(id, L, frame, pitchIdx) {
+  const c = cache.get(K(id, L, frame, pitchIdx, 0)) || cache.get(K(id, L, frame, 2, 0));
+  if (c) return c;
+  const sizes = warmSizes.get(id);
+  if (!sizes || !sizes.size) return null;
+  let best = -1, bd = 1e9;
+  for (const s of sizes) { const d = Math.abs(s - L); if (d < bd) { bd = d; best = s; } }
+  return cache.get(K(id, best, frame, 2, 0)) || null;
+}
 
 export function fishSprite(id, L, frame, pitchIdx = 2, flash = 0) {
-  const key = id + '|' + L + '|' + frame + '|' + pitchIdx + '|' + flash;
+  const key = K(id, L, frame, pitchIdx, flash);
   let c = cache.get(key);
-  if (!c) {
-    c = renderFish(id, L, frame, PITCHES[pitchIdx], flash);
-    cache.set(key, c);
+  if (c) return c;
+  if (B.left <= 0) {
+    const fb = fallback(id, L, frame, pitchIdx);
+    if (fb) return fb;
   }
+  c = timed(() => renderFish(id, L, frame, PITCHES[pitchIdx], flash));
+  cache.set(key, c);
   return c;
 }
 
-export function prewarmFish(id, lengths, pitches = [0, 1, 2, 3, 4], flash = false) {
+// Render every level frame of a size now (used during loading).
+export function warmLevel(id, L) {
   const sp = SPECIES[id];
-  for (const L of lengths) {
-    for (let f = 0; f < sp.frames; f++) {
-      for (const p of pitches) {
-        fishSprite(id, L, f, p, 0);
-        if (flash) fishSprite(id, L, f, p, 1);
-      }
-    }
-  }
+  for (let f = 0; f < sp.frames; f++) fishSprite(id, L, f, 2, 0);
+  let set = warmSizes.get(id);
+  if (!set) warmSizes.set(id, (set = new Set()));
+  set.add(L);
+}
+
+// Queue the remaining variants for background rendering.
+export function queueVariants(id, L, pitches = [1, 3, 0, 4], flash = false) {
+  const sp = SPECIES[id];
+  queueWarm(() => warmLevel(id, L));
+  for (const p of pitches) for (let f = 0; f < sp.frames; f++) queueWarm(() => fishSprite(id, L, f, p, 0));
+  if (flash) for (const p of [2, 1, 3]) for (let f = 0; f < sp.frames; f++) queueWarm(() => fishSprite(id, L, f, p, 1));
 }

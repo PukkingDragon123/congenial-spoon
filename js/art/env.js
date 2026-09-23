@@ -464,36 +464,47 @@ export function genCaustics(size = 96, frames = 24, seed = 4) {
 }
 
 // ----------------------------------------------------------------- kelp --
-const KELP = ramp(['#12301e', '#1e4a28', '#2e6432', '#46803a', '#66a046', '#90be5a', '#bcd878'], 7);
+const KELP = ramp(['#142a18', '#24401c', '#3a5c22', '#56782a', '#789636', '#9cb246', '#c4cc66'], 7);
 export const KELP_FRAMES = 32;
 export function genKelp(height, seed) {
   const r = rng(seed);
-  const W = Math.ceil(height * 0.5) + 16;
+  const W = Math.ceil(height * 0.55) + 24;
   const frames = [];
-  const leaves = [];
-  for (let s = 6; s < height - 2; s += r.range(4, 7)) leaves.push({ s, side: leaves.length % 2 ? 1 : -1, len: r.range(6, 11) * (1 - (s / height) * 0.4), ang: r.range(0.5, 0.9) });
-  const amp = r.range(5, 9), k = r.range(0.035, 0.06), ph0 = r() * TAU;
+  const stipes = [];
+  const n = r.int(1, 3);
+  for (let k = 0; k < n; k++) {
+    const h = height * (k === 0 ? 1 : r.range(0.55, 0.85));
+    const blades = [];
+    for (let sy = 8; sy < h - 2; sy += r.range(4.5, 7.5)) blades.push({ s: sy, side: blades.length % 2 ? 1 : -1, len: r.range(9, 17) * (1 - (sy / h) * 0.35), w: r.range(1.6, 2.4), droop: r.range(0.9, 1.4), ph: r() * TAU });
+    stipes.push({ h, off: (k - (n - 1) / 2) * 5 + r.range(-1, 1), blades, amp: r.range(5, 9), k: r.range(0.035, 0.055), ph: r() * TAU });
+  }
   for (let f = 0; f < KELP_FRAMES; f++) {
     const t = (f / KELP_FRAMES) * TAU;
     const buf = new Buf(W, height + 4);
     const base = W / 2;
-    const X = (s) => base + Math.sin(t + ph0 - s * k) * amp * Math.pow(s / height, 1.5) + Math.sin(t * 2 + s * 0.1) * 0.6 * (s / height);
-    for (let s = 0; s < height; s++) {
-      const x = Math.round(X(s)), y = height + 2 - s;
-      buf.set(x, y, KELP[2]);
-      buf.set(x + 1, y, KELP[1]);
-    }
-    for (const L of leaves) {
-      const bx = X(L.s), by = height + 2 - L.s;
-      const sway = Math.sin(t + ph0 - L.s * k) * 0.35;
-      const ang = -Math.PI / 2 + L.side * L.ang + sway;
-      for (let i = 0; i < L.len; i++) {
-        const w = Math.sin((i / L.len) * Math.PI) * 1.8;
-        const cx = bx + Math.cos(ang) * i, cy = by + Math.sin(ang) * i + (i * i) * 0.02;
-        for (let j = -Math.floor(w); j <= Math.ceil(w); j++) {
-          const px = Math.round(cx - Math.sin(ang) * j * 0.8), py = Math.round(cy + Math.cos(ang) * j * 0.5);
-          const l = 3 + (j < 0 ? 1.4 : -0.4) + (i / L.len) * 1.5 - (Math.abs(j) > w - 0.6 ? 1 : 0);
-          buf.set(px, py, KELP[clamp(Math.round(l), 0, 6)], 240);
+    for (const st of stipes) {
+      const X = (s) => base + st.off + Math.sin(t + st.ph - s * st.k) * st.amp * Math.pow(s / height, 1.5) + Math.sin(t * 2 + s * 0.1) * 0.5 * (s / height);
+      for (let s = 0; s < st.h; s++) {
+        const x = Math.round(X(s)), y = height + 2 - s;
+        buf.set(x, y, KELP[s < st.h * 0.3 ? 1 : 2]);
+      }
+      for (const b of st.blades) {
+        const bx = X(b.s), by = height + 2 - b.s;
+        const sway = Math.sin(t + st.ph - b.s * st.k) * 0.45 + Math.sin(t * 2 + b.ph) * 0.12;
+        // blade starts angled up/out, then droops with the current
+        const a0 = -Math.PI / 2 + b.side * 0.75 + sway;
+        for (let i = 0; i < b.len; i++) {
+          const u = i / b.len;
+          const ang = a0 + b.side * u * b.droop * 0.9 + sway * u;
+          const cx = bx + Math.cos(ang) * i * 0.95, cy = by + Math.sin(ang) * i * 0.8 + u * u * 3;
+          const w = Math.sin(Math.min(1, u * 1.4 + 0.08) * Math.PI) * b.w;
+          for (let j = -Math.ceil(w); j <= Math.ceil(w); j++) {
+            if (Math.abs(j) > w + 0.2) continue;
+            const px = Math.round(cx - Math.sin(ang) * j * 0.7), py = Math.round(cy + Math.cos(ang) * j * 0.7);
+            let l = 3.4 + (j * b.side < 0 ? 1.3 : -0.3) + u * 1.2 - (Math.abs(j) > w - 0.7 ? 0.9 : 0);
+            if (Math.abs(j) < 0.5 && u > 0.1 && u < 0.85) l -= 0.8; // midrib
+            buf.set(px, py, KELP[clamp(Math.round(l), 0, 6)], u > 0.8 ? 200 : 245);
+          }
         }
       }
     }
@@ -523,12 +534,16 @@ export function genFarRidge(w, h, seed) {
 // Curved panoramic window set in a dark hall, built in screen space so the
 // glass always bows around the viewer like the real walk-through hall.
 export const CX = 1200;
+// On tall (portrait) screens the window grows upward so the tank fills the view.
+export function tallExtra(H) { return clamp((H - 380) * 0.55, 0, 150); }
 export function frameCurves(W, H, CY) {
   const k = clamp(W / 640, 0.45, 1.25);
-  const off = H / 2 - CY; // world y -> screen y at the glass plane
-  const top = (x) => { const u = (x - W / 2) / (W / 2); return 32 + off + 36 * k * (1 - u * u); };
+  const extra = tallExtra(H);
+  const camY0 = CY - extra * 0.3;
+  const off = H / 2 - camY0; // world y -> screen y at the glass plane
+  const top = (x) => { const u = (x - W / 2) / (W / 2); return 32 - extra + off + 36 * k * (1 - u * u); };
   const sill = (x) => { const u = (x - W / 2) / (W / 2); return 306 + off - 13 * k * (1 - u * u); };
-  return { top, sill, off };
+  return { top, sill, off, extra, camY0, topWorld: 32 - extra };
 }
 
 export function genFrame(W, H, CY) {

@@ -2,7 +2,9 @@
 // the viewing hall, and the couple standing in front of the glow.
 import { TAU, clamp, lerp, smoothstep, R, rng, makeCanvas, ramp, bayer, Buf, heartPoint, hex } from '../util.js';
 import { genFormation, genStatue, genPillar, genSand, genCaustics, genKelp, KELP_FRAMES, genFarRidge, genFrame, genCeilTile, frameCurves, CX } from '../art/env.js';
-import { prewarmFish, SPECIES } from '../art/fish.js';
+import { warmLevel, queueVariants, SPECIES } from '../art/fish.js';
+import { queueWarm } from '../art/budget.js';
+import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
 import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES } from '../art/creatures.js';
 import { Creature, School, sizeAt } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
@@ -118,17 +120,30 @@ export class Aquarium {
     // creatures
     step(2, () => this.spawnCreatures(r));
     step(3, () => {
-      // Warm every sprite the population will need (avoids hitches later).
-      const need = new Map();
+      // Render what the opening needs now; queue every other variant for
+      // time-sliced background rendering (nearest-size fallback meanwhile).
+      const now = new Map(), later = new Map();
       for (const c of this.creatures) {
         if (!SPECIES[c.kind]) continue;
-        const set = need.get(c.kind) || new Set();
-        for (let z = Math.max(0, c.z - 0.25); z <= Math.min(1, c.z + 0.25); z += 0.05) set.add(sizeAt(c.len, z));
-        need.set(c.kind, set);
+        if (!now.has(c.kind)) { now.set(c.kind, new Set()); later.set(c.kind, new Set()); }
+        now.get(c.kind).add(sizeAt(c.len, c.z));
+        for (let z = Math.max(0, c.z - 0.25); z <= Math.min(1, c.z + 0.25); z += 0.05) later.get(c.kind).add(sizeAt(c.len, z));
       }
-      for (const [k, set] of need) prewarmFish(k, [...set], [0, 1, 2, 3, 4], k === 'trevally' || k === 'bait' || k === 'giant');
-      for (let f = 0; f < RAY_FRAMES; f++) for (const s of [48, 52, 56, 60, 64, 68, 72, 76, 80]) renderRay(s, f);
-      for (let f = 0; f < TURTLE_FRAMES; f++) for (const s of [52, 56, 60, 64]) renderTurtle(s, f);
+      for (const [k, set] of now) for (const L of set) warmLevel(k, L);
+      const glint = (k) => k === 'trevally' || k === 'bait' || k === 'giant';
+      for (const [k, set] of now) for (const L of set) queueVariants(k, L, [1, 3], glint(k));
+      for (const [k, set] of later) for (const L of set) if (!now.get(k).has(L)) queueVariants(k, L, [1, 3], glint(k));
+      for (const c of this.creatures) {
+        if (c.kind === 'ray') for (let f = 0; f < RAY_FRAMES; f++) renderRay(sizeAt(c.len, c.z), f);
+        if (c.kind === 'turtle') for (let f = 0; f < TURTLE_FRAMES; f++) renderTurtle(sizeAt(c.len, c.z), f);
+      }
+      // transition school + finale jellies
+      for (const L of [18, 21, 24, 34, 38, 42, 60, 72, 84]) queueVariants('trevally', L, [1, 3], true);
+      for (const sz of [14, 18, 22]) for (const hue of ['pink', 'blue']) for (let f = 0; f < JELLY_FRAMES; f++) queueWarm(() => renderJelly(sz, f, hue));
+      for (const c of this.creatures) {
+        if (c.kind === 'ray') for (let z = c.z - 0.2; z <= c.z + 0.2; z += 0.05) { const s = sizeAt(c.len, z); for (let f = 0; f < RAY_FRAMES; f++) queueWarm(() => renderRay(s, f)); }
+        if (c.kind === 'turtle') for (let z = c.z - 0.2; z <= c.z + 0.2; z += 0.05) { const s = sizeAt(c.len, z); for (let f = 0; f < TURTLE_FRAMES; f++) queueWarm(() => renderTurtle(s, f)); }
+      }
     });
     step(1, () => {
       this.columns = [[CX - 196, 0.66], [CX + 302, 0.7], [CX - 660, 0.5], [CX + 712, 0.56]].map(([x, z]) => ({ x, z, acc: 0 }));
@@ -137,8 +152,11 @@ export class Aquarium {
     });
     const total = steps.reduce((a, s) => a + s[0], 0);
     let done = 0;
-    for (const [w, fn] of steps) {
+    const prof = typeof location !== 'undefined' && location.search.includes('prof');
+    for (const [i, [w, fn]] of steps.entries()) {
+      const t0 = performance.now();
       fn();
+      if (prof) console.log('build step', i, (performance.now() - t0).toFixed(0) + 'ms');
       done += w;
       progress(done / total);
       await nextFrame();
@@ -185,6 +203,8 @@ export class Aquarium {
   // ------------------------------------------------------------ resize --
   resize(W, H) {
     this.W = W; this.H = H;
+    this.curves0Y = frameCurves(W, H, CY).camY0;
+    this.cam.y = this.curves0Y;
     this.tank = makeCanvas(W, H);
     this.tmp = makeCanvas(560, 300);
     this.refl = makeCanvas(W, H);
@@ -192,7 +212,7 @@ export class Aquarium {
     const pal = ramp(['#0a2f86', '#0f3f9e', '#1552b8', '#1b66cc', '#2379dc', '#2d8ce8', '#3a9ef2', '#52b2f8'], 8);
     const b = new Buf(W, H);
     for (let y = 0; y < H; y++) {
-      const wy = y - H / 2 + CY;
+      const wy = y - H / 2 + this.curves0Y;
       const v = clamp(1 - (wy - 50) / 240);
       for (let x = 0; x < W; x++) {
         const cx = (x - W / 2) / (W * 0.8);
@@ -204,8 +224,10 @@ export class Aquarium {
     this.fogGrad = null;
     this.frame = genFrame(W, H, CY);
     this.curves = frameCurves(W, H, CY);
+    this.camY0 = this.curves.camY0;
+    this.winTop = this.curves.topWorld;
     this.ceil = makeCanvas(W, H + 8);
-    this.yTop = 64;
+    this.yTop = 64 - this.curves.extra * 0.75;
   }
 
   // ------------------------------------------------------------ update --
@@ -279,7 +301,7 @@ export class Aquarium {
 
   fog(ctx, a) {
     if (!this.fogGrad) {
-      const g = ctx.createLinearGradient(0, this.toScreen(0, 40, 0.5)[1], 0, this.toScreen(0, 300, 0.5)[1]);
+      const g = ctx.createLinearGradient(0, this.toScreen(0, this.winTop + 8, 0.5)[1], 0, this.toScreen(0, 300, 0.5)[1]);
       g.addColorStop(0, '#46a8f6');
       g.addColorStop(0.5, '#2a80e0');
       g.addColorStop(1, '#1a5cc2');
@@ -320,7 +342,7 @@ export class Aquarium {
     const t = this.t;
     for (const r of this.rays) {
       const [sx] = this.toScreen(r.x, 0, r.z);
-      const top = this.toScreen(0, 30, r.z)[1], bot = this.toScreen(0, 300, r.z)[1];
+      const top = this.toScreen(0, this.winTop - 10, r.z)[1], bot = this.toScreen(0, 300, r.z)[1];
       const a = r.a * (0.55 + 0.45 * Math.sin(t * r.sp + r.ph)) * this.light;
       const w1 = r.w * (0.8 + 0.2 * Math.sin(t * 0.3 + r.ph)), w2 = r.w2;
       const lean = (bot - top) * r.lean;
@@ -378,7 +400,8 @@ export class Aquarium {
     // glows (heart light etc.)
     for (const g of this.glows) {
       const [sx, sy] = this.toScreen(g.x, g.y, g.z);
-      const k = g.life ? Math.sin(Math.PI * clamp(g.age / g.life)) : 1;
+      let k = g.life ? Math.sin(Math.PI * clamp(g.age / g.life)) : 1;
+      if (g.beat) { const ph = (this.t * 1.1) % 1; k *= 0.75 + 0.35 * (Math.exp(-(((ph - 0.08) / 0.05) ** 2)) + 0.7 * Math.exp(-(((ph - 0.28) / 0.06) ** 2))); }
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = (g.a ?? 1) * k;
       const s = glowSprite(g.r, g.col);
@@ -398,12 +421,13 @@ export class Aquarium {
     ctx.globalAlpha = 1;
     this.fx.draw(ctx, proj);
     // top light falloff
-    const tg = ctx.createLinearGradient(0, this.toScreen(0, 40, 0)[1], 0, this.toScreen(0, 140, 0)[1]);
+    const ty0 = this.toScreen(0, this.winTop + 8, 0)[1], ty1 = this.toScreen(0, this.winTop + 108, 0)[1];
+    const tg = ctx.createLinearGradient(0, ty0, 0, ty1);
     tg.addColorStop(0, `rgba(160,220,255,${0.22 * this.light})`);
     tg.addColorStop(1, 'rgba(160,220,255,0)');
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = tg;
-    ctx.fillRect(0, 0, W, this.toScreen(0, 140, 0)[1]);
+    ctx.fillRect(0, 0, W, ty1);
     ctx.globalCompositeOperation = 'source-over';
   }
 
@@ -418,7 +442,7 @@ export class Aquarium {
     this.renderTank();
     ctx.drawImage(this.tank, 0, 0);
     // ceiling panels scroll with the camera; the curved frame is screen space
-    const dy = Math.round(this.cam.y - CY);
+    const dy = Math.round(this.cam.y - this.camY0);
     const cc = this.ceil.ctx;
     cc.globalCompositeOperation = 'copy';
     cc.fillStyle = cc.createPattern(this.ceilTile, 'repeat');

@@ -5,6 +5,7 @@ import { Aquarium, CX, CY } from './world/scene.js';
 import { Story } from './story/story.js';
 import { drawText } from './font.js';
 import { heartSprite, bubbleSprite } from './world/fx.js';
+import { B, pumpWarm } from './art/budget.js';
 
 const params = new URLSearchParams(location.search);
 const SPEED = +(params.get('speed') || 1);
@@ -74,6 +75,11 @@ view.addEventListener('pointermove', (e) => { if (story) { const [x, y] = toLow(
 view.addEventListener('pointerup', (e) => { if (story) { const [x, y] = toLow(e); story.pointer('up', x, y); } });
 window.addEventListener('keydown', (e) => { if (story && (e.key === ' ' || e.key === 'Enter')) story.pointer('key', W / 2, H / 2); });
 window.addEventListener('resize', () => resize());
+document.addEventListener('visibilitychange', () => {
+  const snd = story && story.sound;
+  if (!snd || !snd.ctx) return;
+  if (document.hidden) snd.ctx.suspend(); else if (snd.enabled) snd.ctx.resume();
+});
 
 // -------------------------------------------------------------------- boot --
 async function boot() {
@@ -102,12 +108,14 @@ async function boot() {
     const dt = clamp(raw, 0, 0.05) * SPEED;
     last = now;
     time += dt;
+    B.left = 4; // ms of on-demand sprite rendering allowed this frame
     story.update(dt);
     aq.update(dt);
     aq.render(world.ctx);
     ui.ctx.clearRect(0, 0, W, H);
     story.draw(ui.ctx);
     post.render(world, ui, time);
+    pumpWarm(raw < 0.02 ? 5 : 2);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
