@@ -184,7 +184,8 @@ export class Sweep {
       if (x < -120 || x > W + 120) continue;
       const img = fishSprite('trevally', fi.L, Math.floor(this.t * 14 + fi.ph) % 8, fi.pi, (Math.floor(this.t * 6 + fi.ph) % 9 === 0) ? 1 : 0);
       ctx.globalAlpha = fi.depth > 0.5 ? 0.75 : 1;
-      ctx.setTransform(-1, 0, 0, 1, Math.round(x), Math.round(fi.y + Math.sin(this.t * 3 + fi.ph) * 3));
+      // the wall travels left and the sprites are drawn nose-left: no mirroring
+      ctx.setTransform(1, 0, 0, 1, Math.round(x), Math.round(fi.y + Math.sin(this.t * 3 + fi.ph) * 3));
       ctx.drawImage(img, -img.ox, -img.oy);
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -192,15 +193,85 @@ export class Sweep {
   }
 }
 
-// Bubble curtain rising from the bottom (the "dive in" moment).
+// Bubble curtain rising from the bottom (the "dive in" moment): an arched,
+// wobbling wall of foam packed with bubbles, sparkling at its crest, with the
+// bubbles at the top edge popping as it clears the screen.
 export class BubbleCurtain {
-  constructor(W, H, dur = 2.2) {
+  constructor(W, H, dur = 3) {
     this.W = W; this.H = H; this.dur = dur; this.t = 0; this.done = false;
     this.b = [];
-    const n = Math.round((W * H) / 260);
+    const n = Math.round((W * H) / 120);
     for (let i = 0; i < n; i++) {
       const rr = Math.random();
-      this.b.push({ x: Math.random() * W, u: Math.random() * 1.4, r: rr < 0.5 ? 1 + ((Math.random() * 2) | 0) : rr < 0.85 ? 3 + ((Math.random() * 3) | 0) : 6 + ((Math.random() * 5) | 0), w: Math.random() * TAU, sp: 0.8 + Math.random() * 0.5 });
+      const r = rr < 0.45 ? 1 + ((Math.random() * 2) | 0) : rr < 0.82 ? 3 + ((Math.random() * 3) | 0) : 6 + ((Math.random() * 6) | 0);
+      this.b.push({ x: Math.random() * W, u: Math.pow(Math.random(), 0.7) * 1.5, r, w: Math.random() * TAU, sp: 0.75 + Math.random() * 0.6 });
+    }
+    this.sparks = [];
+    for (let i = 0; i < Math.round(W / 5); i++) this.sparks.push({ x: Math.random() * W, ph: Math.random() * TAU, d: Math.random() * 18 });
+  }
+  get k() { return clamp(this.t / this.dur); }
+  covered() { return this.k >= 0.5; }
+  update(dt) { this.t += dt; if (this.t >= this.dur) this.done = true; }
+  front(x) {
+    const base = lerp(this.H + 60, -this.H * 1.7, ease.inOutCubic(this.k));
+    const u = x / this.W;
+    return base - Math.sin(u * Math.PI) * this.H * 0.16 + Math.sin(x * 0.045 + this.t * 7) * 5 + Math.sin(x * 0.11 - this.t * 5) * 2.5;
+  }
+  draw(ctx) {
+    const W = this.W, H = this.H;
+    const len = H * 1.35;
+    // foam body: a wavy-edged polygon filled with a cool bright gradient
+    const mid = this.front(W / 2);
+    const g = ctx.createLinearGradient(0, mid - H * 0.2, 0, mid + len);
+    g.addColorStop(0, 'rgba(200,245,255,0)');
+    g.addColorStop(0.08, 'rgba(210,248,255,0.95)');
+    g.addColorStop(0.22, 'rgba(120,205,255,0.92)');
+    g.addColorStop(0.7, 'rgba(60,150,235,0.9)');
+    g.addColorStop(1, 'rgba(40,110,210,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(0, this.front(0));
+    for (let x = 0; x <= W; x += 4) ctx.lineTo(x, this.front(x));
+    for (let x = W; x >= 0; x -= 4) ctx.lineTo(x, this.front(x) + len + Math.sin(x * 0.06 + this.t * 4) * 10);
+    ctx.closePath();
+    ctx.fill();
+    // bubbles, brighter and bigger toward the crest
+    for (const b of this.b) {
+      const x = b.x + Math.sin(this.t * 3 + b.w) * 3;
+      const y = this.front(x) + (b.u * H) / b.sp + Math.sin(this.t * 4 + b.w) * 2;
+      if (y < -14 || y > H + 14) continue;
+      if (y < 6 && b.r >= 3) {
+        // pop at the top of the screen
+        ctx.strokeStyle = 'rgba(230,250,255,0.8)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(Math.round(x) + 0.5, Math.round(y) + 0.5, b.r + 2 + (6 - y) * 0.4, 0, TAU); ctx.stroke();
+        continue;
+      }
+      const s = bubbleSprite(b.r);
+      ctx.drawImage(s, Math.round(x) - s.o, Math.round(y) - s.o);
+    }
+    // glitter along the crest
+    ctx.fillStyle = '#ffffff';
+    for (const sp of this.sparks) {
+      const y = this.front(sp.x) + sp.d;
+      if (y < 0 || y > H) continue;
+      if (Math.sin(this.t * 9 + sp.ph) > 0.4) {
+        ctx.fillRect(Math.round(sp.x), Math.round(y), 1, 1);
+        if (Math.sin(this.t * 9 + sp.ph) > 0.9) { ctx.fillRect(Math.round(sp.x) - 1, Math.round(y), 3, 1); ctx.fillRect(Math.round(sp.x), Math.round(y) - 1, 1, 3); }
+      }
+    }
+  }
+}
+
+// A soft flood of light from the centre with drifting sparkles: used to
+// move between galleries so it feels like walking through a dream.
+export class LightBloom {
+  constructor(W, H, dur = 2.6, col = [200, 230, 255]) {
+    this.W = W; this.H = H; this.dur = dur; this.t = 0; this.done = false; this.col = col;
+    this.sp = [];
+    for (let i = 0; i < 90; i++) {
+      const a = Math.random() * TAU;
+      this.sp.push({ a, r: Math.random(), v: 0.4 + Math.random() * 0.9, s: Math.random() < 0.2 ? 2 : 1, ph: Math.random() * TAU });
     }
   }
   get k() { return clamp(this.t / this.dur); }
@@ -208,21 +279,25 @@ export class BubbleCurtain {
   update(dt) { this.t += dt; if (this.t >= this.dur) this.done = true; }
   draw(ctx) {
     const W = this.W, H = this.H, k = this.k;
-    const front = lerp(H + 30, -H * 1.5, ease.inOutSine(k));
-    // bright foam body
-    const top = front, bot = front + H * 1.25;
-    for (let y = Math.max(0, Math.floor(top)); y < Math.min(H, bot); y++) {
-      const d = Math.min(y - top, bot - y);
-      const a = clamp(d / 60);
-      ctx.fillStyle = `rgba(${Math.round(lerp(120, 200, a))},${Math.round(lerp(200, 240, a))},255,${a * 0.92})`;
-      ctx.fillRect(0, y, W, 1);
+    const a = Math.sin(k * Math.PI);
+    const R0 = Math.hypot(W, H) * 0.62;
+    const r = R0 * (0.15 + 0.85 * ease.outCubic(Math.min(1, k * 1.6)));
+    const [cr, cg, cb] = this.col;
+    const g = ctx.createRadialGradient(W / 2, H * 0.45, 0, W / 2, H * 0.45, r);
+    g.addColorStop(0, `rgba(255,255,255,${a})`);
+    g.addColorStop(0.45, `rgba(${cr},${cg},${cb},${a * 0.95})`);
+    g.addColorStop(1, `rgba(${cr},${cg},${cb},${a * (k < 0.5 ? 0.0 : 0.85)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    if (k > 0.35 && k < 0.65) { ctx.fillStyle = `rgba(255,255,255,${1 - Math.abs(k - 0.5) / 0.15})`; ctx.fillRect(0, 0, W, H); }
+    for (const p of this.sp) {
+      const d = (p.r + this.t * p.v * 0.5) % 1;
+      const x = W / 2 + Math.cos(p.a) * d * W * 0.7, y = H * 0.45 + Math.sin(p.a) * d * H * 0.7;
+      ctx.globalAlpha = a * (0.4 + 0.6 * Math.abs(Math.sin(this.t * 5 + p.ph)));
+      ctx.fillStyle = '#fffbe8';
+      ctx.fillRect(Math.round(x), Math.round(y), p.s, p.s);
     }
-    for (const b of this.b) {
-      const y = front + b.u * H * 0.9 / b.sp + Math.sin(this.t * 4 + b.w) * 2;
-      if (y < -12 || y > H + 12) continue;
-      const s = bubbleSprite(b.r);
-      ctx.drawImage(s, Math.round(b.x + Math.sin(this.t * 3 + b.w) * 3) - s.o, Math.round(y) - s.o);
-    }
+    ctx.globalAlpha = 1;
   }
 }
 

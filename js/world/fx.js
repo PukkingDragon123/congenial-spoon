@@ -130,6 +130,28 @@ export class Particles {
         ctx.globalCompositeOperation = 'lighter';
         ctx.drawImage(s, Math.round(x - p.r), Math.round(y - p.r));
         ctx.globalCompositeOperation = 'source-over';
+      } else if (p.kind === 'ring') {
+        // cartoon impact ring: a thin circle that expands and thins out
+        const r = (p.r0 || 2) + (p.r1 || 30) * (1 - Math.pow(1 - t, 2));
+        ctx.strokeStyle = p.col || '#cfeaff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(Math.round(x) + 0.5, Math.round(y) + 0.5, r, 0, TAU);
+        ctx.stroke();
+      } else if (p.kind === 'star') {
+        // four-point twinkle that spins up then shrinks away
+        const tw = Math.sin(t * Math.PI);
+        const r = (p.size || 4) * tw;
+        const a2 = (p.spin || 0) + p.age * (p.spinF || 3);
+        ctx.strokeStyle = p.col || '#fff6c0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let k = 0; k < 4; k++) {
+          const an = a2 + (k * Math.PI) / 2;
+          ctx.moveTo(Math.round(x) + 0.5, Math.round(y) + 0.5);
+          ctx.lineTo(Math.round(x + Math.cos(an) * r) + 0.5, Math.round(y + Math.sin(an) * r) + 0.5);
+        }
+        ctx.stroke();
       } else if (p.kind === 'sprite') {
         ctx.drawImage(p.img, Math.round(x - p.img.width / 2), Math.round(y - p.img.height / 2));
       }
@@ -142,6 +164,17 @@ export function burstSparks(sys, x, y, n, opts = {}) {
   for (let i = 0; i < n; i++) {
     const a = R() * TAU, sp = (opts.speed || 40) * (0.3 + R() * 0.7);
     sys.add({ kind: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, drag: 2.2, age: 0, life: (opts.life || 0.9) * (0.6 + R() * 0.8), size: opts.size || (1 + (R() * 3) | 0), col: opts.col || (R() < 0.5 ? '#ffffff' : '#ffd6ec') });
+  }
+}
+
+export function popRing(sys, x, y, opts = {}) {
+  sys.add({ kind: 'ring', x, y, vx: 0, vy: opts.vy || 0, age: 0, life: opts.life || 0.55, r0: opts.r0 ?? 2, r1: opts.r1 ?? 26, col: opts.col || '#cfeaff' });
+}
+
+export function burstStars(sys, x, y, n, opts = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = R() * TAU, sp = (opts.speed || 40) * (0.3 + R() * 0.8);
+    sys.add({ kind: 'star', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, drag: 2.4, age: 0, life: (opts.life || 0.8) * (0.7 + R() * 0.6), size: opts.size || (3 + R() * 4), spin: R() * TAU, spinF: (R() - 0.5) * 8, col: opts.col || (R() < 0.5 ? '#fff6c0' : '#ffd6ec') });
   }
 }
 

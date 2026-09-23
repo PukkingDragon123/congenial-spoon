@@ -66,8 +66,8 @@ function ik(sx, sy, tx, ty, a, b, bend) {
   return [ex, ey, ex + Math.cos(wa) * b, ey + Math.sin(wa) * b];
 }
 
-export const GUY = { h: 92, headRx: 5.6, headRy: 6.2, neck: 3, sh: 11, hip: 7, torso: 28, leg: 44, ua: 16, fa: 15, girl: false };
-export const GIRL = { h: 84, headRx: 4.8, headRy: 5.6, neck: 3.5, sh: 8.5, hip: 6.5, torso: 24, leg: 40, ua: 14, fa: 13, girl: true };
+export const GUY = { h: 74, headRx: 6.0, headRy: 6.6, neck: 2.4, sh: 10.5, hip: 7, torso: 23, leg: 32, ua: 13, fa: 12, girl: false };
+export const GIRL = { h: 68, headRx: 5.2, headRy: 5.9, neck: 2.8, sh: 8.2, hip: 6.5, torso: 20, leg: 29, ua: 11.5, fa: 11, girl: true };
 
 // ---------------------------------------------------------------- views --
 // Back view (facing the tank). x is screen-right. p: { breath, tilt, lhand, rhand, sway, tip }
@@ -252,7 +252,7 @@ export class Couple {
     this.hands = 0; // face view: holding both hands
     this.hug = 0;
     this.flip = 1; // horizontal squash during turns
-    this.gap = 20;
+    this.gap = 17;
   }
 
   update(dt) {

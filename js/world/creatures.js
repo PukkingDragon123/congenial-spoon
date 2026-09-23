@@ -2,9 +2,13 @@
 import { TAU, clamp, lerp, R } from '../util.js';
 import { glowSprite } from './fx.js';
 import { SPECIES, fishSprite, PITCHES } from '../art/fish.js';
-import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES, renderJelly, JELLY_FRAMES } from '../art/creatures.js';
+import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES, renderJelly, JELLY_FRAMES, renderCrab, CRAB_FRAMES } from '../art/creatures.js';
 
 export const DEPTH_PX = 120; // how many "pixels" of distance one unit of z represents for steering
+
+// Which way each sprite is drawn: -1 = nose points left (the default), +1 =
+// nose points right. Used to decide whether a draw gets mirrored.
+const SPRITE_DIR = { ray: 1 };
 
 export function sizeAt(len, z) {
   const L = len * (1 - 0.42 * z);
@@ -44,6 +48,24 @@ export class Creature {
     this.ax = 0; this.ay = 0; this.az = 0;
     this.bounds = o.bounds ?? null;
     this.glowA = 0;
+    // liveliness: idle bob, beat squash-stretch and startle darts
+    this.bob = R() * TAU;
+    this.bobF = 1.6 + R() * 1.8;
+    this.live = 0.55 + R() * 0.9;      // how strongly this one answers the music
+    this.bnc = 0;
+    this.startle = 0;
+  }
+
+  // A quick pop + dart away from (x,y): used when something happens nearby.
+  react(x, y, power = 1) {
+    const dx = this.x - x, dy = this.y - y;
+    const d = Math.hypot(dx, dy) || 1;
+    this.startle = Math.min(1.4, this.startle + power);
+    this.bnc = Math.min(1.2, this.bnc + power * 0.7);
+    if (!this.form) {
+      this.vx += (dx / d) * 34 * power;
+      this.vy += (dy / d) * 24 * power;
+    }
   }
 
   update(dt, aq) {
@@ -109,6 +131,7 @@ export class Creature {
       if (sp > this.maxSpeed) { this.vx *= this.maxSpeed / sp; this.vy *= this.maxSpeed / sp; }
     }
     this.x += this.vx * dt; this.y += this.vy * dt; this.z = clamp(this.z + this.vz * dt, 0, 1);
+    if (this.fixedZ != null) { this.z = this.fixedZ; this.vz = 0; }
     // facing & turning
     if (this.vx > 1.2) this.dir = 1; else if (this.vx < -1.2) this.dir = -1;
     const wantFace = this.faceOverride || this.dir;
@@ -116,9 +139,15 @@ export class Creature {
     // pitch
     const ang = Math.atan2(this.vy, Math.abs(this.vx) + 3);
     this.pa += (clamp(ang, -0.5, 0.5) - this.pa) * Math.min(1, dt * 4);
-    // animation
+    // animation — tail beats faster when swimming hard or when the music hits
     const sp = Math.hypot(this.vx, this.vy);
-    this.phase += dt * (this.anim * 0.5 + sp * this.anim * 0.03);
+    const drive = 1 + (aq.pulse || 0) * 0.5 * this.live + this.startle * 0.8;
+    this.phase += dt * (this.anim * 0.5 + sp * this.anim * 0.03) * drive;
+    // liveliness
+    this.bob += dt * this.bobF;
+    this.startle = Math.max(0, this.startle - dt * 1.8);
+    const want = (aq.pulse || 0) * this.live * 0.5 + this.startle * 0.5;
+    this.bnc += (want - this.bnc) * Math.min(1, dt * 9);
     if (this.glint) {
       this.flash = Math.max(0, this.flash - dt * 4);
       if (R() < dt * (Math.abs(this.face) < 0.8 ? 0.35 : 0.018)) this.flash = 1;
@@ -134,13 +163,17 @@ export class Creature {
     else if (this.kind === 'turtle') img = renderTurtle(sizeAt(this.len, this.z), frame);
     else if (this.kind === 'jelly') img = renderJelly(this.len, frame, this.hue || 'pink');
     else {
-      const pi = clamp(Math.round(this.pa / 0.25) + 2, 0, PITCHES.length - 1);
+      // Sprites are drawn nose-left, so a descending fish needs the opposite
+      // pitch index to end up nose-down once it is mirrored below.
+      const pi = SPECIES[this.kind].noPitch ? 2 : clamp(Math.round(-this.pa / 0.25) + 2, 0, PITCHES.length - 1);
       img = fishSprite(this.kind, sizeAt(this.len, this.z), frame, pi, this.flash > 0.5 ? 1 : 0);
     }
-    let f = this.face;
-    if (this.kind === 'jelly') f = 1;
-    else if (Math.abs(f) < 0.18) f = 0.18 * Math.sign(f || 1);
-    const X = Math.round(sx), Y = Math.round(sy);
+    // face is +1 swimming right. Most sprites are drawn nose-left so they get
+    // mirrored; the ray is drawn nose-right, and the jelly has no facing.
+    let f = this.kind === 'jelly' ? 1 : this.face * (SPRITE_DIR[this.kind] || -1);
+    if (this.kind !== 'jelly' && Math.abs(f) < 0.18) f = 0.18 * Math.sign(f || 1);
+    const lift = Math.sin(this.bob) * (0.5 + this.len * 0.012) + (aq.waveAt ? aq.waveAt(this.x, this.z) : 0);
+    const X = Math.round(sx), Y = Math.round(sy + lift);
     if (this.glowA > 0.01) {
       const g = glowSprite(7, '#9fe8ff');
       ctx.globalCompositeOperation = 'lighter';
@@ -150,9 +183,11 @@ export class Creature {
       ctx.globalAlpha = 1;
     }
     if (this.alpha < 1) ctx.globalAlpha = this.alpha;
-    if (f === 1) ctx.drawImage(img, X - img.ox, Y - img.oy);
+    const e = this.bnc * 0.3;
+    const sxs = 1 + e, sys = 1 - e * 0.75;
+    if (f === 1 && e < 0.01) ctx.drawImage(img, X - img.ox, Y - img.oy);
     else {
-      ctx.setTransform(f, 0, 0, 1, X, Y);
+      ctx.setTransform(f * sxs, 0, 0, sys, X, Y);
       ctx.drawImage(img, -img.ox, -img.oy);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
@@ -223,5 +258,85 @@ export class School {
       fy += (f.vy / sp) * (this.speed - sp) * 0.8 - f.vy * 0.3;
       f.ax = fx; f.ay = fy; f.az = fz - f.vz * 0.5;
     }
+  }
+}
+
+// Crabs potter about on the sand: scuttle sideways, stop, wave their claws on
+// the beat, bolt when startled, and can be sent to a spot (x, z) on the floor.
+export class Crab {
+  constructor(o = {}) {
+    this.kind = 'crab';
+    this.x = o.x ?? 0; this.z = o.z ?? 0.3; this.y = 0;
+    this.size = o.size ?? 16;
+    this.dir = R() < 0.5 ? -1 : 1;
+    this.v = 0;
+    this.state = 'idle';
+    this.timer = R() * 2;
+    this.phase = R() * 8;
+    this.claw = 0;
+    this.wave = 0;
+    this.form = null;   // [x, z] target on the sand
+    this.startle = 0;
+    this.bnc = 0;
+    this.bounds = o.bounds ?? null;
+    this.hop = 0;
+  }
+  react(x, y, power = 1) {
+    this.startle = Math.min(1.5, this.startle + power);
+    this.bnc = Math.min(1, this.bnc + power);
+    this.hop = Math.max(this.hop, power);
+    if (!this.form) { this.dir = this.x > x ? 1 : -1; this.state = 'run'; this.timer = 0.6 + power; }
+  }
+  update(dt, aq) {
+    this.y = aq.floorY(this.z) - 1;
+    this.startle = Math.max(0, this.startle - dt);
+    this.hop = Math.max(0, this.hop - dt * 3);
+    const [xmin, xmax] = aq.xRange(this.z, this.bounds);
+    let want = 0;
+    if (this.form) {
+      const dx = this.form[0] - this.x, dz = this.form[1] - this.z;
+      const d = Math.hypot(dx, dz * 300);
+      if (d > 1.5) {
+        want = Math.sign(dx) * Math.min(30, Math.abs(dx) * 2 + 6);
+        this.z += clamp(dz, -dt * 0.25, dt * 0.25);
+        this.wave = 0;
+      } else {
+        this.x += dx * Math.min(1, dt * 4);
+        this.wave = 1;
+      }
+    } else {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        const r = R();
+        if (this.state === 'run' || r < 0.4) { this.state = 'idle'; this.timer = 1 + R() * 2.5; }
+        else if (r < 0.85) { this.state = 'walk'; this.timer = 1.5 + R() * 2.5; if (R() < 0.5) this.dir *= -1; }
+        else { this.state = 'wave'; this.timer = 1.5 + R(); }
+      }
+      if (this.x < xmin + 20) this.dir = 1;
+      if (this.x > xmax - 20) this.dir = -1;
+      if (this.state === 'walk') want = this.dir * 12;
+      if (this.state === 'run') want = this.dir * 46;
+      this.wave = this.state === 'wave' ? 1 : 0;
+    }
+    this.v += (want - this.v) * Math.min(1, dt * 8);
+    this.x += this.v * dt;
+    this.phase += dt * Math.abs(this.v) * 0.7;
+    // claws: up and waving on the music when happy, otherwise resting
+    const beat = aq.pulse || 0;
+    this.claw = this.wave ? (beat > 0.45 ? 2 : 1) : this.startle > 0.5 ? 2 : 0;
+    const wantB = this.wave ? beat * 0.8 : 0;
+    this.bnc += (wantB - this.bnc) * Math.min(1, dt * 10);
+  }
+  draw(ctx, aq) {
+    const [sx, sy] = aq.toScreen(this.x, this.y, this.z);
+    if (sx < -40 || sx > aq.W + 40) return;
+    const S = Math.max(8, Math.round((this.size * (1 - 0.4 * this.z)) / 2) * 2);
+    const img = renderCrab(S, Math.floor(this.phase) % CRAB_FRAMES, this.claw);
+    const e = this.bnc * 0.22;
+    const hop = Math.sin(this.hop * Math.PI) * 5;
+    const X = Math.round(sx), Y = Math.round(sy - hop + (aq.waveAt ? aq.waveAt(this.x, this.z) * 0.4 : 0));
+    ctx.setTransform(1 - e * 0.6, 0, 0, 1 + e, X, Y);
+    ctx.drawImage(img, -img.ox, -img.oy);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 }

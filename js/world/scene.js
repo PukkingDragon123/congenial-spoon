@@ -2,17 +2,19 @@
 // the viewing hall, and the couple standing in front of the glow.
 import { TAU, clamp, lerp, smoothstep, R, rng, makeCanvas, ramp, bayer, Buf, heartPoint, hex } from '../util.js';
 import { genFormation, genStatue, genPillar, genSand, genCaustics, genKelp, KELP_FRAMES, genFarRidge, genFrame, genCeilTile, frameCurves, CX } from '../art/env.js';
-import { warmLevel, queueVariants, SPECIES } from '../art/fish.js';
+import { warmLevel, queueVariants, SPECIES, fishSprite } from '../art/fish.js';
 import { queueWarm } from '../art/budget.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
 import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES } from '../art/creatures.js';
-import { Creature, School, sizeAt } from './creatures.js';
+import { Creature, School, Crab, sizeAt } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { Couple } from '../art/people.js';
 
 export { CX };
 export const CY = 200;
 const FLOOR_NEAR = 294, FLOOR_FAR = 248;
+const WHALE_LEN = 300, WHALE_Z = 0.36;
+const WHALE_L = sizeAt(WHALE_LEN, WHALE_Z);
 const FOG = [
   { z: 0.74, a: 0.36 },
   { z: 0.42, a: 0.2 },
@@ -41,6 +43,45 @@ export class Aquarium {
     this.coupleY = 352;
     this.heartLight = 0;
     this.light = 1;
+    // music reactivity + travelling waves through the tank
+    this.pulse = 0;   // 0..1, decays after each beat
+    this.energy = 0;  // 0..1, smoothed loudness
+    this.waves = [];
+  }
+
+  // A stadium-wave that sweeps the tank; every creature lifts as it passes.
+  sendWave(x0, dir = 1, o = {}) {
+    this.waves.push({ x: x0, dir, speed: o.speed ?? 620, amp: o.amp ?? 5, width: o.width ?? 150, life: o.life ?? 3.4, age: 0 });
+  }
+
+  waveAt(x, z) {
+    let dy = 0;
+    for (const w of this.waves) {
+      const d = (x - w.x) * w.dir;
+      if (d < -w.width || d > w.width) continue;
+      const k = 1 - Math.abs(d) / w.width;
+      dy -= Math.sin(k * Math.PI) * w.amp * (1 - w.age / w.life) * (1 - 0.5 * z);
+    }
+    return dy;
+  }
+
+  // Everything nearby notices something happening at (x, y).
+  startle(x, y, radius = 220, power = 1) {
+    for (const c of this.creatures) {
+      const d = Math.hypot(c.x - x, c.y - y);
+      if (d < radius) c.react(x, y, power * (1 - d / radius));
+    }
+  }
+
+  // The gentle giant for the ending: glides in from the right, never turns.
+  spawnWhaleShark() {
+    const w = new Creature('whaleshark', { x: CX + 720, y: 150, z: WHALE_Z, len: WHALE_LEN, speed: 17, anim: 4, turnRate: 0.4, dir: -1 });
+    w.cruiseY = [140, 160];
+    w.fixedZ = WHALE_Z;
+    w.bounds = [CX - 5000, CX + 5000];
+    this.creatures.push(w);
+    this.whale = w;
+    return w;
   }
 
   floorY(z) { return lerp(FLOOR_NEAR, FLOOR_FAR, z); }
@@ -130,7 +171,7 @@ export class Aquarium {
         for (let z = Math.max(0, c.z - 0.25); z <= Math.min(1, c.z + 0.25); z += 0.05) later.get(c.kind).add(sizeAt(c.len, z));
       }
       for (const [k, set] of now) for (const L of set) warmLevel(k, L);
-      const glint = (k) => k === 'trevally' || k === 'bait' || k === 'giant';
+      const glint = (k) => k === 'trevally' || k === 'minnow' || k === 'giant';
       for (const [k, set] of now) for (const L of set) queueVariants(k, L, [1, 3], glint(k));
       for (const [k, set] of later) for (const L of set) if (!now.get(k).has(L)) queueVariants(k, L, [1, 3], glint(k));
       for (const c of this.creatures) {
@@ -140,6 +181,9 @@ export class Aquarium {
       // transition school + finale jellies
       for (const L of [18, 21, 24, 34, 38, 42, 60, 72, 84]) queueVariants('trevally', L, [1, 3], true);
       for (const sz of [14, 18, 22]) for (const hue of ['pink', 'blue']) for (let f = 0; f < JELLY_FRAMES; f++) queueWarm(() => renderJelly(sz, f, hue));
+      // the whale shark only appears at the end: draw it slowly in the background
+      for (let f = 0; f < SPECIES.whaleshark.frames; f++) queueWarm(() => fishSprite('whaleshark', WHALE_L, f, 2, 0));
+      queueWarm(() => warmLevel('whaleshark', WHALE_L));
       for (const c of this.creatures) {
         if (c.kind === 'ray') for (let z = c.z - 0.2; z <= c.z + 0.2; z += 0.05) { const s = sizeAt(c.len, z); for (let f = 0; f < RAY_FRAMES; f++) queueWarm(() => renderRay(s, f)); }
         if (c.kind === 'turtle') for (let z = c.z - 0.2; z <= c.z + 0.2; z += 0.05) { const s = sizeAt(c.len, z); for (let f = 0; f < TURTLE_FRAMES; f++) queueWarm(() => renderTurtle(s, f)); }
@@ -169,11 +213,12 @@ export class Aquarium {
     const add = (c) => { this.creatures.push(c); return c; };
     // trevally school (hero)
     const trev = [];
-    for (let i = 0; i < 118; i++) trev.push(add(new Creature('trevally', { x: CX + (r() - 0.5) * 300, y: 110 + r() * 90, z: 0.25 + r() * 0.35, len: 30 + r() * 6, speed: 26, anim: 8, glint: true, vx: (r() - 0.5) * 40 })));
+    for (let i = 0; i < 148; i++) trev.push(add(new Creature('trevally', { x: CX + (r() - 0.5) * 300, y: 110 + r() * 90, z: 0.25 + r() * 0.35, len: 30 + r() * 6, speed: 26, anim: 8, glint: true, vx: (r() - 0.5) * 40 })));
     this.trevSchool = new School(trev, { radius: 30, sep: 13, speed: 28, path: (t) => [CX + Math.sin(t * 0.09) * 360 + Math.sin(t * 0.21) * 80, 145 + Math.sin(t * 0.17) * 40, 0.42 + Math.sin(t * 0.05) * 0.14] });
     // bait ball
     const bait = [];
-    for (let i = 0; i < 190; i++) bait.push(add(new Creature('bait', { x: CX - 400 + (r() - 0.5) * 120, y: 120 + r() * 60, z: 0.2 + r() * 0.3, len: 10 + r() * 3, speed: 34, anim: 12, glint: true, turnRate: 6, vx: 20 })));
+    // the minnows: the little school that draws the heart and writes the words
+    for (let i = 0; i < 250; i++) bait.push(add(new Creature('minnow', { x: CX - 400 + (r() - 0.5) * 120, y: 120 + r() * 60, z: 0.2 + r() * 0.3, len: 12 + r() * 3, speed: 34, anim: 12, glint: true, turnRate: 6, vx: 20 })));
     this.baitSchool = new School(bait, { radius: 18, sep: 6, speed: 34, wc: 0.7, wt: 0.5, path: (t) => [CX + Math.sin(t * 0.13 + 2) * 520, 125 + Math.sin(t * 0.31) * 45, 0.32 + Math.sin(t * 0.09) * 0.1] });
     // big cruisers
     add(new Creature('shark', { x: CX - 500, y: 170, z: 0.52, len: 132, speed: 15, anim: 5, turnRate: 0.9, dir: 1 })).cruiseY = [140, 230];
@@ -182,22 +227,27 @@ export class Aquarium {
     add(new Creature('ray', { x: CX - 200, y: 110, z: 0.4, len: 84, speed: 12, anim: 5, turnRate: 0.7, dir: -1 })).cruiseY = [80, 170];
     add(new Creature('ray', { x: CX + 600, y: 140, z: 0.6, len: 70, speed: 10, anim: 5, turnRate: 0.7, dir: 1 })).cruiseY = [90, 190];
     add(new Creature('turtle', { x: CX - 700, y: 130, z: 0.3, len: 66, speed: 9, anim: 4, turnRate: 0.8, dir: 1 })).cruiseY = [90, 170];
-    for (let i = 0; i < 6; i++) add(new Creature('giant', { x: CX + (r() - 0.5) * 1200, y: 120 + r() * 120, z: 0.1 + r() * 0.2, len: 46 + r() * 8, speed: 20 + r() * 6, anim: 7, glint: true, turnRate: 1.6, dir: r.sign() }));
+    for (let i = 0; i < 10; i++) add(new Creature('giant', { x: CX + (r() - 0.5) * 1200, y: 120 + r() * 120, z: 0.1 + r() * 0.2, len: 46 + r() * 8, speed: 20 + r() * 6, anim: 7, glint: true, turnRate: 1.6, dir: r.sign() }));
     // groupers near rock bases
     add(new Creature('grouper', { x: CX - 220, y: 246, z: 0.4, len: 68, speed: 6, mode: 'hover', homeR: 60, anim: 4, turnRate: 1.2 }));
     add(new Creature('grouper', { x: CX + 230, y: 250, z: 0.38, len: 64, speed: 6, mode: 'hover', homeR: 60, anim: 4, turnRate: 1.2 }));
     // reef fish around the massifs
     const homes = [[CX - 250, 130, 0.4], [CX - 210, 190, 0.38], [CX - 300, 230, 0.4], [CX + 200, 200, 0.4], [CX + 260, 150, 0.4], [CX + 330, 110, 0.4], [CX - 90, 244, 0.5], [CX + 150, 246, 0.5], [CX - 960, 180, 0.2], [CX + 960, 190, 0.2]];
     const reef = [['tang', 20, 7], ['butterfly', 18, 7], ['snapper', 26, 8], ['batfish', 26, 5]];
-    for (let i = 0; i < 34; i++) {
+    for (let i = 0; i < 46; i++) {
       const [k, len, n] = reef[i % reef.length];
       const h = homes[i % homes.length];
       add(new Creature(k, { x: h[0] + (r() - 0.5) * 60, y: h[1] + (r() - 0.5) * 30, z: h[2] + (r() - 0.5) * 0.1, len: len + r() * 4, speed: 8 + r() * 6, mode: 'hover', home: [h[0], h[1], h[2]], homeR: 50, anim: n + 2, turnRate: 4 }));
     }
     // distant silhouettes
-    for (let i = 0; i < 26; i++) add(new Creature(r() < 0.7 ? 'trevally' : 'snapper', { x: CX + (r() - 0.5) * 1400, y: 90 + r() * 130, z: 0.88 + r() * 0.1, len: 30, speed: 10 + r() * 8, anim: 6, dir: r.sign() }));
+    for (let i = 0; i < 36; i++) add(new Creature(r() < 0.7 ? 'trevally' : 'snapper', { x: CX + (r() - 0.5) * 1400, y: 90 + r() * 130, z: 0.88 + r() * 0.1, len: 30, speed: 10 + r() * 8, anim: 6, dir: r.sign() }));
     this.trev = trev;
     this.bait = bait;
+    // crabs on the sand
+    this.crabs = [];
+    for (let i = 0; i < 14; i++) this.crabs.push(add(new Crab({ x: CX + (r() - 0.5) * 700, z: 0.04 + r() * 0.3, size: 15 + r() * 7, bounds: [CX - 430, CX + 430] })));
+    // a warm halo behind the Buddha
+    this.glows.push({ x: CX + 34, y: 150, z: 0.66, r: 70, col: '#ffe2a0', a: 0.16 });
   }
 
   // ------------------------------------------------------------ resize --
@@ -233,6 +283,12 @@ export class Aquarium {
   // ------------------------------------------------------------ update --
   update(dt) {
     this.t += dt;
+    for (let i = this.waves.length - 1; i >= 0; i--) {
+      const w = this.waves[i];
+      w.age += dt;
+      w.x += w.dir * w.speed * dt;
+      if (w.age > w.life) this.waves.splice(i, 1);
+    }
     this.trevSchool.update(dt, this);
     this.baitSchool.update(dt, this);
     for (const c of this.creatures) c.update(dt, this);

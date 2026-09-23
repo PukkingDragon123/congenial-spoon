@@ -43,8 +43,38 @@ export const CONFIG = {
   finale: '{to} ♥ {from}',
   finaleSub: 'our story starts here',
 
-  // Procedural ambient soundtrack (music box + underwater hum)
+  // Soundtrack. `music` is the file that plays and that the whole piece is
+  // timed to; the story follows the song's clock, so swapping the track means
+  // re-timing `lyrics` and the atSong(...) beats in js/story/story.js.
   sound: true,
+  music: 'audio/always.mp3',
+
+  // Words that drift up through the water, in song seconds. These are our own
+  // lines written to the song's shape — replace them with anything you like
+  // (including the real lyrics, if you have the right to use them).
+  //   [ time, text, band ]   band: 'high' (default, open water up top) | 'low'
+  lyrics: [
+    [30.0, 'i keep finding you'],
+    [37.0, 'in every blue room'],
+    [44.5, 'the whole ocean moved'],
+    [51.5, 'and i still only saw you'],
+
+    [62.0, 'always'],
+    [69.0, "that's the word"],
+    [76.0, 'for how long'],
+    [82.5, "i'll look at you like this"],
+
+    [96.0, "i'm no good"],
+    [103.0, 'at saying the big things'],
+
+    [142.0, 'always'],
+    [150.5, 'still always'],
+    [158.0, 'and after that'],
+
+    [174.0, 'every tide'],
+    [182.0, 'comes back to you'],
+    [191.0, 'always'],
+  ],
 };
 
 // URL parameter overrides (?to=..&from=..&q=..)

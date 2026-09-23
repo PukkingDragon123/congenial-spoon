@@ -1,26 +1,32 @@
 # Beneath the Blue — a pixel-art love confession
 
-A love confession told almost entirely through pictures, set in front of a huge
-curved aquarium window inspired by SEA LIFE Bangkok Ocean World (Siam
-Paragon). Two silhouettes walk up to the glowing glass and hold hands. Then
-the tank answers for them: a school of trevally swirls into a heart around the
-carved stone head, a message in a bottle sinks down, and the fish spell out the
-words.
+A love confession told almost entirely through pictures, set to Daniel
+Caesar's "Always". A couple walks through an empty, softly glowing aquarium
+inspired by SEA LIFE Bangkok Ocean World: a jellyfish hall, a coral reef full
+of clownfish, and finally the great window with the stone Buddha, where the
+fish spell out the words.
 
-Everything is drawn in code, with no image or audio files. The fish, sharks,
-eagle rays, sea turtle, jellyfish, rocks, statue, kelp, the couple and the
-music are all generated when the page loads.
+All the art is drawn in code: fish, jellies, crabs, coral, the Buddha, the
+couple and the whale shark are generated when the page loads. The only asset
+is the song in `audio/`.
 
-## The story (about 90 seconds)
+## The story (the length of the song, about 3:45)
 
-1. **Title**: the tank glows, blurred, behind the title. Tap to dive in.
-2. **Dive**: a curtain of bubbles rushes up the screen and the water wobbles.
-3. **Arrival**: the camera pans across the panorama while the couple walks in and turns to face the glass.
-4. **Hands**: they hold hands, a heart pops up, and she leans her head on his shoulder.
-5. **The heart**: about 120 trevally leave their school and swirl into a hollow heart around the statue's face.
-6. **Message in a bottle**: a bottle sinks to the glass. Tapping it sends out a ripple and a parchment letter unrolls.
-7. **The words**: a wall of fish sweeps across the screen. Then about 190 glowing baitfish spell `I ♥ YOU`, and the question appears with **YES ♥** and **no** buttons. The "no" button runs away.
-8. **Finale**: a pink flash and a burst of hearts. The couple share a forehead kiss while every trevally forms a giant beating heart. Jellyfish rise and hearts float up from the sand.
+Every beat is pinned to a moment in the track, and the whole tank moves with
+the music: fish bounce and squash on the beat, waves ripple through the
+schools, crabs wave their claws, and the light breathes with the song.
+
+1. **Title** (before the music): the jellyfish hall glows behind the title. Tap to dive in and start the song.
+2. **Dive** (0:05): bubbles swell, then an arched wall of foam rushes up and reveals the hall.
+3. **Jellyfish hall** (intro and first verse): the couple strolls in under drifting, colour-shifting jellies, turns to the glass, holds hands and leans in.
+4. **Coral reef** (0:38): a bloom of light carries them into a bright reef. Clownfish peek out of their anemones and crabs potter about on the sand.
+5. **The Buddha tank** (0:55): a wall of fish sweeps the reef away right on the lift into the chorus. The minnows pour into a swirling heart around the Buddha, and the crabs line up underneath to dance.
+6. **Message in a bottle** (1:31): a bottle sinks to the glass. Tap it, or wait, and a letter unrolls and types itself out over the second verse.
+7. **The words** (2:16): foam rushes up for the big chorus, the minnows spell `I ♥ YOU`, and the question appears with **YES ♥** and **no**. The "no" button runs away.
+8. **Finale**: after "yes", a whale shark glides out of the blue carrying a heart of minnows on its back while the trevally circle it. The couple share a forehead kiss, jellies rise and hearts float up from the sand.
+
+Lines of text drift up through the water between the beats, each letter in
+its own bubble. They are in `js/config.js` under `lyrics`.
 
 ## Personalise it
 
@@ -28,6 +34,11 @@ Edit **`js/config.js`**. It holds the names, the letter, the question, the
 words the fish spell, the button labels and the final card. Thai and other
 languages work too: characters that aren't in the built-in pixel font are
 drawn as crisp pixels from the system font.
+
+`lyrics` is a list of `[seconds, text, band]` entries timed to the song. The
+lines included are original words written to the song's shape; swap in your
+own. If you change the song, re-time `lyrics` and the `atSong(...)` beats in
+`js/story/story.js`.
 
 For a quick test without editing, use URL parameters:
 
@@ -50,7 +61,9 @@ npx serve .            # or: python3 -m http.server
 ```
 
 To deploy, publish the folder as-is on GitHub Pages, Netlify or Vercel. There
-is no build step.
+is no build step. The song is a commercial track: sharing it privately with
+one person is one thing, but check the rights before posting the page
+publicly.
 
 ## Tech notes
 
@@ -74,16 +87,22 @@ is no build step.
   also follow set paths to form shapes (the swirling heart, the lettering).
 - **Director** (`js/story/story.js`): the whole piece is one async script
   built from waits, tweens and taps.
-- **Sound** (`js/audio.js`): a music box and underwater hum synthesised with
-  WebAudio. It starts on the first tap, and the speaker icon (top right) mutes
-  it.
+- **Sound** (`js/audio.js`): plays the song and runs a live analyser on it,
+  giving the scene a loudness level and a beat pulse. The story reads its
+  clock from the track, so it stays in sync. Small effects (bubbles, chimes)
+  are still synthesised. It starts on the first tap, and the speaker icon (top
+  right) mutes it.
+- **Galleries** (`js/world/rooms.js`): the jellyfish hall and the coral reef
+  share the main tank's camera, couple and effects, so the story drives any
+  of them the same way.
 - **Loading**: only the sprites needed for the opening are drawn upfront.
   Everything else is drawn in the background a few milliseconds per frame, with
   nearest-size fallbacks, so the animation doesn't stutter.
 
 ### Dev helpers
 
-- `?scene=tank|heart|bottle|letter|question|finale` jumps to a beat.
+- `?scene=jelly|reef|heart|bottle|letter|question|finale` jumps to a beat.
+- `?sim=1` makes the story follow the simulated clock instead of the audio (for headless tests).
 - `?speed=2` runs time faster.
 - `?gl=0` forces the plain-2D fallback renderer (no bloom or blur).
 - `tools/*.html` are art preview sheets (fish, creatures, environment, couple).

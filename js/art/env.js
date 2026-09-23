@@ -219,95 +219,98 @@ export function genStatue() {
   const heights = new Float32Array(W * Ht);
   const mask = new Uint8Array(W * Ht);
   const mossy = new Float32Array(W * Ht);
-  const tiers = [
-    // [yTop, yBot, hwTop, hwBot]
-    [10, 21, 5, 9],
-    [21, 33, 8, 15],
-    [33, 45, 13, 21],
-    [45, 56, 18, 26],
-    [56, 66, 25, 31],
-  ];
+  // Serene Sukhothai-style head: flame finial, curled ushnisha and hair,
+  // arched brows, downcast eyes, long earlobes, neck folds and a robe.
+  const curls = (x, y) => {
+    // snail-shell curls on a staggered lattice: rounded bumps with dark seams
+    const sp = 4.6, row = Math.round(y / (sp * 0.87));
+    const off = (row % 2) * sp * 0.5;
+    const cxl = Math.round((x - off) / sp) * sp + off, cyl = row * sp * 0.87;
+    const d = Math.hypot(x - cxl, y - cyl);
+    return d < 2.5 ? 1.9 * (1 - (d / 2.5) ** 2) + (d < 0.9 ? 0.5 : 0) : -0.6;
+  };
   for (let y = 0; y < Ht; y++) {
     for (let x = 0; x < W; x++) {
       const dx = x + 0.5 - cx, adx = Math.abs(dx);
-      let h = -1, m = 0;
-      // Crown tiers
-      for (let t = 0; t < tiers.length; t++) {
-        const [y0, y1, w0, w1] = tiers[t];
-        if (y >= y0 && y < y1) {
-          const f = (y - y0) / (y1 - y0);
-          const hw = lerp(w0, w1, Math.pow(f, 0.7)) + Math.sin(f * Math.PI) * 2.2;
-          if (adx < hw) {
-            h = 16 * Math.sqrt(1 - (dx / hw) ** 2) + 4 + t * 2;
-            if (t > 0) {
-              // bead band along the bottom of each tier
-              if (y1 - y < 3) h += 1.6 * Math.abs(Math.sin(dx * 0.9));
-              // lotus petals on the tier face
-              const pw = 5.5, pi = Math.round(dx / pw), pc = pi * pw;
-              const pf = (y - y0) / (y1 - y0 - 3);
-              const petal = Math.abs(dx - pc) < (pw * 0.48) * Math.sin(Math.min(1, pf) * Math.PI * 0.95);
-              if (petal && pf < 1) h += 1.3 * (1 - pf * 0.4);
-              else if (pf < 1) h -= 0.6;
-            } else h += 1.5 * Math.sin(y * 0.8);
-          }
-        }
+      let h = -1;
+      // flame finial (rasmi)
+      if (y >= 3 && y < 31) {
+        const f = (y - 3) / 28;
+        const hw = 0.9 + 6.2 * Math.pow(f, 1.15) + Math.sin(f * 9) * 0.5 * f;
+        if (adx < hw) h = 7 + 8 * Math.sqrt(1 - (dx / hw) ** 2) + f * 4 + (Math.abs(Math.sin(y * 0.9 + dx * 0.4)) < 0.2 ? -0.8 : 0);
       }
-      // Finial bulb
-      const fb = Math.hypot(dx / 5, (y - 8) / 6);
-      if (fb < 1) h = Math.max(h, 10 * Math.sqrt(1 - fb * fb) + 8);
-      if (y < 5 && adx < 1.5) h = Math.max(h, 12);
-      // Face oval
-      const fx = dx / 30, fy = (y - 104) / 44;
+      // ushnisha
+      const ub = Math.hypot(dx / 16, (y - 42) / 13);
+      if (ub < 1) h = Math.max(h, 17 * Math.sqrt(1 - ub * ub) + 7 + curls(x, y));
+      // skull covered in curls down to the hairline
+      const sk = Math.hypot(dx / 31, (y - 84) / 38);
+      const hairline = 73 + 0.013 * dx * dx;
+      if (sk < 1 && y < hairline + 1) h = Math.max(h, 21 * Math.sqrt(1 - sk * sk) + curls(x, y));
+      // face
+      const fx = dx / 27.5, fy = (y - 106) / 37;
       const fr = fx * fx + fy * fy;
-      if (fr < 1 && y > 60) {
-        let fh = 20 * Math.sqrt(1 - fr);
-        const browY = 85 + 0.014 * dx * dx;
-        if (adx < 25) fh += 2.8 * Math.exp(-(((y - browY) / 2.4) ** 2)) * (1 - adx / 30);
-        // eye sockets and heavy lidded closed eyes
-        for (const s of [-1, 1]) {
-          const ex = cx + s * 12.5, ey = 93;
-          fh -= 3.4 * g(x, y, ex, ey, 7.5, 4.2);
-          const lx = x - ex;
-          const lidY = ey - 0.2 + 0.035 * lx * lx;
-          if (Math.abs(lx) < 7) {
-            fh += 1.6 * Math.exp(-(((y - lidY + 1.6) / 1.8) ** 2));
-            if (Math.abs(y - lidY) < 0.7) fh -= 2.2;
+      if (fr < 1 && y >= hairline - 1) {
+        let fh = 21 * Math.sqrt(1 - fr);
+        // arched brows flowing into the bridge of the nose
+        const browY = 85 - 4.2 * Math.exp(-(((adx - 12) / 7) ** 2));
+        if (adx < 23) fh += 2.3 * Math.exp(-(((y - browY) / 1.6) ** 2)) * (1 - adx / 26);
+        for (const sd of [-1, 1]) {
+          const ex = cx + sd * 12, ey = 95;
+          fh -= 2.6 * g(x, y, ex, ey - 2.5, 7.5, 4);
+          const lx = x + 0.5 - ex;
+          if (Math.abs(lx) < 7.5) {
+            // heavy downcast lid, then a thin crescent slit
+            const slit = ey + 0.035 * lx * lx - 0.4;
+            fh += 1.9 * Math.exp(-(((y - slit + 1.8) / 1.9) ** 2));
+            if (Math.abs(y + 0.5 - slit) < 0.65) fh -= 2.6;
           }
         }
-        // nose
-        if (y > 86 && y < 118) {
-          const t = (y - 86) / 32;
-          fh += (1.5 + 4.5 * t) * Math.exp(-((dx / (2 + 2.6 * t)) ** 2));
+        if (y > 86 && y < 119) {
+          const t = (y - 86) / 33;
+          fh += (1.8 + 4 * t) * Math.exp(-((dx / (1.8 + 2.4 * t)) ** 2));
         }
-        fh += 4.2 * g(x, y, cx, 116, 4.6, 3.6);
-        fh += 2.2 * g(x, y, cx - 5.2, 117.5, 2.6, 2.4) + 2.2 * g(x, y, cx + 5.2, 117.5, 2.6, 2.4);
-        fh -= 2.2 * g(x, y, cx - 2.8, 120, 1.2, 0.9) + 2.2 * g(x, y, cx + 2.8, 120, 1.2, 0.9);
-        // serene smile
-        const my = 128 - 0.022 * dx * dx;
-        if (adx < 13) {
-          fh += 2.6 * Math.exp(-(((y - (my - 2.2)) / 1.8) ** 2)) * (1 - adx / 14);
-          fh += 3.0 * Math.exp(-(((y - (my + 2.4)) / 2.2) ** 2)) * (1 - adx / 12);
-          if (Math.abs(y - my) < 0.7 && adx < 11) fh -= 2.6;
+        fh += 3.4 * g(x, y, cx, 117, 4.4, 3.2);
+        fh += 1.8 * g(x, y, cx - 4.6, 118, 2.4, 2) + 1.8 * g(x, y, cx + 4.6, 118, 2.4, 2);
+        fh -= 1.8 * g(x, y, cx - 2.6, 120.5, 1.1, 0.8) + 1.8 * g(x, y, cx + 2.6, 120.5, 1.1, 0.8);
+        // gentle closed smile, corners lifted
+        const my = 127.5 - 0.028 * dx * dx;
+        if (adx < 12) {
+          fh += 2.2 * Math.exp(-(((y - (my - 2)) / 1.6) ** 2)) * (1 - adx / 13);
+          fh += 2.8 * Math.exp(-(((y - (my + 2.3)) / 2) ** 2)) * (1 - adx / 11);
+          if (Math.abs(y + 0.5 - my) < 0.6 && adx < 10) fh -= 2.2;
         }
-        fh += 2 * g(x, y, cx, 141, 6, 4);
-        fh += 2.6 * g(x, y, cx - 18, 112, 8, 9) + 2.6 * g(x, y, cx + 18, 112, 8, 9);
-        fh -= 1.2 * g(x, y, cx, 123, 1.4, 2);
+        fh += 2.2 * g(x, y, cx, 137.5, 7, 3.6);
+        fh += 2.4 * g(x, y, cx - 17, 111, 8, 10) + 2.4 * g(x, y, cx + 17, 111, 8, 10);
         h = Math.max(h, fh);
       }
-      // Ears
-      for (const s of [-1, 1]) {
-        const ex = (x + 0.5 - (cx + s * 31.5)) / 5.8, ey = (y - 111) / 27;
+      // long earlobes joined to the head
+      for (const sd of [-1, 1]) {
+        const ex = (x + 0.5 - (cx + sd * 29)) / 5.4, ey = (y - 114) / 30;
         if (ex * ex + ey * ey < 1) {
-          let eh = 9 * Math.sqrt(1 - ex * ex - ey * ey) + 3;
-          if (Math.abs(ex + s * 0.1) < 0.4 && ey > -0.75 && ey < 0.55) eh -= 3.2;
-          if (Math.hypot(ex, (ey - 0.72) * 2) < 0.35) eh -= 3;
+          let eh = 8 * Math.sqrt(1 - ex * ex - ey * ey) + 4;
+          if (Math.abs(ex + sd * 0.15) < 0.35 && ey > -0.8 && ey < -0.1) eh -= 2.6;
+          if (Math.abs(ex) < 0.28 && ey > 0.35 && ey < 0.78) eh -= 3.2;
           h = Math.max(h, eh);
         }
       }
-      // Neck / shoulders base
-      if (y > 136 && adx < 21 + Math.max(0, y - 166) * 1.6) {
-        const nhw = 21 + Math.max(0, y - 166) * 1.6;
-        h = Math.max(h, 14 * Math.sqrt(Math.max(0, 1 - (dx / nhw) ** 2)) + (y > 160 ? 2 * Math.sin(dx * 0.4) : 0));
+      // short neck with three folds
+      if (y > 138 && y < 162 && adx < 15.5) {
+        let nh = 13 * Math.sqrt(Math.max(0, 1 - (dx / 15.5) ** 2));
+        for (const fy2 of [146, 151.5, 157]) nh -= 1.3 * Math.exp(-(((y - fy2 + 0.028 * dx * dx) / 0.9) ** 2));
+        h = Math.max(h, nh);
+      }
+      // shoulders and robe draped over the left shoulder
+      if (y >= 158) {
+        const hw = 16 + (y - 158) * 2.3;
+        if (adx < hw) {
+          let rh = 15 * Math.sqrt(Math.max(0, 1 - (dx / hw) ** 2)) + 2;
+          if (dx < 8 - (y - 158) * 0.9) {
+            const fold = ((x + y * 0.9) % 7 + 7) % 7;
+            rh += fold < 1.2 ? -1.1 : fold < 3 ? 0.4 : 0;
+          }
+          if (Math.abs(dx - 8 + (y - 158) * 0.9) < 1) rh += 1.4;
+          h = Math.max(h, rh);
+        }
       }
       if (h > 0) {
         h += (fbm(x * 0.2, y * 0.2, 41, 3) - 0.5) * 2.2;
@@ -352,7 +355,7 @@ export function genStatue() {
       const idx = clamp(Math.round(lvl + (bayer(x, y) - 0.5) * 0.9), 0, STONE.length - 1);
       let col = STONE[idx];
       const up = -ny;
-      if (mossy[y * W + x] > 0.58 && up > 0.15) col = mixRGB(col, MOSS[clamp(Math.round(dif * 4 + (bayer(x, y) - 0.5)), 0, 4)], 0.6);
+      if (mossy[y * W + x] > 0.7 && up > 0.25) col = mixRGB(col, MOSS[clamp(Math.round(dif * 4 + (bayer(x, y) - 0.5)), 0, 4)], 0.4);
       buf.set(x, y, col);
       if (up > 0.2 && dif > 0.35) light.set(x, y, [255, 255, 255], Math.round(clamp((up - 0.2) * 1.6) * 255));
     }

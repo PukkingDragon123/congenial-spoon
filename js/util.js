@@ -199,6 +199,31 @@ export function heartPoint(t) {
   return [x / 17, y / 17];
 }
 
+// Point on the heart outline at arc-length fraction u (0..1), so things
+// spaced evenly in u are spaced evenly along the curve.
+const HEART_LUT = (() => {
+  const N = 720, pts = [], len = [0];
+  for (let i = 0; i <= N; i++) pts.push(heartPoint((i / N) * Math.PI * 2));
+  for (let i = 1; i <= N; i++) len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const total = len[N], out = [];
+  const M = 1024;
+  let j = 0;
+  for (let k = 0; k <= M; k++) {
+    const target = (k / M) * total;
+    while (j < N && len[j + 1] < target) j++;
+    const f = (target - len[j]) / Math.max(1e-9, len[j + 1] - len[j]);
+    out.push([pts[j][0] + (pts[j + 1][0] - pts[j][0]) * f, pts[j][1] + (pts[j + 1][1] - pts[j][1]) * f]);
+  }
+  return out;
+})();
+export function heartArc(u) {
+  u -= Math.floor(u);
+  const f = u * (HEART_LUT.length - 1);
+  const i = Math.floor(f), k = f - i;
+  const a = HEART_LUT[i], b = HEART_LUT[Math.min(i + 1, HEART_LUT.length - 1)];
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+}
+
 export function insideHeart(x, y) {
   // x,y in heart units, y down. Implicit form of the classic heart.
   const X = x * 1.15, Y = -y * 1.15 + 0.25;

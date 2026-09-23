@@ -257,6 +257,12 @@ export function renderTurtle(L, frame) {
 
 // ------------------------------------------------------------ jellyfish --
 export const JELLY_FRAMES = 20;
+const JELLY_PALS = {
+  pink: { rim: [255, 214, 238], body: [240, 150, 205], deep: [190, 90, 170], gon: [255, 120, 196], arm: [236, 150, 210] },
+  blue: { rim: [210, 245, 255], body: [130, 200, 245], deep: [70, 130, 210], gon: [180, 240, 255], arm: [150, 210, 250] },
+  violet: { rim: [238, 220, 255], body: [184, 146, 248], deep: [120, 80, 206], gon: [222, 176, 255], arm: [198, 164, 250] },
+  gold: { rim: [255, 246, 214], body: [252, 204, 136], deep: [214, 134, 74], gon: [255, 224, 156], arm: [250, 212, 154] },
+};
 export function renderJelly(size, frame, hue = 'pink') {
   return cached('jelly|' + size + '|' + frame + '|' + hue, () => {
     const ph = (frame / JELLY_FRAMES) * TAU;
@@ -265,9 +271,7 @@ export function renderJelly(size, frame, hue = 'pink') {
     const W = Math.ceil(size * 1.4), H = Math.ceil(size * 2.6);
     const cx = W / 2, top = Math.round(size * 0.15);
     const buf = new Buf(W, H);
-    const pal = hue === 'pink'
-      ? { rim: [255, 214, 238], body: [240, 150, 205], deep: [190, 90, 170], gon: [255, 120, 196], arm: [236, 150, 210] }
-      : { rim: [210, 245, 255], body: [130, 200, 245], deep: [70, 130, 210], gon: [180, 240, 255], arm: [150, 210, 250] };
+    const pal = JELLY_PALS[hue] || JELLY_PALS.blue;
     // Bell
     for (let py = 0; py < H; py++) {
       for (let px = 0; px < W; px++) {
@@ -315,5 +319,90 @@ export function renderJelly(size, frame, hue = 'pink') {
     const c = buf.toCanvas();
     c.ox = Math.round(cx); c.oy = top + Math.round(bh * 0.6);
     return c;
+  });
+}
+
+// ------------------------------------------------------------------ crab --
+// Front view, feet on the ground. frame = leg cycle, claw 0 (down) .. 2 (up
+// and waving). Origin (ox, oy) is centre of the feet line.
+export const CRAB_FRAMES = 8;
+const CRAB = ramp(['#2a0804', '#6a160a', '#b02e16', '#e05228', '#ff7c42', '#ffb282', '#ffe2c8'], 7);
+export function renderCrab(S, frame, claw = 0) {
+  return cached(`crab|${S}|${frame}|${claw}`, () => {
+    const W = Math.ceil(S * 1.7) + 4, H = Math.ceil(S * 1.25) + 4;
+    const ox = W >> 1, oy = H - 2;
+    const lvl = new Float32Array(W * H).fill(-99);
+    const put = (x, y, l) => {
+      x = Math.floor(x + ox); y = Math.floor(y + oy);
+      if (x < 0 || y < 0 || x >= W || y >= H) return;
+      const i = y * W + x;
+      if (l > lvl[i] || lvl[i] === -99) lvl[i] = l;
+    };
+    const disc = (cx, cy, rx, ry, lf) => {
+      for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
+        const u = (x + 0.5 - cx) / rx, v = (y + 0.5 - cy) / ry;
+        if (u * u + v * v <= 1) put(x, y, lf(u, v));
+      }
+    };
+    const seg = (ax, ay, bx, by, r, l) => {
+      const n = Math.ceil(Math.hypot(bx - ax, by - ay) * 2) + 1;
+      for (let k = 0; k <= n; k++) { const t = k / n; disc(ax + (bx - ax) * t, ay + (by - ay) * t, r, r, () => l); }
+    };
+    const rx = S * 0.36, ry = S * 0.22;
+    const bodyY = -S * 0.34;
+    const ph = (frame / CRAB_FRAMES) * TAU;
+    // legs: three a side, alternating lift
+    for (const s of [-1, 1]) for (let k = 0; k < 3; k++) {
+      const lift = Math.max(0, Math.sin(ph + k * 2.1 + (s > 0 ? Math.PI : 0))) * S * 0.08;
+      const ax = s * rx * (0.55 + k * 0.16), ay = bodyY + ry * (0.1 + k * 0.18);
+      const kx = s * (rx + S * (0.12 + k * 0.05)), ky = bodyY - S * 0.04 + k * S * 0.05 - lift;
+      const fx = s * (rx + S * (0.2 + k * 0.08)), fy = -lift * 0.6;
+      seg(ax, ay, kx, ky, Math.max(0.6, S * 0.035), 2.4);
+      seg(kx, ky, fx, fy, Math.max(0.5, S * 0.03), 2.0);
+    }
+    // claws on arms
+    const up = claw / 2;
+    for (const s of [-1, 1]) {
+      const wig = claw === 2 ? Math.sin(ph * 2 + (s > 0 ? 1 : 0)) * S * 0.05 : 0;
+      const sx = s * rx * 0.7, sy = bodyY - ry * 0.3;
+      const ex = s * (rx + S * 0.1), ey = bodyY - ry * (0.4 + up * 1.4) + wig * 0.5;
+      const cx = s * (rx + S * (0.14 - up * 0.04)), cy = bodyY - ry * (0.9 + up * 2.6) + wig;
+      seg(sx, sy, ex, ey, Math.max(0.7, S * 0.045), 3);
+      seg(ex, ey, cx, cy, Math.max(0.7, S * 0.045), 3.2);
+      disc(cx, cy, S * 0.15, S * 0.12, (u, v) => 4.6 - v * 1.2 - (u * s > 0.4 ? 0.8 : 0));
+      // pincer notch
+      const nx = cx + s * S * 0.05, ny = cy - S * 0.03;
+      for (let d = 0; d < Math.max(1, S * 0.06); d++) {
+        const x = Math.floor(nx + s * d + ox), y = Math.floor(ny + oy);
+        if (x >= 0 && y >= 0 && x < W && y < H) lvl[y * W + x] = -99;
+      }
+    }
+    // carapace with a little mottling
+    disc(0, bodyY, rx, ry, (u, v) => 4.4 - v * 1.6 - Math.abs(u) * 0.6 + (hash2(Math.round(u * 9), Math.round(v * 7), 3) < 0.14 ? -1 : 0));
+    // eye stalks
+    for (const s of [-1, 1]) {
+      const ex = s * S * 0.12, ey = bodyY - ry - S * 0.1;
+      seg(ex, bodyY - ry * 0.7, ex, ey, Math.max(0.5, S * 0.03), 3.4);
+    }
+    const b = new Buf(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const l = lvl[y * W + x];
+      if (l === -99) continue;
+      const up1 = y > 0 ? lvl[(y - 1) * W + x] : -99, dn = y < H - 1 ? lvl[(y + 1) * W + x] : -99;
+      let e = l;
+      if (up1 === -99) e += 1.1;
+      if (dn === -99) e -= 1.2;
+      b.set(x, y, CRAB[clamp(Math.round(e + (bayer(x, y) - 0.5) * 0.6), 0, CRAB.length - 1)]);
+    }
+    // eyes: black beads with a glint
+    for (const s of [-1, 1]) {
+      const ex = Math.floor(s * S * 0.12 + ox), ey = Math.floor(bodyY - ry - S * 0.1 + oy);
+      b.set(ex, ey, [8, 6, 10]);
+      if (S >= 14) { b.set(ex + (s > 0 ? 0 : -1), ey - 1, [8, 6, 10]); b.set(ex, ey - 1, [255, 255, 255]); }
+      else b.set(ex, ey - 1, [230, 240, 255]);
+    }
+    const cv = b.toCanvas();
+    cv.ox = ox; cv.oy = oy;
+    return cv;
   });
 }
