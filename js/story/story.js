@@ -49,9 +49,6 @@ export class Story {
     this.lyricQueue = (CONFIG.lyrics || []).map(([t, text, band]) => ({ t, text, band: band || 'high' }));
     this.lyrics = [];
     this.waveAcc = 0;
-    this.goal = null;
-    this.pearls = 0;
-    this.floaters = [];
     this.hud = false;
     this.stage.cam.x = this.camX;
     aq.couple.mode = 'walk';
@@ -232,21 +229,7 @@ export class Story {
     this.tween(1.4, (k) => { p.warp = 0.7 * (1 - k); });
   }
 
-  // ------------------------------------------------------ game layer --
-  // A little objective with a counter; tapping the right creatures fills it.
-  setGoal(label, need = 0, match = null) {
-    this.goal = { label, need, got: 0, match, a: 0, done: false };
-    const G = this.goal;
-    this.tween(0.6, (k) => { G.a = k; });
-    this.sound.sfx('chime');
-  }
-  clearGoal() {
-    const G = this.goal;
-    if (!G) return;
-    this.tween(0.5, (k) => { G.a = 1 - k; }).then(() => { if (this.goal === G) this.goal = null; });
-  }
-
-  // Tap a creature: it reacts, you get a pearl, and it may count to the goal.
+  // Tap a creature and it reacts with a little sparkle.
   tapCreature(x, y) {
     const st = this.stage;
     let best = null, bd = 1e9;
@@ -266,24 +249,9 @@ export class Story {
     best.react(best.x + (R() - 0.5) * 4, best.y + 8, 0.9);
     if (best.kind === 'crab') best.hop = 1;
     if (best.kind === 'jelly') best.lit = 1.6;
-    popRing(this.fx, x, y, { r1: 18, col: '#fff6c0' });
+    popRing(this.fx, x, y, { r1: 18, col: '#ffe0f0' });
     burstStars(this.fx, x, y, 6, { speed: 40, size: 4 });
-    const G = this.goal;
-    const counts = G && !G.done && G.match && G.match(best) && !best.counted;
-    if (counts) best.counted = true;
-    this.pearls = (this.pearls || 0) + (counts ? 3 : 1);
-    this.floaters.push({ x, y: y - 6, text: counts ? '+3' : '+1', age: 0 });
-    this.sound.sfx(counts ? 'sparkle' : 'pop');
-    if (counts) {
-      G.got++;
-      if (G.got >= G.need) {
-        G.done = true;
-        this.sound.sfx('yes');
-        burstStars(this.fx, this.W / 2, 14, 16, { speed: 70, size: 6 });
-        this.floaters.push({ x: this.W / 2, y: 26, text: 'goal complete!', age: 0, big: true });
-        st.sendWave(st.cam.x - 700, 1, { speed: 800, amp: 6, width: 200 });
-      }
-    }
+    this.sound.sfx('pop');
   }
 
   // Put the couple at the big window.
@@ -311,28 +279,29 @@ export class Story {
     const c = this.aq.couple;
     this.tween(14, (k) => { this.camX = lerp(CX - 260, CX, k); }, ease.inOutSine);
     await this.atSong(8.5);
-    this.setGoal('light up the jellies', 5, (k) => k.kind === 'jelly');
-    await this.walkTo(CX, 17);
+    await this.walkTo(CX, 16);
     await this.turnToGlass();
-    c.hold = 0; c.lean = 0;
-    await this.atSong(23.2);
-    this.clearGoal();
+    await this.atSong(19.6);
+    await this.tween(2.4, (k) => { c.hold = k; }, ease.inOutCubic);
+    this.tween(2.6, (k) => { c.lean = k; }, ease.inOutSine);
   }
 
   // Chapter 2: the clownfish reef.
   async reefScene() {
     const reef = this.rooms.reef;
+    const c = this.aq.couple;
     if (reef && this.stage !== reef) {
       await this.atSong(23.6);
       this.sound.sfx('chime');
       await this.go(reef, new LightBloom(this.W, this.H, 2.6, [190, 240, 255]), () => this.enterRoom(reef, CX - 160, CX - 220));
     }
     this.tween(10, (k) => { this.camX = lerp(CX - 160, CX, k); }, ease.inOutSine);
-    this.setGoal('find the clownfish', 3, (k) => k.kind === 'clown');
-    await this.walkTo(CX - 20, 32);
+    await this.walkTo(CX - 20, 29.5);
     await this.turnToGlass();
-    await this.atSong(41.2);
-    this.clearGoal();
+    await this.tween(1.6, (k) => { c.hold = k; }, ease.inOutCubic);
+    await this.atSong(37.6);
+    this.heartPop(this.stage, this.stage.coupleX, this.stage.coupleY - 34);
+    this.tween(2.4, (k) => { c.lean = k; }, ease.inOutSine);
   }
 
   // Chapter 3: the underwater tunnel, walking toward the light.
@@ -345,22 +314,23 @@ export class Story {
     await this.go(tun, new Sweep(this.W, this.H, 2.9), () => {
       this.camX = CX;
       this.setStage(tun);
-      c.mode = 'back'; c.hold = 0; c.lean = 0; c.flip = 1;
+      c.mode = 'back'; c.hold = 1; c.lean = 0.6; c.flip = 1;
       tun.coupleScale = 1.18; tun.walkSpeed = 0.5; tun.endGlow = 0;
     });
-    this.setGoal('wave at the manta rays', 2, (k) => k.kind === 'ray');
     this.tween(12, (k) => { tun.coupleScale = 1.18 - 0.2 * k; this.camX = CX + Math.sin(k * 3) * 30; });
-    await this.atSong(52.0);
+    await this.atSong(46.5);
+    // little hearts drift up around them in the tunnel light
+    for (let i = 0; i < 6; i++) this.fx.add({ kind: 'heart', x: this.W / 2 + (R() - 0.5) * 50, y: this.H * 0.8, vx: (R() - 0.5) * 8, vy: -10 - R() * 8, age: 0, life: 4, size: R() < 0.6 ? 0 : 1, ph: R() * TAU, wob: 8, wobF: 2, fin: 0.6, alpha: 0.85 });
+    await this.atSong(49.5);
     this.tween(4.5, (k) => { tun.endGlow = k; }, ease.inOutSine);
-    await this.atSong(55.2);
-    this.clearGoal();
+    await this.atSong(53.6);
   }
 
   // The hook: out of the tunnel into the great Buddha tank, and the game
   // stops pretending. The minnows rush into a heart right on the chorus.
   async hookScene() {
     const aq = this.aq, c = aq.couple, p = this.post.p;
-    await this.atSong(56.0);
+    await this.atSong(54.0);
     await this.mainReady;
     this.sound.sfx('chime');
     const s = Math.min(96, this.W * 0.36);
@@ -375,9 +345,9 @@ export class Story {
       for (const f of aq.bait) f.formFace = 0;
       glow = { x: cx, y: cy + 14, z: 0.34, r: Math.round(s * 1.5), col: '#ff5aa0', a: 0, beat: true };
       aq.glows.push(glow);
-      this.tween(3.0, (k) => { for (const f of aq.bait) f.formK = k; glow.a = 0.5 * k; }, ease.inOutSine);
+      this.tween(2.8, (k) => { for (const f of aq.bait) f.formK = k; glow.a = 0.5 * k; }, ease.inOutSine);
     });
-    await this.atSong(60.3);
+    await this.atSong(57.9);
     // she turns to him; he turns to her
     await this.tween(0.16, (k) => { c.flip = 1 - 0.45 * k; });
     c.mode = 'face'; c.hands = 1; c.hug = 0;
@@ -392,7 +362,7 @@ export class Story {
     this.chorus = true;
     this.heartRain = 0.5;
     const crabs = aq.crabs || [];
-    await this.atSong(64.0);
+    await this.atSong(62.0);
     crabs.forEach((k, i) => {
       const u = crabs.length > 1 ? i / (crabs.length - 1) - 0.5 : 0;
       k.form = [cx - 6 + u * 320, 0.05 + Math.abs(u) * 0.2];
@@ -401,7 +371,7 @@ export class Story {
     this.tween(1.6, (k) => { c.hug = 0.35 * k; }, ease.inOutSine);
     await this.atSong(78.0);
     for (let i = 0; i < 4; i++) this.spawnJelly();
-    await this.atSong(86.0);
+    await this.atSong(88.0);
     this.chorus = false;
     this.heartSparkle = null;
     this.heartRain = 0;
@@ -514,7 +484,7 @@ export class Story {
     await this.wait(0.8);
     this.hint = { text: 'tap to continue', y: () => Math.min(this.H - 8, Math.round(this.H / 2 + this.letter.h / 2 + 12)), a: 0 };
     { const h = this.hint; this.tween(0.6, (k) => { h.a = k; }); }
-    await this.tapOrSong(135.6);
+    await this.tapOrSong(134.2);
     this.hint = null;
   }
 
@@ -535,7 +505,7 @@ export class Story {
   async questionScene() {
     const aq = this.aq, c = aq.couple, p = this.post.p;
     // the big lift: foam rushes up and the tank comes back bright for the chorus
-    await this.atSong(Math.min(135.8, this.songT + 0.1));
+    await this.atSong(Math.min(134.4, this.songT + 0.1));
     this.sound.sfx('dive');
     const sw = new BubbleCurtain(this.W, this.H, 3.0);
     this.trans = sw;
@@ -556,13 +526,13 @@ export class Story {
     this.chorus = true;
     aq.sendWave(CX - 800, 1, { speed: 820, amp: 6, width: 220, life: 3 });
     burstStars(aq.fx, words.center[0], words.center[1], 18, { speed: 80, size: 6 });
-    await this.atSong(146.0);
+    await this.atSong(144.0);
     // the room goes quiet around them: a soft spotlight, hearts drifting up
     this.tween(2.5, (k) => { p.vig = 0.55 + 0.4 * k; p.dim = 0.14 * k; p.tint = [1 + 0.05 * k, 0.99, 1 + 0.03 * k]; }, ease.inOutSine);
     this.heartRain = 0.5;
     this.question = { a: 0 };
     { const Q = this.question; this.tween(1, (k) => { Q.a = k; }, ease.outCubic); }
-    await this.atSong(149.0);
+    await this.atSong(147.0);
     this.noCount = 0;
     this.buttons = [
       { id: 'yes', label: CONFIG.yes, pink: true, w: textWidth(CONFIG.yes) + 22, h: 15, ph: 0, alpha: 0, rel: [-1, 0] },
@@ -713,7 +683,7 @@ export class Story {
     const t = this.songT;
     while (this.lyricQueue.length && this.lyricQueue[0].t <= t) {
       const L = this.lyricQueue.shift();
-      if (t - L.t < 2.5 && this.sound.playing) this.spawnLyric(L);
+      if (t - L.t < 2.5 && this.sound.playing) this.spawnLyric(L, this.lyricQueue.length ? this.lyricQueue[0].t - L.t : 6);
     }
     for (let i = this.lyrics.length - 1; i >= 0; i--) {
       const L = this.lyrics[i];
@@ -742,7 +712,7 @@ export class Story {
     }
   }
 
-  spawnLyric(L) {
+  spawnLyric(L, gap = 6) {
     const text = fill(L.text);
     const cs = chars(text);
     let sc = textWidth(text) * 2 + 40 < this.W * (L.band === 'low' ? 0.46 : 0.9) ? 2 : 1;
@@ -756,7 +726,7 @@ export class Story {
     let x = high ? this.W / 2 : this.W / 2 + this.lyricSide * this.W * 0.25;
     x = half * 2 > this.W ? this.W / 2 : clamp(x, half, this.W - half);
     const y = high ? Math.max(14, top + 18) : sill - 34;
-    this.lyrics.push({ text, cs, sc, x, y, r: Math.round(3.2 * sc + 0.5), age: 0, life: 5.4, popped: false, nPop: 0, w });
+    this.lyrics.push({ text, cs, sc, x, y, r: Math.round(3.2 * sc + 0.5), age: 0, life: clamp(gap - 0.9, 2.6, 5.4), love: L.t >= 57.5, popped: false, nPop: 0, w });
   }
 
   lyricPos(L, i) {
@@ -778,7 +748,9 @@ export class Story {
         const b = bubbleSprite(L.r);
         ctx.globalAlpha = a * 0.7;
         ctx.drawImage(b, Math.round(x) - b.o, Math.round(yy + 3.5 * L.sc) - b.o);
-        drawText(ctx, ch, Math.round(x), Math.round(yy), { align: 'center', scale: L.sc, color: '#f2fbff', outline: '#0b2a5c', shadow: '#5ac0ff', alpha: a });
+        drawText(ctx, ch, Math.round(x), Math.round(yy), L.love
+          ? { align: 'center', scale: L.sc, color: '#fff0f7', outline: '#4a0a30', shadow: '#ff6aa6', alpha: a }
+          : { align: 'center', scale: L.sc, color: '#f2fbff', outline: '#0b2a5c', shadow: '#5ac0ff', alpha: a });
       });
     }
     ctx.globalAlpha = 1;
@@ -828,8 +800,6 @@ export class Story {
       if (this.heartSparkle) { this.heartSparkle.cx = x; this.heartSparkle.cy = y; }
     }
     this.updateLyrics(dt);
-    for (const f of this.floaters) f.age += dt;
-    this.floaters = this.floaters.filter((f) => f.age < 1.2);
     for (const k of st.creatures) if (k.lit) k.lit = Math.max(0, k.lit - dt * 0.6);
     if (this.trans) this.trans.update(dt);
     this.fx.update(dt);
@@ -1074,27 +1044,6 @@ export class Story {
     drawText(ctx, fill(CONFIG.finaleSub), this.W / 2, y + 7 * sc + 6, { align: 'center', color: '#ffc4e0', outline: '#2a0a24', alpha: F.a * 0.9 });
   }
 
-  drawHud(ctx) {
-    for (const f of this.floaters) {
-      const k = f.age / 1.2;
-      drawText(ctx, f.text, Math.round(f.x), Math.round(f.y - k * 14), { align: 'center', scale: f.big ? 2 : 1, color: '#fff6c0', outline: '#4a2a00', alpha: 1 - k * k });
-    }
-    if (!this.hud) return;
-    // pearl counter
-    const pill = (x, w, a = 1) => { ctx.globalAlpha = 0.55 * a; ctx.fillStyle = '#04102a'; ctx.fillRect(x, 3, w, 13); ctx.fillRect(x + 1, 2, w - 2, 15); ctx.globalAlpha = 1; };
-    pill(3, textWidth(String(this.pearls)) + 20);
-    const b = bubbleSprite(3);
-    ctx.drawImage(b, 6, 5);
-    drawText(ctx, String(this.pearls), 18, 6, { color: '#ffffff', outline: '#0a2a5c' });
-    const G = this.goal;
-    if (G && G.a > 0) {
-      const txt = G.need ? `${G.done ? '✓ ' : ''}${G.label}  ${Math.min(G.got, G.need)}/${G.need}` : G.label;
-      const tw = textWidth(txt) + 12;
-      pill(Math.round(this.W / 2 - tw / 2), tw, G.a);
-      drawText(ctx, txt, this.W / 2, 6, { align: 'center', color: G.done ? '#b8ffb0' : '#ffffff', outline: '#0a2a5c', alpha: G.a * (G.done ? 1 : 0.85 + 0.15 * Math.sin(this.t * 3)) });
-    }
-  }
-
   draw(ctx) {
     this.fxBack.draw(ctx);
     if (this.title) this.drawTitle(ctx);
@@ -1105,7 +1054,6 @@ export class Story {
     if (this.finale) this.drawFinale(ctx);
     if (this.hint) this.drawHint(ctx);
     this.fx.draw(ctx);
-    this.drawHud(ctx);
     if (this.trans) this.trans.draw(ctx);
     if (this.replay) {
       const [x, y, w] = this.replayRect();

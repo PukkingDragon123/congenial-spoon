@@ -7,7 +7,7 @@
 //    index.html?to=Mind&from=Tee
 // ---------------------------------------------------------------------------
 export const CONFIG = {
-  to: 'You',            // the person receiving the confession
+  to: 'Primprae',            // the person receiving the confession
   from: 'Me',           // the person confessing
 
   // Title card shown before diving in
@@ -24,18 +24,19 @@ export const CONFIG = {
     'Dear {to},',
     '',
     'Every time we stand in front of all this blue,',
-    'I forget the fish,',
-    'the lights, the crowd...',
-    '',
-    'because I am only looking at you.',
+    'I forget the fish, the lights, the people...',
+    "because I'm only ever looking at you.",
     '',
     'You make my whole world feel like this:',
     'calm, deep, and full of light.',
     '',
+    "I don't just want to visit this with you.",
+    'I want to keep coming back. Always.',
+    '',
     'Love, {from}',
   ],
 
-  question: 'Will you be mine?',
+  question: '{to}, will you be mine?',
   yes: 'YES ♥',
   no: 'no',
   noEscapes: ['nope!', 'too slow', 'try again', 'hehe', ':('], // what "no" says as it swims away
@@ -54,23 +55,42 @@ export const CONFIG = {
   // lines written to the song's shape — replace them with anything you like
   // (including the real lyrics, if you have the right to use them).
   //   [ time, text, band ]   band: 'high' (default, open water up top) | 'low'
+  // Each line starts where a sung phrase starts in the track (found by
+  // measuring the vocal band of the song), so the words breathe with it.
   lyrics: [
-    // nothing is said until the hook of the song
-    [62.0, 'always'],
-    [69.0, "that's the word"],
-    [76.0, 'for how long'],
-    [82.5, "i'll look at you like this"],
-
-    [96.0, "i'm no good"],
-    [103.0, 'at saying the big things'],
-
-    [142.0, 'always'],
-    [150.5, 'still always'],
-    [158.0, 'and after that'],
-
-    [174.0, 'every tide'],
-    [182.0, 'comes back to you'],
-    [191.0, 'always'],
+    // verse one: the walk through the galleries
+    [20.0, 'some people feel like home'],
+    [25.0, 'you feel like the whole ocean'],
+    [30.0, 'quiet, and deep, and full of light'],
+    [34.2, 'i still remember the first day'],
+    [38.0, 'you laughed, and the room changed'],
+    [44.0, "i've been carrying this for a while"],
+    [47.0, 'like a message in a bottle'],
+    [51.0, 'waiting for the tide to reach you'],
+    [54.0, 'so here it is...'],
+    // the hook
+    [58.0, 'always'],
+    [64.0, "in every lifetime, it's you"],
+    [72.0, 'always'],
+    [77.0, 'every wave comes back to the shore'],
+    [80.0, 'the way i keep coming back to you'],
+    [86.0, '{to}'],
+    // verse two
+    [94.0, "i'm not good with the big words"],
+    [101.0, 'so i asked the whole sea'],
+    [104.0, 'to say them for me'],
+    [107.0, 'look...'],
+    // the big chorus
+    [139.0, 'always'],
+    [153.0, 'no matter how far'],
+    [161.0, 'no matter how long'],
+    [167.0, 'always'],
+    [171.0, "it's you"],
+    // outro
+    [178.0, '{to},'],
+    [185.0, 'thank you for every little moment'],
+    [192.0, "and every one that's still to come"],
+    [199.0, 'always'],
   ],
 };
 

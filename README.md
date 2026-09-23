@@ -16,22 +16,19 @@ Every beat is pinned to a moment in the track, and the whole tank moves with
 the music: fish bounce and squash on the beat, waves ripple through the
 schools, crabs wave their claws, and the light breathes with the song.
 
-It plays like a little aquarium game at first, and only turns into a
-confession at the turn of the song.
-
 1. **Title** (before the music): "Very Cool Aquarium Game". Tap to dive in and start the song.
-2. **Jellyfish hall** (0:05): goal *light up the jellies*. Tap creatures anywhere to make them react and collect pearls.
-3. **Clownfish reef** (0:24): a tall arched reef window with rock walls, plate-coral ledges and schools of fish. Goal: *find the clownfish*.
-4. **Underwater tunnel** (0:42): the couple walk down an acrylic tunnel as rays, sharks and a turtle glide overhead. Goal: *wave at the manta rays*. Light grows at the end.
-5. **The hook** (1:00): out of the tunnel into the great Buddha tank. The game ends, the minnows pour into a heart on the downbeat and the couple turn to face each other.
+2. **Jellyfish hall** (0:05): they stroll in under drifting jellies and take each other's hand. Tap any creature to make it react.
+3. **Clownfish reef** (0:24): a tall arched reef window with rock walls, plate-coral ledges and schools of fish. A heart pops as she leans on him.
+4. **Underwater tunnel** (0:42): the couple walk down an acrylic tunnel as rays, sharks and a turtle glide overhead, hand in hand, little hearts drifting up. Light grows at the end.
+5. **The hook** (0:58): out of the tunnel into the great Buddha tank; the minnows pour into a heart on the chorus downbeat and the couple turn to face each other.
 6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
-7. **The words** (2:16): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
+7. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
 8. **Finale**: a whale shark glides in carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
-Lines of text drift up through the water between the beats, each letter in
-its own bubble. They are in `js/config.js` under `lyrics`.
-
-## Personalise it
+Lines of text drift up through the water, each letter in its own bubble.
+Every line starts where a sung phrase starts in the track (found by
+measuring the song's vocal band). They are original lines, in
+`js/config.js` under `lyrics`: swap in your own words there.
 
 Edit **`js/config.js`**. It holds the names, the letter, the question, the
 words the fish spell, the button labels and the final card. Thai and other
