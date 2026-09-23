@@ -20,12 +20,13 @@ It plays like a little aquarium game at first, and only turns into a
 confession at the turn of the song.
 
 1. **Title** (before the music): "Very Cool Aquarium Game". Tap to dive in and start the song.
-2. **The Buddha tank** (0:05): a wall of foam reveals the great window. Goal: *say hi to the fish*. Tap creatures to make them react and collect pearls.
-3. **Clownfish reef** (0:38): goal: *find the clownfish*. On the first chorus the whole reef throws a fish party.
-4. **Jellyfish hall** (1:12): goal: *light up the jellies*. The couple quietly take each other's hand.
-5. **The turn** (1:39): back at the Buddha tank a bottle sinks to the glass. Tap it and the letter unrolls. This is where the game stops pretending.
-6. **The words** (2:16): foam rushes up for the big chorus, the minnows spell `I ♥ YOU`, and the question appears with **YES ♥** and **no**. The "no" button runs away.
-7. **Finale**: after "yes", a whale shark glides in carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
+2. **Jellyfish hall** (0:05): goal *light up the jellies*. Tap creatures anywhere to make them react and collect pearls.
+3. **Clownfish reef** (0:24): a tall arched reef window with rock walls, plate-coral ledges and schools of fish. Goal: *find the clownfish*.
+4. **Underwater tunnel** (0:42): the couple walk down an acrylic tunnel as rays, sharks and a turtle glide overhead. Goal: *wave at the manta rays*. Light grows at the end.
+5. **The hook** (1:00): out of the tunnel into the great Buddha tank. The game ends, the minnows pour into a heart on the downbeat and the couple turn to face each other.
+6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
+7. **The words** (2:16): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
+8. **Finale**: a whale shark glides in carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
 Lines of text drift up through the water between the beats, each letter in
 its own bubble. They are in `js/config.js` under `lyrics`.
@@ -101,7 +102,7 @@ is no build step.
 
 ### Dev helpers
 
-- `?scene=tank|reef|jelly|bottle|letter|question|finale` jumps to a beat.
+- `?scene=jelly|reef|tunnel|hook|bottle|letter|question|finale` jumps to a beat.
 - `?sim=1` makes the story follow the simulated clock instead of the audio (for headless tests).
 - `?speed=2` runs time faster.
 - `?gl=0` forces the plain-2D fallback renderer (no bloom or blur).

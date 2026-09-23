@@ -55,9 +55,14 @@ export const CONFIG = {
   // (including the real lyrics, if you have the right to use them).
   //   [ time, text, band ]   band: 'high' (default, open water up top) | 'low'
   lyrics: [
-    // nothing is said until the turn of the song
-    [104.0, "i'm no good"],
-    [109.0, 'at saying the big things'],
+    // nothing is said until the hook of the song
+    [62.0, 'always'],
+    [69.0, "that's the word"],
+    [76.0, 'for how long'],
+    [82.5, "i'll look at you like this"],
+
+    [96.0, "i'm no good"],
+    [103.0, 'at saying the big things'],
 
     [142.0, 'always'],
     [150.5, 'still always'],

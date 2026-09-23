@@ -101,30 +101,32 @@ export class Story {
     if (debug) {
       await this.mainReady;
       this.post.p.blur = 0; this.post.p.dim = 0;
-      const jump = { tank: 8, reef: 37, jelly: 71, bottle: 99, letter: 110, question: 136, finale: 151 };
+      const jump = { jelly: 8, reef: 23, tunnel: 41, hook: 55.5, bottle: 90, letter: 110, question: 136, finale: 151 };
       this.songOffset = jump[debug] ?? 0;
       this.sound.start();
       this.showSpeaker = CONFIG.sound;
-      const order = ['tank', 'reef', 'jelly', 'bottle', 'letter', 'question', 'finale'];
+      const order = ['jelly', 'reef', 'tunnel', 'hook', 'bottle', 'letter', 'question', 'finale'];
       const from = Math.max(0, order.indexOf(debug));
-      if (from === 0) this.enterMainTank(true);
-      if (from >= 3) this.enterMainTank();
-      if (from <= 0) await this.mainIntro();
+      this.hud = from < 3;
+      if (from === 0) this.enterRoom(this.rooms.jelly, CX - 260, CX - 320);
+      if (from === 1) this.enterRoom(this.rooms.reef, CX - 160, CX - 220);
+      if (from >= 4) this.enterMainTank();
+      if (from <= 0) await this.jellyScene();
       if (from <= 1) await this.reefScene();
-      if (from <= 2) await this.jellyScene();
-      if (from === 2 || from < 2) await this.toBottle();
-      if (from <= 3) await this.bottleScene();
-      if (from <= 4) await this.letterScene();
-      if (from <= 5) await this.questionScene();
+      if (from <= 2) await this.tunnelScene();
+      if (from <= 3) await this.hookScene();
+      if (from <= 4) await this.bottleScene();
+      if (from <= 5) await this.letterScene();
+      if (from <= 6) await this.questionScene();
       await this.finaleScene();
       return;
     }
     await this.titleScene();
     await this.dive();
-    await this.mainIntro();
-    await this.reefScene();
     await this.jellyScene();
-    await this.toBottle();
+    await this.reefScene();
+    await this.tunnelScene();
+    await this.hookScene();
     await this.bottleScene();
     await this.letterScene();
     await this.questionScene();
@@ -220,10 +222,9 @@ export class Story {
       if (this.title) this.title.a = 1 - clamp(k * 2.6);
     });
     await this.until(() => tr.covered());
-    await this.mainReady;   // usually long done; if not, the foam simply lingers
     this.title = null;
     this.fxBack.clear();
-    this.enterMainTank(true);
+    this.enterRoom(this.rooms.jelly || this.aq, CX - 260, CX - 320);
     this.hud = true;
     this.stage.sendWave(CX - 700, 1, { speed: 900, amp: 7, width: 220, life: 3 });
     await this.until(() => tr.done);
@@ -286,103 +287,185 @@ export class Story {
   }
 
   // Put the couple at the big window.
-  enterMainTank(fresh = false) {
+  enterMainTank(together = true) {
     const aq = this.aq, c = aq.couple;
-    this.camX = fresh ? CX - 300 : CX;
+    this.camX = CX;
     this.setStage(aq);
-    aq.coupleX = fresh ? CX - 340 : CX;
-    c.flip = 1; c.moving = 0;
-    if (fresh) { c.mode = 'walk'; c.hold = 0; c.lean = 0; } else { c.mode = 'back'; c.hold = 1; c.lean = 1; }
+    aq.coupleX = CX;
+    c.flip = 1; c.moving = 0; c.mode = 'back'; c.hug = 0;
+    c.hold = together ? 1 : 0; c.lean = together ? 1 : 0;
   }
 
-  // Chapter 1: the great Buddha tank. Just two people visiting an aquarium.
-  async mainIntro() {
+  // Walk into a gallery from the left.
+  enterRoom(room, camFrom, coupleFrom) {
     const c = this.aq.couple;
-    this.tween(18, (k) => { this.camX = lerp(CX - 300, CX, k); }, ease.inOutSine);
-    await this.atSong(9.0);
-    this.setGoal('say hi to the fish', 5, (k) => k.kind !== 'crab');
-    await this.walkTo(CX, 22);
-    await this.atSong(24);
+    this.camX = camFrom;
+    this.setStage(room);
+    room.cam.x = camFrom;
+    room.coupleX = coupleFrom;
+    c.hold = 0; c.lean = 0; c.hug = 0; c.mode = 'walk'; c.flip = 1;
+  }
+
+  // Chapter 1: the jellyfish hall. Just two people visiting an aquarium.
+  async jellyScene() {
+    const c = this.aq.couple;
+    this.tween(14, (k) => { this.camX = lerp(CX - 260, CX, k); }, ease.inOutSine);
+    await this.atSong(8.5);
+    this.setGoal('light up the jellies', 5, (k) => k.kind === 'jelly');
+    await this.walkTo(CX, 17);
     await this.turnToGlass();
     c.hold = 0; c.lean = 0;
-    await this.atSong(37.4);
+    await this.atSong(23.2);
     this.clearGoal();
   }
 
-  // Chapter 2: the clownfish reef, and a fish party on the first chorus.
+  // Chapter 2: the clownfish reef.
   async reefScene() {
     const reef = this.rooms.reef;
-    const c = this.aq.couple;
     if (reef && this.stage !== reef) {
-      await this.atSong(37.8);
-      this.sound.sfx('whoosh');
-      await this.go(reef, new Sweep(this.W, this.H, 2.9), () => {
-        this.camX = CX - 220;
-        reef.cam.x = this.camX;
-        reef.coupleX = CX - 280;
-        c.hold = 0; c.lean = 0; c.mode = 'walk';
-      });
-    }
-    const st = this.stage;
-    this.tween(12, (k) => { this.camX = lerp(CX - 220, CX + 10, k); }, ease.inOutSine);
-    this.setGoal('find the clownfish', 3, (k) => k.kind === 'clown');
-    await this.walkTo(CX - 20, 50);
-    await this.turnToGlass();
-    await this.atSong(60.2);
-    // the chorus hits: everyone dances
-    this.chorus = true;
-    for (const k of st.creatures) if (k.kind === 'crab') { k.state = 'wave'; k.timer = 12; }
-    if (st.anemones) for (const a of st.anemones) st.startle(a.x, st.floorY(a.z) - 20, 70, 0.8);
-    burstStars(this.fx, this.W / 2, this.H * 0.35, 20, { speed: 90, size: 6 });
-    st.sendWave(CX - 600, 1, { speed: 700, amp: 6, width: 180 });
-    await this.atSong(71.2);
-    this.chorus = false;
-    this.clearGoal();
-  }
-
-  // Chapter 3: the jellyfish hall. Something softer starts to show.
-  async jellyScene() {
-    const jel = this.rooms.jelly;
-    const c = this.aq.couple;
-    if (jel && this.stage !== jel) {
-      await this.atSong(71.6);
+      await this.atSong(23.6);
       this.sound.sfx('chime');
-      await this.go(jel, new LightBloom(this.W, this.H, 2.6, [210, 190, 255]), () => {
-        this.camX = CX - 260;
-        jel.cam.x = this.camX;
-        jel.coupleX = CX - 320;
-        c.hold = 0; c.lean = 0; c.mode = 'walk';
-      });
+      await this.go(reef, new LightBloom(this.W, this.H, 2.6, [190, 240, 255]), () => this.enterRoom(reef, CX - 160, CX - 220));
     }
-    this.tween(14, (k) => { this.camX = lerp(CX - 260, CX, k); }, ease.inOutSine);
-    this.setGoal('light up the jellies', 5, (k) => k.kind === 'jelly');
-    await this.walkTo(CX, 84);
+    this.tween(10, (k) => { this.camX = lerp(CX - 160, CX, k); }, ease.inOutSine);
+    this.setGoal('find the clownfish', 3, (k) => k.kind === 'clown');
+    await this.walkTo(CX - 20, 32);
     await this.turnToGlass();
-    await this.atSong(88);
-    await this.tween(2.6, (k) => { c.hold = k; }, ease.inOutCubic);
-    await this.atSong(93.5);
-    this.tween(3, (k) => { c.lean = k; }, ease.inOutSine);
-    await this.atSong(98.8);
+    await this.atSong(41.2);
     this.clearGoal();
   }
 
-  // Back to the big tank for the turn: something is sinking...
-  async toBottle() {
-    await this.atSong(99.2);
-    this.sound.sfx('dive');
-    await this.go(this.aq, new BubbleCurtain(this.W, this.H, 2.8), () => this.enterMainTank());
-    this.hud = false;
+  // Chapter 3: the underwater tunnel, walking toward the light.
+  async tunnelScene() {
+    const tun = this.rooms.tunnel;
+    const c = this.aq.couple;
+    if (!tun) return;
+    await this.atSong(41.6);
+    this.sound.sfx('whoosh');
+    await this.go(tun, new Sweep(this.W, this.H, 2.9), () => {
+      this.camX = CX;
+      this.setStage(tun);
+      c.mode = 'back'; c.hold = 0; c.lean = 0; c.flip = 1;
+      tun.coupleScale = 1.18; tun.walkSpeed = 0.5; tun.endGlow = 0;
+    });
+    this.setGoal('wave at the manta rays', 2, (k) => k.kind === 'ray');
+    this.tween(12, (k) => { tun.coupleScale = 1.18 - 0.2 * k; this.camX = CX + Math.sin(k * 3) * 30; });
+    await this.atSong(52.0);
+    this.tween(4.5, (k) => { tun.endGlow = k; }, ease.inOutSine);
+    await this.atSong(55.2);
+    this.clearGoal();
+  }
+
+  // The hook: out of the tunnel into the great Buddha tank, and the game
+  // stops pretending. The minnows rush into a heart right on the chorus.
+  async hookScene() {
+    const aq = this.aq, c = aq.couple, p = this.post.p;
+    await this.atSong(56.0);
+    await this.mainReady;
+    this.sound.sfx('chime');
+    const s = Math.min(96, this.W * 0.36);
+    const cx = CX + 34, cy = 146, cz = 0.3;
+    let glow;
+    await this.go(aq, new LightBloom(this.W, this.H, 2.6, [240, 250, 255]), () => {
+      this.enterMainTank(false);
+      this.hud = false;
+      // the minnows scatter wide, then pour into the heart
+      for (const f of aq.bait) { f.x = cx + (R() - 0.5) * 600; f.y = 60 + R() * 200; }
+      this.formHeart(aq.bait, cx, cy, cz, s, aq.t, true);
+      for (const f of aq.bait) f.formFace = 0;
+      glow = { x: cx, y: cy + 14, z: 0.34, r: Math.round(s * 1.5), col: '#ff5aa0', a: 0, beat: true };
+      aq.glows.push(glow);
+      this.tween(3.0, (k) => { for (const f of aq.bait) f.formK = k; glow.a = 0.5 * k; }, ease.inOutSine);
+    });
+    await this.atSong(60.3);
+    // she turns to him; he turns to her
+    await this.tween(0.16, (k) => { c.flip = 1 - 0.45 * k; });
+    c.mode = 'face'; c.hands = 1; c.hug = 0;
+    await this.tween(0.22, (k) => { c.flip = 0.55 + 0.45 * k; }, ease.outBack);
+    c.flip = 1;
+    this.heartPop(aq, aq.coupleX, aq.coupleY - 62, true);
+    this.sound.sfx('sparkle');
+    this.heartSparkle = { cx, cy, cz, s };
+    this.tween(3, (k) => { p.tint = [1 + 0.06 * k, 1 - 0.01 * k, 1 + 0.03 * k]; p.bloom = 0.75 + 0.3 * k; });
+    aq.sendWave(CX - 800, 1, { speed: 780, amp: 6, width: 200, life: 3 });
+    burstStars(aq.fx, cx, cy, 18, { speed: 70, size: 6 });
+    this.chorus = true;
+    this.heartRain = 0.5;
+    const crabs = aq.crabs || [];
+    await this.atSong(64.0);
+    crabs.forEach((k, i) => {
+      const u = crabs.length > 1 ? i / (crabs.length - 1) - 0.5 : 0;
+      k.form = [cx - 6 + u * 320, 0.05 + Math.abs(u) * 0.2];
+    });
+    await this.atSong(72.0);
+    this.tween(1.6, (k) => { c.hug = 0.35 * k; }, ease.inOutSine);
+    await this.atSong(78.0);
+    for (let i = 0; i < 4; i++) this.spawnJelly();
+    await this.atSong(86.0);
+    this.chorus = false;
+    this.heartSparkle = null;
+    this.heartRain = 0;
+    this.releaseForm(aq.bait, 40, [cx, cy + 14]);
+    for (const k of crabs) { k.form = null; k.react(cx, aq.floorY(0.1), 0.8); }
+    this.tween(2, (k) => { glow.a = 0.5 * (1 - k); p.tint = [1.06 - 0.03 * k, 0.99, 1.03 - 0.015 * k]; }).then(() => { aq.glows.splice(aq.glows.indexOf(glow), 1); });
+    // back to the glass, hand in hand now
+    await this.tween(0.16, (k) => { c.flip = 1 - 0.45 * k; });
+    c.mode = 'back'; c.hold = 1; c.lean = 0; c.hug = 0;
+    await this.tween(0.22, (k) => { c.flip = 0.55 + 0.45 * k; }, ease.outBack);
+    c.flip = 1;
+    this.tween(3, (k) => { c.lean = k; }, ease.inOutSine);
+  }
+
+  formHeart(fish, cx, cy, cz, s, t0, full = false, center = null) {
+    // a thick outline of nested hearts, each circulating the other way; fish
+    // are spaced by arc length so none bunch up at the tip or the dip
+    const rings = full ? [[1, 0.36], [0.92, 0.33], [0.84, 0.31]] : [[1, 0.46], [0.88, 0.32], [0.76, 0.22]];
+    const MIDY = 0.12; // the heart's visual centre in heart units
+    let idx = 0;
+    const n = fish.length;
+    rings.forEach(([sc, frac], j) => {
+      const cnt = j === rings.length - 1 ? n - idx : Math.round(n * frac);
+      const dir = j % 2 ? -1 : 1;
+      const loops = 0.03 / sc; // laps per second
+      for (let i = 0; i < cnt && idx < n; i++, idx++) {
+        const f = fish[idx];
+        const u0 = i / cnt + j * 0.13;
+        const zo = cz + (j - 1) * 0.012 + Math.sin(u0 * TAU * 3) * 0.008;
+        f.form = (t) => {
+          const [hx, hy] = heartArc(u0 + dir * loops * (t - t0));
+          const [ox, oy] = center ? center(t) : [cx, cy];
+          return [ox + hx * s * sc, oy + (MIDY + (hy - MIDY) * sc) * s, zo];
+        };
+        f.formK = 0;
+      }
+    });
+  }
+
+  releaseForm(fish, burst = 0, from = null) {
+    for (const f of fish) {
+      f.form = null;
+      f.formK = 0;
+      f.faceOverride = 0;
+      f.mode = 'school';
+      if (burst && from) {
+        const dx = f.x - from[0], dy = f.y - from[1];
+        const d = Math.hypot(dx, dy) || 1;
+        f.vx += (dx / d) * burst * (0.6 + R() * 0.6);
+        f.vy += (dy / d) * burst * (0.6 + R() * 0.6);
+        f.flash = 1;
+      }
+    }
   }
 
   async bottleScene() {
     const aq = this.aq;
-    await this.atSong(101.0);
+    await this.atSong(91.0);
     const b = (this.bottle = { x: CX - 58, y: aq.yTop - 40, z: 0.05, ang: 0.6, a: 1, base: 196, glow: 0, bob: 0, landed: false });
     const self = this;
     b.draw = (ctx) => self.drawBottle(ctx);
     aq.extras = [b];
     this.sound.sfx('whoosh');
-    await this.tween(6.0, (k) => {
+    await this.tween(7.0, (k) => {
       b.y = lerp(aq.yTop - 40, b.base, ease.outCubic(k));
       b.ang = 0.6 * Math.cos(k * 7) * (1 - k) + 0.1;
       if (R() < 0.5) aq.bubbles.add({ kind: 'bubble', x: b.x + (R() - 0.5) * 8, y: b.y - 6, z: b.z, vx: 0, vy: -20 - R() * 20, age: 0, life: 6, r: R() < 0.7 ? 1 : 2, wob: 8, wobF: 5, ph: R() * TAU, fade: false });
@@ -474,6 +557,9 @@ export class Story {
     aq.sendWave(CX - 800, 1, { speed: 820, amp: 6, width: 220, life: 3 });
     burstStars(aq.fx, words.center[0], words.center[1], 18, { speed: 80, size: 6 });
     await this.atSong(146.0);
+    // the room goes quiet around them: a soft spotlight, hearts drifting up
+    this.tween(2.5, (k) => { p.vig = 0.55 + 0.4 * k; p.dim = 0.14 * k; p.tint = [1 + 0.05 * k, 0.99, 1 + 0.03 * k]; }, ease.inOutSine);
+    this.heartRain = 0.5;
     this.question = { a: 0 };
     { const Q = this.question; this.tween(1, (k) => { Q.a = k; }, ease.outCubic); }
     await this.atSong(149.0);
@@ -541,6 +627,7 @@ export class Story {
     const yes = this.buttons.find((b) => b.id === 'yes');
     const bx = yes ? yes.x : this.W / 2, by = yes ? yes.y : this.H / 2;
     this.sound.sfx('yes');
+    this.tween(1.5, (k) => { p.vig = 0.95 - 0.4 * k; p.dim = 0.14 * (1 - k); });
     p.flash = [1, 0.75, 0.88, 0.55];
     this.tween(1.1, (k) => { p.flash[3] = 0.55 * (1 - k); });
     p.rip = [bx / this.W, by / this.H, 0, 1];

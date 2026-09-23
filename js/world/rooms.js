@@ -3,9 +3,9 @@
 // their anemones and crabs on the sand. Both share the main tank's world
 // coordinates, camera, couple and effect hooks, so the story can drive any of
 // them the same way.
-import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm } from '../util.js';
+import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm, noise2 } from '../util.js';
 import { CX, tallExtra, genCaustics, genSand } from '../art/env.js';
-import { Creature, Crab } from './creatures.js';
+import { Creature, Crab, School } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
 import { warmLevel, queueVariants } from '../art/fish.js';
@@ -579,26 +579,81 @@ function genAnemone(w, hue, seed) {
   return frames;
 }
 
+// Rock mass for a reef wall: a noise field thresholded against a "wall
+// shape" (dense at the sides, thinning upward) so it grows overhangs, holes
+// and ledges. Pixels open to the water above get top-lit and collect coral.
+function rockMass(P, shape, seed, pal, fogK = 0) {
+  const { w, h } = P;
+  const solid = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const up = (h - y) / h;
+    for (let x = 0; x < w; x++) {
+      const sh = shape(x, up);
+      if (sh < -0.6) continue;
+      const n = fbm(x * 0.016, y * 0.02, seed, 4) + fbm(x * 0.05, y * 0.06, seed + 7, 2) * 0.25;
+      if (n + sh > 0.78) solid[y * w + x] = 1;
+    }
+  }
+  const tops = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!solid[y * w + x]) continue;
+    const openUp = y === 0 || !solid[(y - 1) * w + x];
+    const openUp2 = y < 2 || !solid[(y - 2) * w + x];
+    const side = (x > 0 && !solid[y * w + x - 1]) || (x < w - 1 && !solid[y * w + x + 1]);
+    // lumpy boulders: emboss a bumpy height field, lit from above
+    const bump = (noise2(x * 0.09, (y - 1) * 0.09, seed + 5) - noise2(x * 0.09, (y + 1) * 0.09, seed + 5)) * 9
+      + (noise2(x * 0.25, (y - 1) * 0.25, seed + 9) - noise2(x * 0.25, (y + 1) * 0.25, seed + 9)) * 3;
+    let l = 2.2 + bump + fbm(x * 0.03, y * 0.03, seed + 3, 2) * 1.2 - (1 - (h - y) / h) * 0.8;
+    if (openUp) l += 2.2; else if (openUp2) l += 1.1;
+    if (side) l -= 0.6;
+    if (hash2(x, y, seed) < 0.05) l -= 0.8;
+    P.px(x, y, pal, l - fogK);
+    if (openUp && hash2(x >> 2, y >> 2, seed + 11) < 0.11) tops.push([x, y]);
+    else if (!openUp && hash2(x >> 3, y >> 3, seed + 13) < 0.03 && hash2(x, y, seed + 17) < 0.02) tops.push([x, y, 1]);
+  }
+  return tops;
+}
+function plate(P, cx, cy, w, pal) {
+  // a plate coral jutting out as a ledge: flat, pale on top, dark under
+  P.blob(cx, cy, w / 2, Math.max(1.6, w * 0.09), pal, (l, u, v) => (v < -0.2 ? 4.6 : v < 0.3 ? 3.2 : 1.4) + Math.abs(Math.sin(u * 20)) * 0.3);
+  P.stick(cx, cy + 1, cx - w * 0.05, cy + w * 0.18, 1.6, 1.2, pal);
+}
+function decorate(P, tops, r, pals, density = 1) {
+  for (const [x, y, face] of tops) {
+    const k = r();
+    if (face) {
+      // soft corals and sponges clinging to the rock face
+      const pal = [PAL.pink, PAL.purple, PAL.orange, PAL.teal][(r() * 4) | 0];
+      P.blob(x, y, 2 + r() * 3, 1.5 + r() * 2.5, pal, (l, u, v) => l + 0.8 + (Math.abs(Math.sin(u * 9)) < 0.3 ? -1 : 0));
+      continue;
+    }
+    if (k > 0.75 * density) continue;
+    if (k < 0.22) plate(P, x, y - 1, 12 + r() * 26, pals.plate);
+    else if (k < 0.36) fan(P, x, y + 1, 10 + r() * 16, pals.fan, (x * 7 + y) % 89);
+    else if (k < 0.5) staghorn(P, x, y + 1, -Math.PI / 2 + (r() - 0.5) * 0.6, 7 + r() * 7, 1.8, 2, pals.branch, r);
+    else if (k < 0.62) brain(P, x, y + 1, 5 + r() * 6, pals.brain, (x + y) % 61);
+    else P.blob(x, y, 2 + r() * 3, 1.6 + r() * 2, pals.soft, (l) => l + 1);
+  }
+}
+
 export class ReefRoom extends Room {
   constructor(couple) {
     super(couple);
-    this.rimCols = [hex('#b8f4ff'), hex('#4ab0d8'), hex('#1a4a78')];
-    this.wallCol = [hex('#0a1c3a'), hex('#040a18')];
-    this.floorCol = [hex('#0a1a34'), hex('#02050c')];
+    this.rimCols = [hex('#a8e8ff'), hex('#3a8ad0'), hex('#123a70')];
+    this.wallCol = [hex('#0a1838'), hex('#030814')];
+    this.floorCol = [hex('#081632'), hex('#02050c')];
     this.reflA = 0.3;
-    this.span = 280;
+    this.span = 240;
     this.near = 292; this.far = 258;
     this.shafts = [];
     this.layers = [];
   }
 
+  // A tall, generous arch like the big reef window in the aquarium.
   winTop(x) {
     const w = this.win;
-    const cr = 14;
-    const dl = x - w.l, dr = w.r - 1 - x;
-    const d = Math.min(dl, dr);
-    if (d >= cr) return w.top;
-    return Math.round(w.top + cr - Math.sqrt(Math.max(0, cr * cr - (cr - d) * (cr - d))));
+    const u = (x - (w.l + w.r) / 2) / ((w.r - w.l) / 2);
+    return Math.round(w.top + 70 * Math.pow(Math.min(1, u * u), 1.6));
   }
 
   async build(progress = () => {}) {
@@ -608,54 +663,62 @@ export class ReefRoom extends Room {
     const step = (fn) => steps.push(fn);
     this.caustics = genCaustics();
     this.sand = genSand(640, 48, 11);
-    const LW = 1500, X0 = CX - LW / 2;
-    // far reef silhouette
+    const LW = 1400, X0 = CX - LW / 2, HH = 300;
+    const HW = this.W / 2 + 40; // walls are placed relative to what the screen shows
+    const rockPal = ramp(['#06102a', '#0b1a3c', '#13274e', '#1c3662', '#294a7a', '#3a6294', '#5480b0', '#7aa2cc'], 8);
+    const farPal = ramp(['#10306a', '#15397a', '#1b448a', '#22519a', '#2c60aa', '#3a72ba'], 6);
+    const pals = { plate: PAL.lime, fan: PAL.purple, branch: PAL.pink, brain: PAL.gold, soft: PAL.teal };
+    // far wall: rock on both sides with an open blue channel up the middle
     step(() => {
-      const h = 110, P = new Painter(LW, h);
-      for (let x = 0; x < LW; x++) {
-        const top = h - (30 + fbm(x * 0.012, 1, 3, 4) * 70 + Math.max(0, Math.sin(x * 0.03)) * 8);
-        for (let y = Math.floor(top); y < h; y++) P.px(x, y, PAL.teal, 1.6 + (y - top < 2 ? 1.3 : 0) - (y - top) * 0.01);
-      }
-      this.layers.push({ img: P.canvas(), x: X0, z: 0.86, sink: 4 });
+      const P = new Painter(LW, HH);
+      const tops = rockMass(P, (x, up) => {
+        const c = Math.abs(x - LW / 2) / HW;
+        return (c - 0.12 - up * 0.55) * 2.2 + 0.3;
+      }, 21, farPal);
+      decorate(P, tops, r, { plate: PAL.teal, fan: PAL.teal, branch: PAL.teal, brain: PAL.teal, soft: PAL.teal }, 0.6);
+      this.layers.push({ img: P.canvas(), x: X0, z: 0.82, sink: 4 });
     });
-    // mid reef: a garden of colourful corals
+    // mid ledges stepping out from the sides
     step(() => {
-      const h = 170, P = new Painter(LW, h), by = h - 2;
-      rocks(P, 0, LW, by, PAL.rock, 5, 26);
-      for (let x = 40; x < LW - 40; x += 34 + r() * 40) {
-        const k = r();
-        if (k < 0.22) staghorn(P, x, by - 8, -Math.PI / 2 + (r() - 0.5) * 0.4, 18 + r() * 10, 2.6, 3, r() < 0.5 ? PAL.teal : PAL.pink, r);
-        else if (k < 0.4) brain(P, x, by - 6, 12 + r() * 10, r() < 0.5 ? PAL.lime : PAL.gold, (x | 0) % 97);
-        else if (k < 0.58) fan(P, x, by - 8, 24 + r() * 16, PAL.purple, (x | 0) % 53);
-        else if (k < 0.72) table(P, x, by - 6, 40 + r() * 20, PAL.teal);
-        else if (k < 0.86) tubes(P, x, by - 6, 3 + ((r() * 3) | 0), 16 + r() * 12, PAL.orange, r);
-        else staghorn(P, x, by - 8, -Math.PI / 2, 14, 2, 2, PAL.gold, r);
-      }
+      const P = new Painter(LW, HH);
+      const tops = rockMass(P, (x, up) => {
+        const c = Math.abs(x - LW / 2) / HW;
+        return (c - 0.38 - up * 0.45) * 2.6 + 0.3;
+      }, 33, rockPal, 0.7);
+      decorate(P, tops, r, pals, 0.9);
       this.layers.push({ img: P.canvas(), x: X0, z: 0.5, sink: 6 });
     });
-    // near: big heads framing the view left and right
+    // near walls framing the window, heavy with coral
     step(() => {
-      const h = 190, P = new Painter(LW, h), by = h - 2;
-      const side = (c0, c1, s) => {
-        rocks(P, c0, c1, by, PAL.rock, s, 60);
-        for (let x = c0 + 20; x < c1 - 10; x += 26 + r() * 20) {
-          const k = r();
-          if (k < 0.3) brain(P, x, by - 30 - r() * 20, 16 + r() * 10, PAL.lime, (x | 0) % 71);
-          else if (k < 0.55) staghorn(P, x, by - 40, -Math.PI / 2 + (r() - 0.5) * 0.6, 22 + r() * 8, 3.2, 3, PAL.pink, r);
-          else if (k < 0.75) fan(P, x, by - 40, 30 + r() * 14, PAL.purple, (x | 0) % 41);
-          else tubes(P, x, by - 40, 3, 22, PAL.orange, r);
-        }
-      };
-      side(80, 520, 8);
-      side(LW - 520, LW - 80, 9);
-      this.layers.push({ img: P.canvas(), x: X0, z: 0.1, sink: 16 });
+      const P = new Painter(LW, HH);
+      const tops = rockMass(P, (x, up) => {
+        const c = Math.abs(x - LW / 2) / HW;
+        return (c - 0.6 - up * 0.3) * 3 + 0.3;
+      }, 47, rockPal);
+      decorate(P, tops, r, pals, 1.1);
+      this.layers.push({ img: P.canvas(), x: X0, z: 0.14, sink: 10 });
+    });
+    // coral garden on the floor of the channel
+    step(() => {
+      const h = 120, P = new Painter(LW, h), by = h - 2;
+      rocks(P, LW * 0.2, LW * 0.8, by, rockPal, 5, 22);
+      for (let x = LW * 0.22; x < LW * 0.78; x += 16 + r() * 22) {
+        const q = r();
+        if (q < 0.2) staghorn(P, x, by - 6, -Math.PI / 2 + (r() - 0.5) * 0.4, 12 + r() * 8, 2.2, 3, r() < 0.5 ? PAL.teal : PAL.pink, r);
+        else if (q < 0.38) brain(P, x, by - 4, 8 + r() * 8, r() < 0.5 ? PAL.lime : PAL.gold, (x | 0) % 97);
+        else if (q < 0.54) fan(P, x, by - 6, 16 + r() * 12, PAL.purple, (x | 0) % 53);
+        else if (q < 0.7) plate(P, x, by - 12 - r() * 14, 20 + r() * 20, PAL.lime);
+        else if (q < 0.84) tubes(P, x, by - 4, 2 + ((r() * 3) | 0), 12 + r() * 10, PAL.orange, r);
+        else P.blob(x, by - 4, 5 + r() * 4, 3 + r() * 2, PAL.pink, (l) => l + 0.6);
+      }
+      this.layers.push({ img: P.canvas(), x: X0, z: 0.32, sink: 6 });
     });
     // anemones with clownfish families
     step(() => {
       this.anemones = [
-        { x: CX - 150 * k, z: 0.34, frames: genAnemone(44, 'pink', 1) },
-        { x: CX + 140 * k, z: 0.3, frames: genAnemone(40, 'purple', 2) },
-        { x: CX - 10, z: 0.2, frames: genAnemone(48, 'lime', 3) },
+        { x: CX - 120 * k, z: 0.28, frames: genAnemone(44, 'pink', 1) },
+        { x: CX + 110 * k, z: 0.26, frames: genAnemone(40, 'purple', 2) },
+        { x: CX - 10, z: 0.18, frames: genAnemone(48, 'lime', 3) },
       ];
       for (const a of this.anemones) {
         const self = this;
@@ -668,27 +731,40 @@ export class ReefRoom extends Room {
       }
     });
     step(() => {
-      for (let i = 0; i < 6; i++) this.creatures.push(new Creature('tang', { x: CX + (r() - 0.5) * 700 * k, y: 120 + r() * 100, z: 0.2 + r() * 0.5, len: 28 + r() * 4, speed: 14 + r() * 6, anim: 8, turnRate: 2.5, dir: r() < 0.5 ? -1 : 1 }));
-      for (let i = 0; i < 6; i++) this.creatures.push(new Creature('butterfly', { x: CX + (r() - 0.5) * 700 * k, y: 150 + r() * 90, z: 0.15 + r() * 0.5, len: 24 + r() * 4, speed: 8, mode: 'hover', homeR: 60, anim: 7, turnRate: 3 }));
-      for (let i = 0; i < 6; i++) this.creatures.push(new Crab({ x: CX + (r() - 0.5) * 500 * k, z: 0.08 + r() * 0.4, size: 10 + r() * 4 }));
-      for (let i = 0; i < 5; i++) this.shafts.push({ x: CX + (i - 2) * 190 + (r() - 0.5) * 60, z: 0.6, w: 34 + r() * 30, f: 0.25 + r() * 0.3, ph: r() * TAU });
-      this.makeMotes(70, ['#ffffff', '#e8fcff', '#fff6c8'], { rise: 1.5, a: 0.55 });
-      for (const [id, L] of [['clown', 20], ['clown', 22], ['clown', 24], ['tang', 26], ['tang', 28], ['butterfly', 24], ['butterfly', 22]]) warmLevel(id, L);
-      for (const [id, L] of [['tang', 20], ['tang', 30], ['butterfly', 16], ['butterfly', 20], ['clown', 18]]) queueVariants(id, L, [1, 3]);
+      const X = (m) => CX + (r() - 0.5) * m * k;
+      for (let i = 0; i < 7; i++) this.creatures.push(new Creature('tang', { x: X(600), y: 90 + r() * 140, z: 0.2 + r() * 0.5, len: 26 + r() * 4, speed: 14 + r() * 6, anim: 8, turnRate: 2.5, dir: r() < 0.5 ? -1 : 1 }));
+      for (let i = 0; i < 7; i++) this.creatures.push(new Creature('butterfly', { x: X(600), y: 120 + r() * 110, z: 0.15 + r() * 0.5, len: 22 + r() * 4, speed: 8, mode: 'hover', homeR: 60, anim: 7, turnRate: 3 }));
+      for (let i = 0; i < 2; i++) this.creatures.push(new Creature('batfish', { x: X(400), y: 110 + r() * 60, z: 0.35 + r() * 0.3, len: 40, speed: 7, anim: 5, turnRate: 1.2, dir: r() < 0.5 ? -1 : 1 }));
+      // a school of yellow snapper and a sparkling ball of minnows in the channel
+      const snap = [];
+      for (let i = 0; i < 16; i++) snap.push(new Creature('snapper', { x: X(200), y: 150 + r() * 40, z: 0.4 + r() * 0.15, len: 22 + r() * 3, speed: 18, anim: 8, vx: 10 }));
+      const bait = [];
+      for (let i = 0; i < 60; i++) bait.push(new Creature('minnow', { x: X(160), y: 80 + r() * 50, z: 0.55 + r() * 0.2, len: 11 + r() * 2, speed: 26, anim: 12, glint: true, turnRate: 6, vx: 10 }));
+      this.creatures.push(...snap, ...bait);
+      this.schools = [
+        new School(snap, { radius: 22, sep: 10, speed: 18, path: (t) => [CX + Math.sin(t * 0.12) * 160 * k, 170 + Math.sin(t * 0.3) * 20, 0.45] }),
+        new School(bait, { radius: 16, sep: 6, speed: 26, wc: 0.7, wt: 0.5, path: (t) => [CX + Math.sin(t * 0.17 + 1) * 120 * k, 95 + Math.sin(t * 0.4) * 25, 0.62] }),
+      ];
+      for (let i = 0; i < 6; i++) this.creatures.push(new Crab({ x: X(400), z: 0.06 + r() * 0.3, size: 10 + r() * 4 }));
+      for (let i = 0; i < 5; i++) this.shafts.push({ x: CX + (i - 2) * 150 + (r() - 0.5) * 60, z: 0.6, w: 30 + r() * 26, f: 0.25 + r() * 0.3, ph: r() * TAU });
+      this.makeMotes(80, ['#ffffff', '#e8fcff', '#cfe8ff'], { rise: 1.5, a: 0.5 });
+      for (const [id, L] of [['clown', 20], ['clown', 22], ['clown', 24], ['tang', 24], ['tang', 26], ['butterfly', 22], ['butterfly', 20], ['snapper', 20], ['minnow', 10], ['minnow', 11], ['batfish', 32]]) warmLevel(id, L);
+      for (const [id, L] of [['tang', 20], ['tang', 28], ['butterfly', 16], ['clown', 18], ['snapper', 18], ['snapper', 22], ['minnow', 9], ['batfish', 28], ['batfish', 36]]) queueVariants(id, L, [1, 3]);
     });
     for (let i = 0; i < steps.length; i++) { steps[i](); progress((i + 1) / steps.length); await nextFrame(); }
   }
 
   buildScreen() {
     const { W, H } = this;
-    const pal = ramp(['#0a3a6a', '#0e5088', '#1468a2', '#1c84ba', '#28a0cc', '#3cbcd8', '#62d4e2', '#9aeaf0'], 8);
+    // deep blue, bright near the surface
+    const pal = ramp(['#030c2a', '#061840', '#0a2658', '#0f3672', '#16498c', '#2060a8', '#3a80c4', '#62a6dc', '#9ccff0'], 9);
     const b = new Buf(W, H);
     for (let y = 0; y < H; y++) {
       const wy = y - this.off;
-      const v = clamp(1 - (wy - 20) / 260);
+      const v = clamp(1 - (wy + 10) / 300);
       for (let x = 0; x < W; x++) {
-        const cx = (x - W / 2) / (W * 0.8);
-        b.set(x, y, pal[clamp(Math.round(v * 7 + (1 - cx * cx) * 0.8 - 0.6 + (bayer(x, y) - 0.5) * 1.1), 0, 7)]);
+        const cx = (x - W / 2) / (W * 0.7);
+        b.set(x, y, pal[clamp(Math.round(v * v * 8.4 + (1 - cx * cx) * 0.9 - 0.4 + (bayer(x, y) - 0.5) * 1.1), 0, 8)]);
       }
     }
     this.backdrop = b.toCanvas();
@@ -716,7 +792,7 @@ export class ReefRoom extends Room {
     const [, s0] = this.toScreen(CX, this.far, 1);
     const [, s1] = this.toScreen(CX, this.near + 14, 0);
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.34;
+    ctx.globalAlpha = 0.16;
     ctx.fillStyle = this.causPattern;
     const off = Math.round(-(this.cam.x - CX) * 0.85);
     ctx.setTransform(1, 0, 0, 0.4, off % 96, Math.round(s0));
@@ -727,44 +803,246 @@ export class ReefRoom extends Room {
   }
 
   tick(dt) {
-    // a steady trickle of bubbles from the anemones
+    for (const sc of this.schools || []) sc.update(dt, this);
     if (R() < dt * 3 && this.anemones) {
       const a = this.anemones[(R() * this.anemones.length) | 0];
-      this.bubbles.add({ kind: 'bubble', x: a.x + (R() - 0.5) * 10, y: this.floorY(a.z) - 18, z: a.z, vx: 0, vy: -(20 + R() * 20), age: 0, life: 10, r: R() < 0.7 ? 1 : 2, wob: 8, wobF: 5, ph: R() * TAU, fade: false });
+      this.bubbles.add({ kind: 'bubble', x: a.x + (R() - 0.5) * 10, y: this.floorY(a.z) - 18, z: a.z, vx: 0, vy: -(20 + R() * 20), age: 0, life: 12, r: R() < 0.7 ? 1 : 2, wob: 8, wobF: 5, ph: R() * TAU, fade: false });
     }
   }
 
-  drawTank(ctx) {
+  // Light rippling across the underside of the surface, like the photos.
+  drawSurface(ctx) {
     const { W } = this;
+    const top = this.win.top;
+    const h = 70;
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createLinearGradient(0, top, 0, top + h);
+    g.addColorStop(0, 'rgba(200,240,255,0.45)');
+    g.addColorStop(1, 'rgba(200,240,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, top, W, h);
+    ctx.fillStyle = this.causPattern;
+    const off = Math.round(-(this.cam.x - CX) * 0.2 + this.t * 6);
+    for (const [a, y0, hh] of [[0.26, 0, 26], [0.12, 26, 26]]) {
+      ctx.globalAlpha = a;
+      ctx.setTransform(0.8, 0, 0, 0.35, off % 77, top + y0);
+      ctx.fillRect(-off % 77 - 80, 0, W / 0.8 + 160, hh / 0.35);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  drawTank(ctx) {
+    const { W, H } = this;
     this.causPattern = ctx.createPattern(this.caustics[Math.floor(this.t * 9) % this.caustics.length], 'repeat');
     ctx.drawImage(this.backdrop, 0, 0);
-    this.drawShafts(ctx, this.shafts, '220,255,255', 0.16);
-    // layers + sand + life, far to near
+    this.drawShafts(ctx, this.shafts, '190,235,255', 0.16);
     const layerAt = (L) => {
       const [sx, sy] = this.toScreen(L.x, this.floorY(L.z) + L.sink - L.img.height, L.z);
       ctx.drawImage(L.img, Math.round(sx), Math.round(sy));
     };
     layerAt(this.layers[0]);
-    // soft haze over the far reef
-    ctx.fillStyle = 'rgba(60,170,210,0.28)';
-    ctx.fillRect(0, 0, W, this.H);
+    ctx.fillStyle = 'rgba(30,90,170,0.3)';
+    ctx.fillRect(0, 0, W, H);
     this.drawSand(ctx);
-    // the coral layers sort in depth with the fish and crabs
     const saved = this.decor;
-    this.decor = [...saved, { z: this.layers[1].z, draw: () => layerAt(this.layers[1]) }, { z: this.layers[2].z, draw: () => layerAt(this.layers[2]) }];
+    this.decor = [...saved, ...this.layers.slice(1).map((L) => ({ z: L.z, draw: () => layerAt(L) }))];
     this.drawLife(ctx);
     this.decor = saved;
     this.drawMotes(ctx);
     this.drawGlows(ctx);
     this.fx.draw(ctx, (p) => this.toScreen(p.x, p.y, p.z));
-    // surface shimmer at the top of the window
-    const top = this.win.top;
-    const g = ctx.createLinearGradient(0, top, 0, top + 60);
-    g.addColorStop(0, 'rgba(220,255,255,0.35)');
-    g.addColorStop(1, 'rgba(220,255,255,0)');
+    this.drawSurface(ctx);
+  }
+}
+
+// ======================================================= walk-through tunnel ==
+// Looking down an acrylic tunnel: rings slide past as the couple walks, rays
+// and sharks glide overhead, light ripples down the curved glass.
+export class TunnelRoom extends Room {
+  constructor(couple) {
+    super(couple);
+    this.span = 260;
+    this.near = 175; this.far = 165;   // keep swimmers overhead
+    this.ringPhase = 0;
+    this.walkSpeed = 0;
+    this.endGlow = 0;
+    this.shafts = [];
+    this.spots = [];
+  }
+
+  resize(W, H) {
+    this.W = W; this.H = H;
+    const extra = tallExtra(H);
+    this.extra = extra;
+    this.camY0 = CY - extra * 0.3;
+    this.cam.y = this.camY0;
+    this.off = H / 2 - this.camY0;
+    this.yTop = 30 - extra;
+    this.tank = makeCanvas(W, H);
+    this.vp = [W / 2, Math.round(H * 0.44)];
+    this.win = { l: 0, r: W, top: 0, sill: Math.round(H * 0.72) };
+    this.curves = { top: () => 8, sill: () => Math.round(H * 0.72) };
+    this.buildScreen();
+  }
+
+  async build(progress = () => {}) {
+    const r = rng(9090);
+    const add = (c) => { this.creatures.push(c); return c; };
+    add(new Creature('ray', { x: CX - 200, y: 70, z: 0.12, len: 110, speed: 13, anim: 5, turnRate: 0.6, dir: 1 })).cruiseY = [50, 90];
+    add(new Creature('ray', { x: CX + 260, y: 110, z: 0.4, len: 80, speed: 11, anim: 5, turnRate: 0.6, dir: -1 })).cruiseY = [90, 130];
+    add(new Creature('shark', { x: CX + 300, y: 60, z: 0.25, len: 130, speed: 16, anim: 5, turnRate: 0.8, dir: -1 })).cruiseY = [40, 80];
+    add(new Creature('reefshark', { x: CX - 350, y: 140, z: 0.55, len: 96, speed: 18, anim: 6, turnRate: 1, dir: 1 })).cruiseY = [120, 150];
+    add(new Creature('turtle', { x: CX, y: 100, z: 0.3, len: 64, speed: 8, anim: 4, turnRate: 0.7, dir: 1 })).cruiseY = [80, 120];
+    const trev = [];
+    for (let i = 0; i < 40; i++) trev.push(add(new Creature('trevally', { x: CX + (r() - 0.5) * 200, y: 80 + r() * 40, z: 0.45 + r() * 0.25, len: 28 + r() * 5, speed: 24, anim: 8, glint: true, vx: 10 })));
+    this.schools = [new School(trev, { radius: 28, sep: 12, speed: 24, path: (t) => [CX + Math.sin(t * 0.1) * 260, 95 + Math.sin(t * 0.27) * 25, 0.55] })];
+    for (let i = 0; i < 4; i++) this.shafts.push({ x: CX + (i - 1.5) * 160, z: 0.6, w: 30 + r() * 20, f: 0.2 + r() * 0.3, ph: r() * TAU });
+    this.makeMotes(70, ['#ffffff', '#dff4ff'], { rise: 1.2, a: 0.5 });
+    const cols = ['#ff8cc6', '#ffd66a', '#8ae8ff', '#b8a0ff', '#ffffff'];
+    for (let i = 0; i < 18; i++) this.spots.push({ u: (r() - 0.5) * 0.8, d: r() * 7, w: 0.018 + r() * 0.022, col: cols[(r() * cols.length) | 0], star: r() < 0.35 });
+    this.caustics = genCaustics(96, 24, 12);
+    warmLevel('trevally', 26); warmLevel('trevally', 28);
+    for (const L of [22, 24, 30, 32]) queueVariants('trevally', L, [1, 3], true);
+    progress(1);
+    await nextFrame();
+  }
+
+  buildScreen() {
+    const { W, H } = this;
+    const [vx, vy] = this.vp;
+    const pal = ramp(['#041a44', '#08285e', '#0e3a7c', '#16519a', '#2168b4', '#3486cc', '#56a6de', '#86c8ee', '#bfe6fa'], 9);
+    const b = new Buf(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const top = 1 - y / H;
+      const d = Math.hypot((x - vx) / W, (y - vy) / H);
+      const l = top * 5.2 + Math.max(0, 0.35 - d) * 9 + 0.6;
+      b.set(x, y, pal[clamp(Math.round(l + (bayer(x, y) - 0.5) * 1.1), 0, 8)]);
+    }
+    this.backdrop = b.toCanvas();
+  }
+
+  // depth parameter -> ring scale
+  scaleAt(k) { return 1 / (1 + k * 0.55); }
+  floorAt(s) { return this.vp[1] + (this.H * 1.02 - this.vp[1]) * s; }
+
+  tick(dt) {
+    for (const sc of this.schools) sc.update(dt, this);
+    this.ringPhase += this.walkSpeed * dt;
+  }
+
+  drawRings(ctx) {
+    const { W, H } = this;
+    const [vx] = this.vp;
+    const fr = this.ringPhase % 1;
+    for (let i = 8; i >= 0; i--) {
+      const k = i - fr;
+      if (k < -0.2) continue;
+      const s = this.scaleAt(Math.max(0, k));
+      const fy = this.floorAt(s);
+      const rx = W * 0.72 * s, ry = H * 0.98 * s;
+      const a = 0.18 + 0.4 * s;
+      ctx.lineWidth = Math.max(1, Math.round(4 * s));
+      ctx.strokeStyle = `rgba(20,50,100,${a})`;
+      ctx.beginPath(); ctx.ellipse(vx, fy, rx, ry, 0, Math.PI, TAU); ctx.stroke();
+      ctx.lineWidth = Math.max(1, Math.round(1.5 * s));
+      ctx.strokeStyle = `rgba(200,235,255,${a * 0.8})`;
+      ctx.beginPath(); ctx.ellipse(vx, fy - 1, rx - 1, ry - 1, 0, Math.PI, TAU); ctx.stroke();
+    }
+    // long bright reflections running along the curved glass
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [sc, a0, a1, al] of [[0.92, 1.12, 1.48, 0.22], [0.8, 1.55, 1.95, 0.14], [0.97, 3.5 + 0.2, 4.0, 0.12]]) {
+      const s = sc;
+      const fy = this.floorAt(s);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = `rgba(230,250,255,${al * (0.8 + 0.2 * Math.sin(this.t * 1.3 + sc * 9))})`;
+      ctx.beginPath(); ctx.ellipse(vx, fy, W * 0.72 * s, H * 0.98 * s, 0, Math.PI + a0 - 1, Math.PI + a1 - 1); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  drawFloor(ctx) {
+    const { W, H } = this;
+    const [vx] = this.vp;
+    const sFar = this.scaleAt(8), yFar = this.floorAt(sFar);
+    const band = (u0, u1, c0, c1) => {
+      const g = ctx.createLinearGradient(0, yFar, 0, H);
+      g.addColorStop(0, c0); g.addColorStop(1, c1);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(vx + W * 0.72 * sFar * u0, yFar);
+      ctx.lineTo(vx + W * 0.72 * sFar * u1, yFar);
+      ctx.lineTo(vx + W * 0.72 * 1.02 * u1, H * 1.02);
+      ctx.lineTo(vx + W * 0.72 * 1.02 * u0, H * 1.02);
+      ctx.closePath(); ctx.fill();
+    };
+    // sand and rock outside the benches, benches, then the walkway
+    band(-1, -0.62, '#6aa0c8', '#2a4c70');
+    band(0.62, 1, '#6aa0c8', '#2a4c70');
+    band(-0.62, -0.44, '#4a78b0', '#1c3868');
+    band(0.44, 0.62, '#4a78b0', '#1c3868');
+    band(-0.44, 0.44, '#2a4c88', '#0c1c44');
+    // coloured spots on the walkway sliding by as they walk
+    const fr = this.ringPhase % 1;
+    for (const sp of this.spots) {
+      const k = (sp.d - this.ringPhase * 1) % 7;
+      const kk = k < 0 ? k + 7 : k;
+      const s = this.scaleAt(kk);
+      const y = this.floorAt(s);
+      const x = vx + W * 0.72 * s * sp.u;
+      const rw = Math.max(1, W * sp.w * s), rh = Math.max(1, rw * 0.35);
+      ctx.globalAlpha = 0.8 * Math.min(1, s * 1.6);
+      ctx.fillStyle = sp.col;
+      ctx.beginPath(); ctx.ellipse(x, y, rw, rh, 0, 0, TAU); ctx.fill();
+    }
+    void fr;
+    ctx.globalAlpha = 1;
+  }
+
+  drawTank(ctx) {
+    const { W, H } = this;
+    this.causPattern = ctx.createPattern(this.caustics[Math.floor(this.t * 9) % this.caustics.length], 'repeat');
+    ctx.drawImage(this.backdrop, 0, 0);
+    // rippling light over the whole curved roof
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = this.causPattern;
+    const off = Math.round(this.t * 8);
+    ctx.setTransform(1.2, 0, 0, 0.6, off % 115, 0);
+    ctx.fillRect(-off % 115 - 120, 0, W / 1.2 + 240, (H * 0.55) / 0.6);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    this.drawShafts(ctx, this.shafts, '200,240,255', 0.12);
+    this.drawMotes(ctx);
+    this.drawLife(ctx);
+    this.drawGlows(ctx);
+    // light at the end of the tunnel
+    const [vx, vy] = this.vp;
+    const g = ctx.createRadialGradient(vx, vy, 0, vx, vy, W * 0.3);
+    const a = 0.25 + this.endGlow * 0.75;
+    g.addColorStop(0, `rgba(235,250,255,${a})`);
+    g.addColorStop(1, 'rgba(235,250,255,0)');
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = g;
-    ctx.fillRect(0, top, W, 60);
+    ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = 'source-over';
+    this.drawFloor(ctx);
+    this.drawRings(ctx);
+    this.fx.draw(ctx, (p) => this.toScreen(p.x, p.y, p.z));
+  }
+
+  render(ctx) {
+    this.drawTank(this.tank.ctx);
+    ctx.drawImage(this.tank, 0, 0);
+    // the couple from behind, a little step bob while they walk
+    const img = this.couple.render();
+    const sc = this.coupleScale ?? 1;
+    const bob = this.walkSpeed > 0.01 ? Math.abs(Math.sin(this.t * 5.5)) * 1.2 : 0;
+    const X = Math.round(this.W / 2 + (this.coupleDX || 0)), Y = Math.round(this.H * 0.97 - bob);
+    ctx.setTransform(sc, 0, 0, sc, X, Y);
+    ctx.drawImage(img, -this.couple.R.ox, -this.couple.R.oy);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 }

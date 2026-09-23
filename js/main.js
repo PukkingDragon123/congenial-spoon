@@ -2,7 +2,7 @@
 import { makeCanvas, clamp } from './util.js';
 import { Post } from './post.js';
 import { Aquarium, CX, CY } from './world/scene.js';
-import { JellyRoom, ReefRoom } from './world/rooms.js';
+import { JellyRoom, ReefRoom, TunnelRoom } from './world/rooms.js';
 import { Story } from './story/story.js';
 import { drawText } from './font.js';
 import { bubbleSprite } from './world/fx.js';
@@ -16,7 +16,7 @@ const post = new Post(view);
 const world = makeCanvas(2, 2);
 const ui = makeCanvas(2, 2);
 const aq = new Aquarium();
-const rooms = { jelly: new JellyRoom(aq.couple), reef: new ReefRoom(aq.couple) };
+const rooms = { jelly: new JellyRoom(aq.couple), reef: new ReefRoom(aq.couple), tunnel: new TunnelRoom(aq.couple) };
 let story = null;
 let W = 0, H = 0, S = 1, DPR = 1;
 
@@ -96,7 +96,8 @@ async function boot() {
   story.sound.sim = params.get('sim') === '1';
   const song = story.sound.load(); // decode in parallel with the art
   await rooms.jelly.build((p) => { loadP = p * 0.6; });
-  await rooms.reef.build((p) => { loadP = 0.6 + p * 0.35; });
+  await rooms.reef.build((p) => { loadP = 0.6 + p * 0.3; });
+  await rooms.tunnel.build((p) => { loadP = 0.9 + p * 0.08; });
   await Promise.race([song, new Promise((r) => setTimeout(r, 6000))]);
   loadP = 1;
   loading = false;
