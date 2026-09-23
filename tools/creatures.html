@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#1553b0}canvas{image-rendering:pixelated}</style></head>
+<body><canvas id="c"></canvas><script type="module">
+import { renderRay, renderTurtle, renderJelly, RAY_FRAMES, TURTLE_FRAMES, JELLY_FRAMES } from '../js/art/creatures.js';
+const S = 4, W = 460, H = 300;
+const c = document.getElementById('c');
+c.width = W; c.height = H; c.style.width = W*S+'px'; c.style.height = H*S+'px';
+const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#2f8ef0'); g.addColorStop(1,'#0f3f98');
+ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+let x = 4, y = 4;
+for (let f = 0; f < RAY_FRAMES; f += 4) { const s = renderRay(80, f); ctx.drawImage(s, x, y); x += s.width - 20; }
+x = 4; y = 90;
+for (let f = 0; f < TURTLE_FRAMES; f += 4) { const s = renderTurtle(70, f); ctx.drawImage(s, x, y); x += s.width + 4; }
+x = 4; y = 170;
+for (let f = 0; f < JELLY_FRAMES; f += 4) { const s = renderJelly(22, f); ctx.drawImage(s, x, y); x += s.width + 6; }
+for (let f = 0; f < JELLY_FRAMES; f += 5) { const s = renderJelly(16, f, 'blue'); ctx.drawImage(s, x, y); x += s.width + 6; }
+</script></body></html>

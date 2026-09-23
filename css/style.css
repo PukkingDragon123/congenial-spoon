@@ -1,0 +1,27 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #02040c;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#view {
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  cursor: default;
+}
+#view.pointer { cursor: pointer; }
+noscript {
+  color: #9ec8ee;
+  font: 16px/1.4 monospace;
+  display: block;
+  padding: 2em;
+  text-align: center;
+}

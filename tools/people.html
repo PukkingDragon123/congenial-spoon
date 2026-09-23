@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#1553b0}canvas{image-rendering:pixelated}</style></head>
+<body><canvas id="c"></canvas><script type="module">
+import { Couple } from '../js/art/people.js';
+const S = 4, W = 460, H = 260;
+const c = document.getElementById('c');
+c.width = W; c.height = H; c.style.width = W*S+'px'; c.style.height = H*S+'px';
+const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#3aa0ff'); g.addColorStop(1,'#1560d0');
+ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+const cp = new Couple();
+const put = (x, y) => { const cv = cp.render(); ctx.drawImage(cv, x, y); };
+cp.mode = 'walk'; cp.moving = 1;
+for (let i = 0; i < 3; i++) { cp.walk = i * 1.05; put(i * 150 - 20, 0); }
+cp.mode = 'back'; cp.hold = 0; put(-20, 125);
+cp.hold = 1; put(90, 125);
+cp.lean = 1; put(200, 125);
+cp.mode = 'face'; cp.hands = 1; put(290, 125); cp.hug = 1; put(360, 125);
+</script></body></html>
