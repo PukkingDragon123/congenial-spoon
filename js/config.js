@@ -11,8 +11,8 @@ export const CONFIG = {
   from: 'Me',           // the person confessing
 
   // Title card shown before diving in
-  title: 'Beneath the Blue',
-  subtitle: 'an aquarium adventure',
+  title: 'Very Cool Aquarium Game',
+  subtitle: 'a little underwater adventure',
   tapToBegin: 'tap to dive in',
 
   // Written by the fish school in the tank (keep it short: 2-10 characters

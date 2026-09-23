@@ -1,4 +1,4 @@
-# Beneath the Blue — a pixel-art love confession
+# Very Cool Aquarium Game — a pixel-art love confession in disguise
 
 A love confession told almost entirely through pictures, set to Daniel
 Caesar's "Always". A couple walks through an empty, softly glowing aquarium
@@ -19,7 +19,7 @@ schools, crabs wave their claws, and the light breathes with the song.
 It plays like a little aquarium game at first, and only turns into a
 confession at the turn of the song.
 
-1. **Title** (before the music): "Beneath the Blue, an aquarium adventure". Tap to dive in and start the song.
+1. **Title** (before the music): "Very Cool Aquarium Game". Tap to dive in and start the song.
 2. **The Buddha tank** (0:05): a wall of foam reveals the great window. Goal: *say hi to the fish*. Tap creatures to make them react and collect pearls.
 3. **Clownfish reef** (0:38): goal: *find the clownfish*. On the first chorus the whole reef throws a fish party.
 4. **Jellyfish hall** (1:12): goal: *light up the jellies*. The couple quietly take each other's hand.

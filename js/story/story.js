@@ -193,9 +193,10 @@ export class Story {
     await this.mainReady;
     this.hint = { text: CONFIG.tapToBegin, y: () => Math.round(this.H * 0.66), a: 0 };
     { const h = this.hint; this.tween(0.8, (k) => { h.a = k; }); }
+    this.sound.armed = true; // the next tap starts the song inside the tap itself
     await this.waitTap();
     this.hint = null;
-    this.sound.start();      // song starts here: songT 0 is this tap
+    this.sound.start();      // no-op if the tap already started it
     this.showSpeaker = CONFIG.sound;
   }
 
@@ -883,8 +884,8 @@ export class Story {
   drawTitle(ctx) {
     const T = this.title;
     const W = this.W, H = this.H;
-    const sc = W >= 520 ? 3 : 2;
     const str = CONFIG.title;
+    const sc = textWidth(str) * 3 < W - 20 ? 3 : textWidth(str) * 2 < W - 12 ? 2 : 1;
     const y = Math.round(H * 0.36);
     const t = this.t;
     const sweep = ((t * 0.35) % 1.6 - 0.3) * textWidth(str) * sc;
