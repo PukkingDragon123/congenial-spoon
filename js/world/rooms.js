@@ -3,8 +3,8 @@
 // their anemones and crabs on the sand. Both share the main tank's world
 // coordinates, camera, couple and effect hooks, so the story can drive any of
 // them the same way.
-import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm, noise2 } from '../util.js';
-import { CX, tallExtra, genCaustics, genSand } from '../art/env.js';
+import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm } from '../util.js';
+import { CX, tallExtra, genCaustics, genSand, genFormation } from '../art/env.js';
 import { Creature, Crab, School } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
@@ -579,63 +579,11 @@ function genAnemone(w, hue, seed) {
   return frames;
 }
 
-// Rock mass for a reef wall: a noise field thresholded against a "wall
-// shape" (dense at the sides, thinning upward) so it grows overhangs, holes
-// and ledges. Pixels open to the water above get top-lit and collect coral.
-function rockMass(P, shape, seed, pal, fogK = 0) {
-  const { w, h } = P;
-  const solid = new Uint8Array(w * h);
-  for (let y = 0; y < h; y++) {
-    const up = (h - y) / h;
-    for (let x = 0; x < w; x++) {
-      const sh = shape(x, up);
-      if (sh < -0.6) continue;
-      const n = fbm(x * 0.016, y * 0.02, seed, 4) + fbm(x * 0.05, y * 0.06, seed + 7, 2) * 0.25;
-      if (n + sh > 0.78) solid[y * w + x] = 1;
-    }
-  }
-  const tops = [];
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    if (!solid[y * w + x]) continue;
-    const openUp = y === 0 || !solid[(y - 1) * w + x];
-    const openUp2 = y < 2 || !solid[(y - 2) * w + x];
-    const side = (x > 0 && !solid[y * w + x - 1]) || (x < w - 1 && !solid[y * w + x + 1]);
-    // lumpy boulders: emboss a bumpy height field, lit from above
-    const bump = (noise2(x * 0.09, (y - 1) * 0.09, seed + 5) - noise2(x * 0.09, (y + 1) * 0.09, seed + 5)) * 9
-      + (noise2(x * 0.25, (y - 1) * 0.25, seed + 9) - noise2(x * 0.25, (y + 1) * 0.25, seed + 9)) * 3;
-    let l = 2.2 + bump + fbm(x * 0.03, y * 0.03, seed + 3, 2) * 1.2 - (1 - (h - y) / h) * 0.8;
-    if (openUp) l += 2.2; else if (openUp2) l += 1.1;
-    if (side) l -= 0.6;
-    if (hash2(x, y, seed) < 0.05) l -= 0.8;
-    P.px(x, y, pal, l - fogK);
-    if (openUp && hash2(x >> 2, y >> 2, seed + 11) < 0.11) tops.push([x, y]);
-    else if (!openUp && hash2(x >> 3, y >> 3, seed + 13) < 0.03 && hash2(x, y, seed + 17) < 0.02) tops.push([x, y, 1]);
-  }
-  return tops;
-}
 function plate(P, cx, cy, w, pal) {
   // a plate coral jutting out as a ledge: flat, pale on top, dark under
   P.blob(cx, cy, w / 2, Math.max(1.6, w * 0.09), pal, (l, u, v) => (v < -0.2 ? 4.6 : v < 0.3 ? 3.2 : 1.4) + Math.abs(Math.sin(u * 20)) * 0.3);
   P.stick(cx, cy + 1, cx - w * 0.05, cy + w * 0.18, 1.6, 1.2, pal);
 }
-function decorate(P, tops, r, pals, density = 1) {
-  for (const [x, y, face] of tops) {
-    const k = r();
-    if (face) {
-      // soft corals and sponges clinging to the rock face
-      const pal = [PAL.pink, PAL.purple, PAL.orange, PAL.teal][(r() * 4) | 0];
-      P.blob(x, y, 2 + r() * 3, 1.5 + r() * 2.5, pal, (l, u, v) => l + 0.8 + (Math.abs(Math.sin(u * 9)) < 0.3 ? -1 : 0));
-      continue;
-    }
-    if (k > 0.75 * density) continue;
-    if (k < 0.22) plate(P, x, y - 1, 12 + r() * 26, pals.plate);
-    else if (k < 0.36) fan(P, x, y + 1, 10 + r() * 16, pals.fan, (x * 7 + y) % 89);
-    else if (k < 0.5) staghorn(P, x, y + 1, -Math.PI / 2 + (r() - 0.5) * 0.6, 7 + r() * 7, 1.8, 2, pals.branch, r);
-    else if (k < 0.62) brain(P, x, y + 1, 5 + r() * 6, pals.brain, (x + y) % 61);
-    else P.blob(x, y, 2 + r() * 3, 1.6 + r() * 2, pals.soft, (l) => l + 1);
-  }
-}
-
 export class ReefRoom extends Room {
   constructor(couple) {
     super(couple);
@@ -663,41 +611,21 @@ export class ReefRoom extends Room {
     const step = (fn) => steps.push(fn);
     this.caustics = genCaustics();
     this.sand = genSand(640, 48, 11);
-    const LW = 1400, X0 = CX - LW / 2, HH = 300;
-    const HW = this.W / 2 + 40; // walls are placed relative to what the screen shows
+    const LW = 1400, X0 = CX - LW / 2;
     const rockPal = ramp(['#06102a', '#0b1a3c', '#13274e', '#1c3662', '#294a7a', '#3a6294', '#5480b0', '#7aa2cc'], 8);
-    const farPal = ramp(['#10306a', '#15397a', '#1b448a', '#22519a', '#2c60aa', '#3a72ba'], 6);
-    const pals = { plate: PAL.lime, fan: PAL.purple, branch: PAL.pink, brain: PAL.gold, soft: PAL.teal };
-    // far wall: rock on both sides with an open blue channel up the middle
-    step(() => {
-      const P = new Painter(LW, HH);
-      const tops = rockMass(P, (x, up) => {
-        const c = Math.abs(x - LW / 2) / HW;
-        return (c - 0.12 - up * 0.55) * 2.2 + 0.3;
-      }, 21, farPal);
-      decorate(P, tops, r, { plate: PAL.teal, fan: PAL.teal, branch: PAL.teal, brain: PAL.teal, soft: PAL.teal }, 0.6);
-      this.layers.push({ img: P.canvas(), x: X0, z: 0.82, sink: 4 });
+    // the same faceted boulder formations as the great tank, framing a
+    // central channel: far band, mid massifs, then near flanks
+    const F = (o) => step(() => {
+      const c = genFormation(o);
+      this.layers.push({ img: c, x: o.x, z: o.z, sink: o.sink ?? 6 });
     });
-    // mid ledges stepping out from the sides
-    step(() => {
-      const P = new Painter(LW, HH);
-      const tops = rockMass(P, (x, up) => {
-        const c = Math.abs(x - LW / 2) / HW;
-        return (c - 0.38 - up * 0.45) * 2.6 + 0.3;
-      }, 33, rockPal, 0.7);
-      decorate(P, tops, r, pals, 0.9);
-      this.layers.push({ img: P.canvas(), x: X0, z: 0.5, sink: 6 });
-    });
-    // near walls framing the window, heavy with coral
-    step(() => {
-      const P = new Painter(LW, HH);
-      const tops = rockMass(P, (x, up) => {
-        const c = Math.abs(x - LW / 2) / HW;
-        return (c - 0.6 - up * 0.3) * 3 + 0.3;
-      }, 47, rockPal);
-      decorate(P, tops, r, pals, 1.1);
-      this.layers.push({ img: P.canvas(), x: X0, z: 0.14, sink: 10 });
-    });
+    const hw = Math.max(260, this.W * 0.5 + 60);
+    F({ x: CX - hw - 260, z: 0.88, w: 400, h: 150, seed: 61, profile: (x) => 0.95 - 0.55 * x + 0.1 * Math.sin(x * 9), size: [10, 26], decor: 0.5, sink: 4 });
+    F({ x: CX + hw * 0.35, z: 0.88, w: 420, h: 160, seed: 62, profile: (x) => 0.4 + 0.55 * x + 0.08 * Math.sin(x * 11), size: [10, 26], decor: 0.5, sink: 4 });
+    F({ x: CX - hw * 0.95 - 120, z: 0.5, w: 330, h: 230, seed: 63, profile: (x) => 0.97 - Math.abs(x - 0.35) ** 1.8 * 1.5 + 0.04 * Math.sin(x * 17), size: [14, 40], decor: 0.9, taper: [0.1, 0.14] });
+    F({ x: CX + hw * 0.5, z: 0.5, w: 330, h: 240, seed: 64, profile: (x) => 0.97 - Math.abs(x - 0.65) ** 1.8 * 1.5 + 0.04 * Math.sin(x * 15), size: [14, 40], decor: 0.9, taper: [0.14, 0.1] });
+    F({ x: CX - hw - 330, z: 0.12, w: 420, h: 250, seed: 65, profile: (x) => 0.35 + 0.63 * x ** 0.8, size: [18, 46], decor: 1, taper: [0, 0.16], sink: 12 });
+    F({ x: CX + hw - 90, z: 0.12, w: 420, h: 260, seed: 66, profile: (x) => 0.98 - 0.63 * x ** 1.2, size: [18, 46], decor: 1, taper: [0.16, 0], sink: 12 });
     // coral garden on the floor of the channel
     step(() => {
       const h = 120, P = new Painter(LW, h), by = h - 2;
@@ -842,12 +770,13 @@ export class ReefRoom extends Room {
       const [sx, sy] = this.toScreen(L.x, this.floorY(L.z) + L.sink - L.img.height, L.z);
       ctx.drawImage(L.img, Math.round(sx), Math.round(sy));
     };
-    layerAt(this.layers[0]);
+    const far = this.layers.filter((L) => L.z > 0.8), rest = this.layers.filter((L) => L.z <= 0.8);
+    for (const L of far) layerAt(L);
     ctx.fillStyle = 'rgba(30,90,170,0.3)';
     ctx.fillRect(0, 0, W, H);
     this.drawSand(ctx);
     const saved = this.decor;
-    this.decor = [...saved, ...this.layers.slice(1).map((L) => ({ z: L.z, draw: () => layerAt(L) }))];
+    this.decor = [...saved, ...rest.map((L) => ({ z: L.z, draw: () => layerAt(L) }))];
     this.drawLife(ctx);
     this.decor = saved;
     this.drawMotes(ctx);
@@ -857,192 +786,3 @@ export class ReefRoom extends Room {
   }
 }
 
-// ======================================================= walk-through tunnel ==
-// Looking down an acrylic tunnel: rings slide past as the couple walks, rays
-// and sharks glide overhead, light ripples down the curved glass.
-export class TunnelRoom extends Room {
-  constructor(couple) {
-    super(couple);
-    this.span = 260;
-    this.near = 175; this.far = 165;   // keep swimmers overhead
-    this.ringPhase = 0;
-    this.walkSpeed = 0;
-    this.endGlow = 0;
-    this.shafts = [];
-    this.spots = [];
-  }
-
-  resize(W, H) {
-    this.W = W; this.H = H;
-    const extra = tallExtra(H);
-    this.extra = extra;
-    this.camY0 = CY - extra * 0.3;
-    this.cam.y = this.camY0;
-    this.off = H / 2 - this.camY0;
-    this.yTop = 30 - extra;
-    this.tank = makeCanvas(W, H);
-    this.vp = [W / 2, Math.round(H * 0.44)];
-    this.win = { l: 0, r: W, top: 0, sill: Math.round(H * 0.72) };
-    this.curves = { top: () => 8, sill: () => Math.round(H * 0.72) };
-    this.buildScreen();
-  }
-
-  async build(progress = () => {}) {
-    const r = rng(9090);
-    const add = (c) => { this.creatures.push(c); return c; };
-    add(new Creature('ray', { x: CX - 200, y: 70, z: 0.12, len: 110, speed: 13, anim: 5, turnRate: 0.6, dir: 1 })).cruiseY = [50, 90];
-    add(new Creature('ray', { x: CX + 260, y: 110, z: 0.4, len: 80, speed: 11, anim: 5, turnRate: 0.6, dir: -1 })).cruiseY = [90, 130];
-    add(new Creature('shark', { x: CX + 300, y: 60, z: 0.25, len: 130, speed: 16, anim: 5, turnRate: 0.8, dir: -1 })).cruiseY = [40, 80];
-    add(new Creature('reefshark', { x: CX - 350, y: 140, z: 0.55, len: 96, speed: 18, anim: 6, turnRate: 1, dir: 1 })).cruiseY = [120, 150];
-    add(new Creature('turtle', { x: CX, y: 100, z: 0.3, len: 64, speed: 8, anim: 4, turnRate: 0.7, dir: 1 })).cruiseY = [80, 120];
-    const trev = [];
-    for (let i = 0; i < 40; i++) trev.push(add(new Creature('trevally', { x: CX + (r() - 0.5) * 200, y: 80 + r() * 40, z: 0.45 + r() * 0.25, len: 28 + r() * 5, speed: 24, anim: 8, glint: true, vx: 10 })));
-    this.schools = [new School(trev, { radius: 28, sep: 12, speed: 24, path: (t) => [CX + Math.sin(t * 0.1) * 260, 95 + Math.sin(t * 0.27) * 25, 0.55] })];
-    for (let i = 0; i < 4; i++) this.shafts.push({ x: CX + (i - 1.5) * 160, z: 0.6, w: 30 + r() * 20, f: 0.2 + r() * 0.3, ph: r() * TAU });
-    this.makeMotes(70, ['#ffffff', '#dff4ff'], { rise: 1.2, a: 0.5 });
-    const cols = ['#ff8cc6', '#ffd66a', '#8ae8ff', '#b8a0ff', '#ffffff'];
-    for (let i = 0; i < 18; i++) this.spots.push({ u: (r() - 0.5) * 0.8, d: r() * 7, w: 0.018 + r() * 0.022, col: cols[(r() * cols.length) | 0], star: r() < 0.35 });
-    this.caustics = genCaustics(96, 24, 12);
-    warmLevel('trevally', 26); warmLevel('trevally', 28);
-    for (const L of [22, 24, 30, 32]) queueVariants('trevally', L, [1, 3], true);
-    progress(1);
-    await nextFrame();
-  }
-
-  buildScreen() {
-    const { W, H } = this;
-    const [vx, vy] = this.vp;
-    const pal = ramp(['#041a44', '#08285e', '#0e3a7c', '#16519a', '#2168b4', '#3486cc', '#56a6de', '#86c8ee', '#bfe6fa'], 9);
-    const b = new Buf(W, H);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const top = 1 - y / H;
-      const d = Math.hypot((x - vx) / W, (y - vy) / H);
-      const l = top * 5.2 + Math.max(0, 0.35 - d) * 9 + 0.6;
-      b.set(x, y, pal[clamp(Math.round(l + (bayer(x, y) - 0.5) * 1.1), 0, 8)]);
-    }
-    this.backdrop = b.toCanvas();
-  }
-
-  // depth parameter -> ring scale
-  scaleAt(k) { return 1 / (1 + k * 0.55); }
-  floorAt(s) { return this.vp[1] + (this.H * 1.02 - this.vp[1]) * s; }
-
-  tick(dt) {
-    for (const sc of this.schools) sc.update(dt, this);
-    this.ringPhase += this.walkSpeed * dt;
-  }
-
-  drawRings(ctx) {
-    const { W, H } = this;
-    const [vx] = this.vp;
-    const fr = this.ringPhase % 1;
-    for (let i = 8; i >= 0; i--) {
-      const k = i - fr;
-      if (k < -0.2) continue;
-      const s = this.scaleAt(Math.max(0, k));
-      const fy = this.floorAt(s);
-      const rx = W * 0.72 * s, ry = H * 0.98 * s;
-      const a = 0.18 + 0.4 * s;
-      ctx.lineWidth = Math.max(1, Math.round(4 * s));
-      ctx.strokeStyle = `rgba(20,50,100,${a})`;
-      ctx.beginPath(); ctx.ellipse(vx, fy, rx, ry, 0, Math.PI, TAU); ctx.stroke();
-      ctx.lineWidth = Math.max(1, Math.round(1.5 * s));
-      ctx.strokeStyle = `rgba(200,235,255,${a * 0.8})`;
-      ctx.beginPath(); ctx.ellipse(vx, fy - 1, rx - 1, ry - 1, 0, Math.PI, TAU); ctx.stroke();
-    }
-    // long bright reflections running along the curved glass
-    ctx.globalCompositeOperation = 'lighter';
-    for (const [sc, a0, a1, al] of [[0.92, 1.12, 1.48, 0.22], [0.8, 1.55, 1.95, 0.14], [0.97, 3.5 + 0.2, 4.0, 0.12]]) {
-      const s = sc;
-      const fy = this.floorAt(s);
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = `rgba(230,250,255,${al * (0.8 + 0.2 * Math.sin(this.t * 1.3 + sc * 9))})`;
-      ctx.beginPath(); ctx.ellipse(vx, fy, W * 0.72 * s, H * 0.98 * s, 0, Math.PI + a0 - 1, Math.PI + a1 - 1); ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'source-over';
-  }
-
-  drawFloor(ctx) {
-    const { W, H } = this;
-    const [vx] = this.vp;
-    const sFar = this.scaleAt(8), yFar = this.floorAt(sFar);
-    const band = (u0, u1, c0, c1) => {
-      const g = ctx.createLinearGradient(0, yFar, 0, H);
-      g.addColorStop(0, c0); g.addColorStop(1, c1);
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.moveTo(vx + W * 0.72 * sFar * u0, yFar);
-      ctx.lineTo(vx + W * 0.72 * sFar * u1, yFar);
-      ctx.lineTo(vx + W * 0.72 * 1.02 * u1, H * 1.02);
-      ctx.lineTo(vx + W * 0.72 * 1.02 * u0, H * 1.02);
-      ctx.closePath(); ctx.fill();
-    };
-    // sand and rock outside the benches, benches, then the walkway
-    band(-1, -0.62, '#6aa0c8', '#2a4c70');
-    band(0.62, 1, '#6aa0c8', '#2a4c70');
-    band(-0.62, -0.44, '#4a78b0', '#1c3868');
-    band(0.44, 0.62, '#4a78b0', '#1c3868');
-    band(-0.44, 0.44, '#2a4c88', '#0c1c44');
-    // coloured spots on the walkway sliding by as they walk
-    const fr = this.ringPhase % 1;
-    for (const sp of this.spots) {
-      const k = (sp.d - this.ringPhase * 1) % 7;
-      const kk = k < 0 ? k + 7 : k;
-      const s = this.scaleAt(kk);
-      const y = this.floorAt(s);
-      const x = vx + W * 0.72 * s * sp.u;
-      const rw = Math.max(1, W * sp.w * s), rh = Math.max(1, rw * 0.35);
-      ctx.globalAlpha = 0.8 * Math.min(1, s * 1.6);
-      ctx.fillStyle = sp.col;
-      ctx.beginPath(); ctx.ellipse(x, y, rw, rh, 0, 0, TAU); ctx.fill();
-    }
-    void fr;
-    ctx.globalAlpha = 1;
-  }
-
-  drawTank(ctx) {
-    const { W, H } = this;
-    this.causPattern = ctx.createPattern(this.caustics[Math.floor(this.t * 9) % this.caustics.length], 'repeat');
-    ctx.drawImage(this.backdrop, 0, 0);
-    // rippling light over the whole curved roof
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.08;
-    ctx.fillStyle = this.causPattern;
-    const off = Math.round(this.t * 8);
-    ctx.setTransform(1.2, 0, 0, 0.6, off % 115, 0);
-    ctx.fillRect(-off % 115 - 120, 0, W / 1.2 + 240, (H * 0.55) / 0.6);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    this.drawShafts(ctx, this.shafts, '200,240,255', 0.12);
-    this.drawMotes(ctx);
-    this.drawLife(ctx);
-    this.drawGlows(ctx);
-    // light at the end of the tunnel
-    const [vx, vy] = this.vp;
-    const g = ctx.createRadialGradient(vx, vy, 0, vx, vy, W * 0.3);
-    const a = 0.25 + this.endGlow * 0.75;
-    g.addColorStop(0, `rgba(235,250,255,${a})`);
-    g.addColorStop(1, 'rgba(235,250,255,0)');
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.globalCompositeOperation = 'source-over';
-    this.drawFloor(ctx);
-    this.drawRings(ctx);
-    this.fx.draw(ctx, (p) => this.toScreen(p.x, p.y, p.z));
-  }
-
-  render(ctx) {
-    this.drawTank(this.tank.ctx);
-    ctx.drawImage(this.tank, 0, 0);
-    // the couple from behind, a little step bob while they walk
-    const img = this.couple.render();
-    const sc = this.coupleScale ?? 1;
-    const bob = this.walkSpeed > 0.01 ? Math.abs(Math.sin(this.t * 5.5)) * 1.2 : 0;
-    const X = Math.round(this.W / 2 + (this.coupleDX || 0)), Y = Math.round(this.H * 0.97 - bob);
-    ctx.setTransform(sc, 0, 0, sc, X, Y);
-    ctx.drawImage(img, -this.couple.R.ox, -this.couple.R.oy);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }
-}

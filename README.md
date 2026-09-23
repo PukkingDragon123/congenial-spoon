@@ -17,15 +17,15 @@ the music: fish bounce and squash on the beat, waves ripple through the
 schools, crabs wave their claws, and the light breathes with the song.
 
 1. **Title** (before the music): "Very Cool Aquarium Game". Tap to dive in and start the song.
-2. **Jellyfish hall** (0:05): they stroll in under drifting jellies and take each other's hand. Tap any creature to make it react.
-3. **Clownfish reef** (0:24): a tall arched reef window with rock walls, plate-coral ledges and schools of fish. A heart pops as she leans on him.
-4. **Underwater tunnel** (0:42): the couple walk down an acrylic tunnel as rays, sharks and a turtle glide overhead, hand in hand, little hearts drifting up. Light grows at the end.
-5. **The hook** (0:58): out of the tunnel into the great Buddha tank; the minnows pour into a heart on the chorus downbeat and the couple turn to face each other.
+2. **Jellyfish hall** (0:05): they stroll in under drifting jellies and take each other's hand; an arrow points at them: *this could be us 👀*. Tap any creature to make it react.
+3. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with anemones, clownfish families and schools of fish. A heart pops as she leans on him.
+4. **The walk** (0:42): hand in hand along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
+5. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat and the couple turn to face each other.
 6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
 7. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
 8. **Finale**: a whale shark glides in carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
-Lines of text drift up through the water, each letter in its own bubble.
+Subtitles type in over a soft backing, one line at a time, and fade away in a few bubbles.
 Every line starts where a sung phrase starts in the track (found by
 measuring the song's vocal band). They are original lines, in
 `js/config.js` under `lyrics`: swap in your own words there.
@@ -99,7 +99,7 @@ is no build step.
 
 ### Dev helpers
 
-- `?scene=jelly|reef|tunnel|hook|bottle|letter|question|finale` jumps to a beat.
+- `?scene=jelly|reef|walk|hook|bottle|letter|question|finale` jumps to a beat.
 - `?sim=1` makes the story follow the simulated clock instead of the audio (for headless tests).
 - `?speed=2` runs time faster.
 - `?gl=0` forces the plain-2D fallback renderer (no bloom or blur).

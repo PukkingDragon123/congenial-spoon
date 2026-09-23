@@ -185,8 +185,9 @@ function drawSide(R, C, ox, f, p) {
     let tx, ty;
     if (hand) { tx = hand[0]; ty = hand[1]; }
     else {
-      const sw = 0.3 * Math.sin(ph + (i ? 0 : Math.PI)) * moving;
-      tx = sx + Math.sin(sw) * (C.ua + C.fa - 3) * f; ty = sy + Math.cos(sw) * (C.ua + C.fa - 3);
+      const sw = 0.42 * Math.sin(ph + (i ? 0 : Math.PI)) * moving;
+      const reach = C.ua + C.fa - 3.5 - Math.max(0, sw) * 3;
+      tx = sx + Math.sin(sw) * reach * f; ty = sy + Math.cos(sw) * reach;
     }
     const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, f > 0 ? 1 : -1);
     const r0 = C.girl ? 1.9 : 2.5, r1 = C.girl ? 1.5 : 2.0, r2 = C.girl ? 1.3 : 1.7;
@@ -252,6 +253,7 @@ export class Couple {
     this.hands = 0; // face view: holding both hands
     this.hug = 0;
     this.flip = 1; // horizontal squash during turns
+    this.walkHold = 0; // hold hands while walking
     this.gap = 17;
   }
 
@@ -267,8 +269,15 @@ export class Couple {
     const gh = this.gap / 2;
     if (this.mode === 'walk') {
       const flut = Math.sin(this.walk * 2) * 1.2 * this.moving;
-      drawSide(R, GUY, -gh, 1, { walk: this.walk + 0.4, moving: this.moving });
-      drawSide(R, GIRL, gh, 1, { walk: this.walk, moving: this.moving, flutter: flut, hairSway: Math.sin(t * 2) * 0.6 });
+      // walking hand in hand: his near hand and her far hand meet between them
+      let gH = null, qH = null;
+      if (this.walkHold > 0.5) {
+        const mx = Math.sin(this.walk) * 1.4 * this.moving, my = -GUY.leg + 3 + Math.abs(Math.cos(this.walk)) * 0.8;
+        gH = [[mx - 0.5, my], null];
+        qH = [null, [mx + 0.5, my + 0.5]];
+      }
+      drawSide(R, GUY, -gh, 1, { walk: this.walk + 0.4, moving: this.moving, hands: gH });
+      drawSide(R, GIRL, gh, 1, { walk: this.walk, moving: this.moving, hands: qH, flutter: flut, hairSway: Math.sin(t * 2) * 0.6 - this.moving * 0.8 });
     } else if (this.mode === 'back') {
       const h = this.hold, ln = this.lean;
       const meetX = 0, meetY = -GIRL.leg - 1 + (1 - h) * 3;

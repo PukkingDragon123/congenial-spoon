@@ -4,9 +4,7 @@ import { CONFIG, fill } from '../config.js';
 import { CX, CY } from '../world/scene.js';
 import { Creature } from '../world/creatures.js';
 import { Particles, burstSparks, burstHearts, burstStars, popRing, bubbleSprite } from '../world/fx.js';
-import { drawText, textWidth, textPixelsBold, wrap, chars, charX, glyph, LINE_H } from '../font.js';
-
-const glyphW = (ch) => glyph(ch).w;
+import { drawText, textWidth, textPixelsBold, wrap, chars, charX, LINE_H } from '../font.js';
 import { bottleSprite, makePaper, drawRoll, drawSeal, drawBubbleButton, drawSpeaker, Sweep, BubbleCurtain, LightBloom } from './ui.js';
 import { SoundEngine } from '../audio.js';
 
@@ -98,11 +96,11 @@ export class Story {
     if (debug) {
       await this.mainReady;
       this.post.p.blur = 0; this.post.p.dim = 0;
-      const jump = { jelly: 8, reef: 23, tunnel: 41, hook: 55.5, bottle: 90, letter: 110, question: 136, finale: 151 };
+      const jump = { jelly: 8, reef: 23, walk: 41, hook: 54.5, bottle: 90, letter: 110, question: 136, finale: 151 };
       this.songOffset = jump[debug] ?? 0;
       this.sound.start();
       this.showSpeaker = CONFIG.sound;
-      const order = ['jelly', 'reef', 'tunnel', 'hook', 'bottle', 'letter', 'question', 'finale'];
+      const order = ['jelly', 'reef', 'walk', 'hook', 'bottle', 'letter', 'question', 'finale'];
       const from = Math.max(0, order.indexOf(debug));
       this.hud = from < 3;
       if (from === 0) this.enterRoom(this.rooms.jelly, CX - 260, CX - 320);
@@ -110,7 +108,7 @@ export class Story {
       if (from >= 4) this.enterMainTank();
       if (from <= 0) await this.jellyScene();
       if (from <= 1) await this.reefScene();
-      if (from <= 2) await this.tunnelScene();
+      if (from <= 2) await this.mainWalk();
       if (from <= 3) await this.hookScene();
       if (from <= 4) await this.bottleScene();
       if (from <= 5) await this.letterScene();
@@ -122,7 +120,7 @@ export class Story {
     await this.dive();
     await this.jellyScene();
     await this.reefScene();
-    await this.tunnelScene();
+    await this.mainWalk();
     await this.hookScene();
     await this.bottleScene();
     await this.letterScene();
@@ -149,19 +147,29 @@ export class Story {
   }
 
   // Walk the couple to x1, timed to arrive as the song reaches `until`.
+  // Speed eases in and out, so steps start and settle gently.
   walkTo(x1, until) {
     const st = this.stage, c = this.aq.couple;
     c.mode = 'walk';
+    c.walkHold = c.hold > 0.5 ? 1 : 0;
+    let v = 0;
     return this.until(() => {
       const d = x1 - st.coupleX;
       const remain = Math.max(0.35, until - this.songT);
-      const v = clamp(d / remain, 0, 40);
+      const want = clamp(Math.min(d / remain * 1.15, Math.sqrt(Math.max(0, d)) * 5), 0, 36);
       const dt = this.dt || 0.016;
+      v += (want - v) * Math.min(1, dt * 2.2);
       const step = Math.min(d, v * dt);
       st.coupleX += step;
-      c.walk += step / 8;
-      c.moving = clamp(v / 22);
-      if (d < 0.5 || this.songT >= until) { st.coupleX = x1; c.moving = 0; return true; }
+      c.walk += step / 7.5;
+      c.moving += (clamp(v / 18) - c.moving) * Math.min(1, dt * 5);
+      if (d < 0.4 || this.songT >= until) {
+        st.coupleX = x1;
+        // let the last step settle instead of freezing mid-stride
+        const settle = c.walk;
+        this.tween(0.35, (k) => { c.moving *= 1 - k; c.walk = settle + k * 0.3; });
+        return true;
+      }
       return false;
     });
   }
@@ -227,6 +235,8 @@ export class Story {
     await this.until(() => tr.done);
     this.trans = null;
     this.tween(1.4, (k) => { p.warp = 0.7 * (1 - k); });
+    this.credit = { a: 0 };
+    { const C = this.credit; this.tween(1, (k) => { C.a = k; }); this.atSong(15).then(() => this.tween(1.2, (k) => { C.a = 1 - k; })); }
   }
 
   // Tap a creature and it reacts with a little sparkle.
@@ -284,6 +294,11 @@ export class Story {
     await this.atSong(19.6);
     await this.tween(2.4, (k) => { c.hold = k; }, ease.inOutCubic);
     this.tween(2.6, (k) => { c.lean = k; }, ease.inOutSine);
+    await this.atSong(21.2);
+    this.cbu = { a: 0 };
+    { const C = this.cbu; this.tween(0.5, (k) => { C.a = k; }, ease.outBack); }
+    await this.atSong(27.5);
+    { const C = this.cbu; this.tween(0.6, (k) => { C.a = 1 - k; }).then(() => { if (this.cbu === C) this.cbu = null; }); }
   }
 
   // Chapter 2: the clownfish reef.
@@ -304,49 +319,35 @@ export class Story {
     this.tween(2.4, (k) => { c.lean = k; }, ease.inOutSine);
   }
 
-  // Chapter 3: the underwater tunnel, walking toward the light.
-  async tunnelScene() {
-    const tun = this.rooms.tunnel;
-    const c = this.aq.couple;
-    if (!tun) return;
-    await this.atSong(41.6);
+  // Chapter 3: along the great Buddha tank, hand in hand, arriving at the
+  // middle of the window right as the chorus hits.
+  async mainWalk() {
+    const aq = this.aq, c = aq.couple;
+    await this.atSong(41.4);
+    await this.mainReady;
     this.sound.sfx('whoosh');
-    await this.go(tun, new Sweep(this.W, this.H, 2.9), () => {
-      this.camX = CX;
-      this.setStage(tun);
-      c.mode = 'back'; c.hold = 1; c.lean = 0.6; c.flip = 1;
-      tun.coupleScale = 1.18; tun.walkSpeed = 0.5; tun.endGlow = 0;
+    await this.go(aq, new Sweep(this.W, this.H, 2.9), () => {
+      this.camX = CX - 520;
+      this.setStage(aq);
+      aq.coupleX = CX - 470;
+      c.mode = 'walk'; c.hold = 1; c.lean = 0; c.hug = 0; c.flip = 1;
     });
-    this.tween(12, (k) => { tun.coupleScale = 1.18 - 0.2 * k; this.camX = CX + Math.sin(k * 3) * 30; });
-    await this.atSong(46.5);
-    // little hearts drift up around them in the tunnel light
-    for (let i = 0; i < 6; i++) this.fx.add({ kind: 'heart', x: this.W / 2 + (R() - 0.5) * 50, y: this.H * 0.8, vx: (R() - 0.5) * 8, vy: -10 - R() * 8, age: 0, life: 4, size: R() < 0.6 ? 0 : 1, ph: R() * TAU, wob: 8, wobF: 2, fin: 0.6, alpha: 0.85 });
-    await this.atSong(49.5);
-    this.tween(4.5, (k) => { tun.endGlow = k; }, ease.inOutSine);
-    await this.atSong(53.6);
+    this.tween(13.5, (k) => { this.camX = lerp(CX - 520, CX, k); }, ease.inOutSine);
+    await this.walkTo(CX, 56.6);
   }
 
-  // The hook: out of the tunnel into the great Buddha tank, and the game
-  // stops pretending. The minnows rush into a heart right on the chorus.
+  // The hook: the minnows pour into a heart and the couple face each other.
   async hookScene() {
     const aq = this.aq, c = aq.couple, p = this.post.p;
-    await this.atSong(54.0);
-    await this.mainReady;
-    this.sound.sfx('chime');
     const s = Math.min(96, this.W * 0.36);
     const cx = CX + 34, cy = 146, cz = 0.3;
-    let glow;
-    await this.go(aq, new LightBloom(this.W, this.H, 2.6, [240, 250, 255]), () => {
-      this.enterMainTank(false);
-      this.hud = false;
-      // the minnows scatter wide, then pour into the heart
-      for (const f of aq.bait) { f.x = cx + (R() - 0.5) * 600; f.y = 60 + R() * 200; }
-      this.formHeart(aq.bait, cx, cy, cz, s, aq.t, true);
-      for (const f of aq.bait) f.formFace = 0;
-      glow = { x: cx, y: cy + 14, z: 0.34, r: Math.round(s * 1.5), col: '#ff5aa0', a: 0, beat: true };
-      aq.glows.push(glow);
-      this.tween(2.8, (k) => { for (const f of aq.bait) f.formK = k; glow.a = 0.5 * k; }, ease.inOutSine);
-    });
+    if (this.stage !== aq) this.enterMainTank(true);
+    await this.atSong(55.0);
+    this.formHeart(aq.bait, cx, cy, cz, s, aq.t, true);
+    for (const f of aq.bait) f.formFace = 0;
+    const glow = { x: cx, y: cy + 14, z: 0.34, r: Math.round(s * 1.5), col: '#ff5aa0', a: 0, beat: true };
+    aq.glows.push(glow);
+    this.tween(2.8, (k) => { for (const f of aq.bait) f.formK = k; glow.a = 0.5 * k; }, ease.inOutSine);
     await this.atSong(57.9);
     // she turns to him; he turns to her
     await this.tween(0.16, (k) => { c.flip = 1 - 0.45 * k; });
@@ -677,8 +678,8 @@ export class Story {
   }
 
   // ------------------------------------------------------------ lyrics --
-  // Each line floats up letter by letter, every letter in its own bubble,
-  // drifts a moment, then the bubbles pop one after another.
+  // Film-style subtitles: each line types in over a soft backing, rests,
+  // then fades, releasing a few bubbles. Lines turn pink after the reveal.
   updateLyrics(dt) {
     const t = this.songT;
     while (this.lyricQueue.length && this.lyricQueue[0].t <= t) {
@@ -688,72 +689,102 @@ export class Story {
     for (let i = this.lyrics.length - 1; i >= 0; i--) {
       const L = this.lyrics[i];
       L.age += dt;
-      if (!L.popped && L.age > L.life) {
-        L.popped = true;
-        L.popAt = L.age;
+      if (!L.bubbled && L.age > L.life - 0.5) {
+        L.bubbled = true;
+        for (let q = 0; q < 8; q++) this.fx.add({ kind: 'bubble', x: L.x + (R() - 0.5) * L.w, y: L.y + 3 * L.sc, vx: (R() - 0.5) * 10, vy: -18 - R() * 22, drag: 1.2, age: 0, life: 1.4 + R(), r: 1 + (R() * 2 | 0), wob: 8, wobF: 5, ph: R() * TAU, alpha: 0.8 });
       }
-      if (L.popped) {
-        // pop the bubbles left to right
-        const n = L.cs.length;
-        const k = Math.floor((L.age - L.popAt) / 0.045);
-        while (L.nPop < Math.min(n, k)) {
-          const j = L.nPop++;
-          if (L.cs[j] === ' ') continue;
-          const [x, y] = this.lyricPos(L, j);
-          popRing(this.fx, x, y, { r1: 6 + L.sc * 3, life: 0.35, col: '#dff6ff' });
-          for (let q = 0; q < 2; q++) this.fx.add({ kind: 'bubble', x: x + (R() - 0.5) * 6, y, vx: (R() - 0.5) * 20, vy: -20 - R() * 30, drag: 1.5, age: 0, life: 1 + R(), r: 1 + (R() * 2 | 0), wob: 8, wobF: 5, ph: R() * TAU });
-        }
-        if (L.nPop >= n) this.lyrics.splice(i, 1);
-      } else if (R() < dt * 4) {
-        const j = (R() * L.cs.length) | 0;
-        const [x, y] = this.lyricPos(L, j);
-        this.fx.add({ kind: 'bubble', x, y: y - L.r, vx: 0, vy: -12 - R() * 12, age: 0, life: 1.6, r: 1, wob: 6, wobF: 4, ph: R() * TAU, alpha: 0.8 });
-      }
+      if (L.age > L.life + 0.1) this.lyrics.splice(i, 1);
     }
   }
 
   spawnLyric(L, gap = 6) {
     const text = fill(L.text);
-    const cs = chars(text);
-    let sc = textWidth(text) * 2 + 40 < this.W * (L.band === 'low' ? 0.46 : 0.9) ? 2 : 1;
     const st = this.stage;
+    const low = L.band === 'low' || this.question || this.finale;
+    let sc = textWidth(text) * 2 + 24 < this.W * 0.86 ? 2 : 1;
+    if (textWidth(text) + 20 > this.W) sc = 1;
     const top = st.curves ? st.curves.top(this.W / 2) : 30;
     const sill = st.curves && st.curves.sill ? st.curves.sill(this.W / 2) : this.H * 0.8;
-    const high = L.band !== 'low' && !this.question && !this.finale;
-    this.lyricSide = -(this.lyricSide || 1);
-    const w = textWidth(text) * sc;
-    const half = w / 2 + 8;
-    let x = high ? this.W / 2 : this.W / 2 + this.lyricSide * this.W * 0.25;
-    x = half * 2 > this.W ? this.W / 2 : clamp(x, half, this.W - half);
-    const y = high ? Math.max(14, top + 18) : sill - 34;
-    this.lyrics.push({ text, cs, sc, x, y, r: Math.round(3.2 * sc + 0.5), age: 0, life: clamp(gap - 0.9, 2.6, 5.4), love: L.t >= 57.5, popped: false, nPop: 0, w });
-  }
-
-  lyricPos(L, i) {
-    const x0 = L.x - L.w / 2;
-    const t = this.t;
-    const g = glyphW(L.cs[i]) * L.sc;
-    return [x0 + charX(L.text, i, L.sc) + g / 2 + Math.sin(t * 1.3 + i) * 0.6, L.y - L.age * 2 + Math.sin(t * 2.2 + i * 0.7) * 1.6];
+    const y = low ? Math.round(Math.min(this.H - 12 - 7 * sc, sill + 4)) : Math.round(Math.max(10, top + 12));
+    // one line at a time: an earlier line gives way
+    for (const o of this.lyrics) o.life = Math.min(o.life, o.age + 0.3);
+    this.lyrics.push({ text, sc, x: this.W / 2, y, age: 0, life: clamp(gap - 0.4, 2.6, 6), w: textWidth(text) * sc, n: chars(text).length, love: L.t >= 57.5 });
   }
 
   drawLyrics(ctx) {
     for (const L of this.lyrics) {
-      L.cs.forEach((ch, i) => {
-        if (ch === ' ') return;
-        if (L.popped && i < L.nPop) return;
-        const a = clamp((L.age - i * 0.06) / 0.35);
-        if (a <= 0) return;
-        const [x, y] = this.lyricPos(L, i);
-        const yy = y + (1 - ease.outCubic(a)) * 12;
-        const b = bubbleSprite(L.r);
-        ctx.globalAlpha = a * 0.7;
-        ctx.drawImage(b, Math.round(x) - b.o, Math.round(yy + 3.5 * L.sc) - b.o);
-        drawText(ctx, ch, Math.round(x), Math.round(yy), L.love
-          ? { align: 'center', scale: L.sc, color: '#fff0f7', outline: '#4a0a30', shadow: '#ff6aa6', alpha: a }
-          : { align: 'center', scale: L.sc, color: '#f2fbff', outline: '#0b2a5c', shadow: '#5ac0ff', alpha: a });
-      });
+      const a = clamp(L.age / 0.35) * clamp((L.life - L.age) / 0.6);
+      if (a <= 0) continue;
+      const count = Math.min(L.n, Math.floor(L.age * 38) + 1);
+      const pw = L.w + 18, ph = 7 * L.sc + 9;
+      const px = Math.round(L.x - pw / 2), py = Math.round(L.y - 4 - (L.sc - 1));
+      ctx.globalAlpha = a * 0.5;
+      ctx.fillStyle = L.love ? '#2a0418' : '#040c26';
+      ctx.fillRect(px + 2, py, pw - 4, ph);
+      ctx.fillRect(px, py + 2, pw, ph - 4);
+      ctx.fillRect(px + 1, py + 1, pw - 2, ph - 2);
+      ctx.globalAlpha = 1;
+      const rise = Math.round((1 - ease.outCubic(clamp(L.age / 0.5))) * 3);
+      drawText(ctx, L.text, L.x, L.y + rise, L.love
+        ? { align: 'center', scale: L.sc, count, color: '#fff0f7', outline: '#4a0a30', shadow: '#ff6aa6', alpha: a }
+        : { align: 'center', scale: L.sc, count, color: '#f2fbff', outline: '#0b2a5c', shadow: '#5ac0ff', alpha: a });
     }
     ctx.globalAlpha = 1;
+  }
+
+  // "this could be us" with an arrow pointing at the couple
+  drawThisCouldBeUs(ctx) {
+    const C = this.cbu;
+    if (!C || C.a <= 0) return;
+    const st = this.stage;
+    const [cx, cy] = st.toScreen(st.coupleX, st.coupleY - 64, 0);
+    const text = 'this could be us';
+    const tw = textWidth(text);
+    const bob = Math.round(Math.sin(this.t * 3) * 1.5);
+    let tx = Math.round(cx + 34), ty = Math.round(cy - 34 + bob);
+    if (tx + tw + 18 > this.W - 4) { tx = Math.round(cx - 34 - tw - 16); }
+    const leftSide = tx < cx;
+    ctx.globalAlpha = C.a;
+    drawText(ctx, text, tx, ty, { color: '#ffffff', outline: '#0a1a44', shadow: '#ff6aa6' });
+    // pixel 👀: two eyes glancing at the couple
+    const ex = tx + tw + 4, ey = ty - 1;
+    const look = (leftSide ? 1 : -1) * (Math.sin(this.t * 1.7) > -0.3 ? 1 : 0);
+    for (const k of [0, 6]) {
+      ctx.fillStyle = '#0a1a44'; ctx.fillRect(ex + k - 1, ey - 1, 7, 9);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(ex + k, ey, 5, 7); ctx.fillRect(ex + k + 1, ey - 1, 3, 9);
+      ctx.fillStyle = '#10142a'; ctx.fillRect(ex + k + 2 - look * 1 - (leftSide ? 0 : 0), ey + 3, 2, 3);
+    }
+    // a hand-drawn arrow curving down to them
+    const sx = leftSide ? tx + tw - 4 : tx + 4, sy = ty + 10;
+    const hx = cx + (leftSide ? -10 : 10), hy = cy - 4;
+    ctx.fillStyle = '#ffffff';
+    let lx = sx, ly = sy;
+    for (let k = 1; k <= 16; k++) {
+      const u = k / 16;
+      const x = Math.round((1 - u) * (1 - u) * sx + 2 * u * (1 - u) * (sx + (hx - sx) * 0.1) + u * u * hx);
+      const y = Math.round((1 - u) * (1 - u) * sy + 2 * u * (1 - u) * (hy - 2) + u * u * hy);
+      ctx.fillRect(x, y, 2, 2);
+      lx = x; ly = y;
+    }
+    const dx = hx - (sx + (hx - sx) * 0.1), dy = 0.0001 + hy - (hy - 2);
+    const ang = Math.atan2(dy, dx);
+    for (const off of [2.5, -2.5]) {
+      for (let k = 1; k <= 5; k++) ctx.fillRect(Math.round(lx - Math.cos(ang + off * 0.3) * k), Math.round(ly - Math.sin(ang + off * 0.3) * k), 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  drawCredit(ctx) {
+    const C = this.credit;
+    if (!C || C.a <= 0) return;
+    const text = '♪ Always · Daniel Caesar';
+    const w = textWidth(text) + 12;
+    const y = this.H - 18;
+    ctx.globalAlpha = C.a * 0.5;
+    ctx.fillStyle = '#040c26';
+    ctx.fillRect(6, y - 3, w, 13);
+    ctx.globalAlpha = 1;
+    drawText(ctx, text, 12, y, { color: '#e8f4ff', outline: '#0a1a44', alpha: C.a });
   }
 
   spawnJelly(initial = false) {
@@ -1048,6 +1079,8 @@ export class Story {
     this.fxBack.draw(ctx);
     if (this.title) this.drawTitle(ctx);
     this.drawLyrics(ctx);
+    this.drawThisCouldBeUs(ctx);
+    this.drawCredit(ctx);
     if (this.letter) this.drawLetter(ctx);
     if (this.question) this.drawQuestion(ctx);
     for (const b of this.buttons) drawBubbleButton(ctx, b, this.t);
