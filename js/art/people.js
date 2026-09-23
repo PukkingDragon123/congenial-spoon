@@ -3,27 +3,13 @@
 // merge into a single silhouette, then an automatic rim-light pass runs.
 import { clamp, lerp, segDist, pointInPoly, hex, mixRGB, Buf, makeCanvas } from '../util.js';
 
-const MAT = { skin: 1, hair: 2, top: 3, bottom: 4, shoe: 5, dress: 6, shoeW: 7, eye: 8, blush: 9, bow: 10, belt: 11, shine: 12, collar: 13 };
-// [shadow, mid, light] for each material, already tinted by the blue tank light
-const TONES = {
-  1: ['#6a4450', '#b07a74', '#e2ae96'],
-  2: ['#120c16', '#2a1e2c', '#4e3a58'],
-  3: ['#1c2c50', '#34568c', '#6690c8'],
-  4: ['#0e1226', '#1e2640', '#36425f'],
-  5: ['#0a0a12', '#1c1c2a', '#3a3a50'],
-  6: ['#56568a', '#a6a6d4', '#dedcf8'],
-  7: ['#6a7090', '#c4cae4', '#f2f5ff'],
-  8: ['#0a0810', '#0a0810', '#0a0810'],
-  9: ['#c05a78', '#f07a98', '#ff9ab4'],
-  10: ['#a02a5a', '#ff6a9a', '#ffb4cc'],
-  11: ['#0a0a14', '#161826', '#2c2e42'],
-  12: ['#4e3a58', '#7a64a0', '#aa92d2'],
-  13: ['#6a80b0', '#c8d8f4', '#f2f7ff'],
-};
-const TONE = {};
-for (const k in TONES) TONE[k] = TONES[k].map(hex);
-const RIMC = hex('#c4e4ff');
-const DEEP = hex('#050814');
+const MAT = { skin: 1, hair: 2, top: 3, bottom: 4, shoe: 5, dress: 6, shoeW: 7, bow: 8 };
+// Seen against the lit tank in a dark hall they read as shadows: a near-black
+// body, far limbs a touch deeper, and a thin cool glow where light wraps the edge.
+const BODY = hex('#04060e');
+const FAR = hex('#020309');
+const GLOW = hex('#7ab4ec');
+const HAZE = hex('#16284a');
 
 class Raster {
   constructor(w, h, ox, oy) {
@@ -118,22 +104,13 @@ function drawBack(R, C, ox, p) {
       [ox + 5.6 + sway, waistY], [ox + 11.5 + fl, hemY - 1], [ox + 10 + fl * 0.5, hemY + 1], [ox + 3, hemY + 0.5 + fl * 0.3],
       [ox - 3, hemY + 1], [ox - 10 + fl * 0.5, hemY + 0.5], [ox - 11.5 + fl, hemY - 1.5], [ox - 5.6 + sway, waistY],
     ];
-    R.poly(dress, MAT.dress, 0, (x, y) => ((Math.round(x - ox + (y - waistY) * 0.12) % 7 === 0 && y > waistY + 6) ? -1 : 0));
+    R.poly(dress, MAT.dress);
     R.capsule(ox - 6.5 + sway, shY + 1.2, ox + 6.5 + sway, shY + 1.2, 1.8, 1.8, MAT.skin);
-    // a ribbon at the waist, tied in a little bow at the back
-    R.capsule(ox - 5.4 + sway, waistY, ox + 5.4 + sway, waistY, 0.9, 0.9, MAT.bow);
-    R.ellipse(ox + sway - 1.8, waistY - 0.4, 1.5, 1.1, MAT.bow);
-    R.ellipse(ox + sway + 1.8, waistY - 0.4, 1.5, 1.1, MAT.bow);
-    R.capsule(ox + sway - 0.6, waistY + 0.6, ox + sway - 1.4, waistY + 4.5, 0.5, 0.5, MAT.bow);
-    R.capsule(ox + sway + 0.6, waistY + 0.6, ox + sway + 1.6, waistY + 4.2, 0.5, 0.5, MAT.bow);
   } else {
     const hemY = hipY + 3;
     R.poly([
       [ox - 4 + sway * 0.5, shY - 1], [ox + 4 + sway * 0.5, shY - 1], [ox + C.sh - 2.5 + sway * 0.5, shY + 1.2], [ox + C.sh - 1.6, shY + 4.5], [ox + 8.6, shY + 9], [ox + 7.8, hemY - 6], [ox + 8.2, hemY], [ox - 8.2, hemY], [ox - 7.8, hemY - 6], [ox - 8.6, shY + 9], [ox - C.sh + 1.6, shY + 4.5], [ox - C.sh + 2.5 + sway * 0.5, shY + 1.2],
-    ], MAT.top, 0, (x, y) => (Math.abs(x - ox) < 0.8 && y < hemY - 2 ? -1 : 0));
-    // collar and belt
-    R.capsule(ox - 3.4 + sway * 0.5, shY + 0.2, ox + 3.4 + sway * 0.5, shY + 0.2, 1.1, 1.1, MAT.collar);
-    R.capsule(ox - 7.9, hipY + 1.6, ox + 7.9, hipY + 1.6, 0.8, 0.8, MAT.belt);
+    ], MAT.top);
   }
   // Arms (IK towards hand targets, relative to ox)
   for (const s of [-1, 1]) {
@@ -155,24 +132,17 @@ function drawBack(R, C, ox, p) {
   R.ellipse(ox + headX - C.headRx + 0.2, headY + 1.2, 1.2, 1.8, MAT.skin);
   R.ellipse(ox + headX + C.headRx - 0.2, headY + 1.2, 1.2, 1.8, MAT.skin);
   R.ellipse(ox + headX, headY - 0.4, C.headRx + 0.6, C.headRy - 0.2, MAT.hair, 0, (p.tilt || 0) * 0.25);
-  // a soft shine across the hair
-  R.capsule(ox + headX - 3.2, headY - 3.2, ox + headX + 0.4, headY - 4.3, 0.55, 0.55, MAT.shine);
-  if (!C.girl) {
-    // tousled tufts on top
-    R.ellipse(ox + headX - 2.4, headY - C.headRy + 0.4, 1.9, 1.3, MAT.hair);
-    R.ellipse(ox + headX + 1.6, headY - C.headRy + 0.2, 2.1, 1.4, MAT.hair);
-  }
   if (C.girl) {
     const hs = p.hairSway || 0;
     const top = headY - 2;
     R.poly([
       [ox + headX - 5, top], [ox + headX + 5, top], [ox + headX + 6 + hs * 0.2, shY + 1], [ox + headX + 5.2 + hs * 0.6, shY + 9], [ox + headX + 4.2 + hs, shY + 14],
       [ox + headX + 1.5 + hs, shY + 16], [ox + headX - 1 + hs, shY + 15], [ox + headX - 3.8 + hs, shY + 16.5], [ox + headX - 5.4 + hs * 0.6, shY + 10], [ox + headX - 6 + hs * 0.2, shY + 1],
-    ], MAT.hair, 0, (x, y) => ((Math.round(x - ox - headX + y * 0.08) % 4 === 0 && y > shY - 2) ? 1 : 0));
-    // a pink bow in her hair
-    R.ellipse(ox + headX - 2.3, headY - 0.6, 1.8, 1.3, MAT.bow);
-    R.ellipse(ox + headX + 2.3, headY - 0.6, 1.8, 1.3, MAT.bow);
-    R.ellipse(ox + headX, headY - 0.5, 0.9, 0.9, MAT.bow, 1);
+    ], MAT.hair);
+    // a bow high on her head, so it shows in the outline
+    const bx = ox + headX + 2.8, by = headY - C.headRy + 0.6;
+    R.ellipse(bx - 2, by - 0.8, 1.9, 1.3, MAT.bow, 0, -0.5);
+    R.ellipse(bx + 2, by - 0.8, 1.9, 1.3, MAT.bow, 0, 0.5);
   }
 }
 
@@ -241,14 +211,11 @@ function drawSide(R, C, ox, f, p) {
     R.poly([
       [X(shX - 4), shY + 2.5], [X(shX + 4.6), shY + 3], [X(shX * 0.5 + 4.2), waistY], [X(Math.max(k1 + 4, 7) + fl), hemY],
       [X(0), hemY + 1.2], [X(Math.min(k0 - 4, -7) - 1.5 + fl), hemY - 0.5], [X(shX * 0.5 - 3.8), waistY],
-    ], MAT.dress, 0, (x, y) => (Math.round((x - ox) * 0.9 + (y - waistY) * 0.2) % 6 === 0 && y > waistY + 6 ? -1 : 0));
-    R.capsule(X(shX * 0.5 - 3.6), waistY, X(shX * 0.5 + 4), waistY, 0.9, 0.9, MAT.bow);
+    ], MAT.dress);
   } else {
     R.poly([
       [X(shX - 5), shY], [X(shX + 5.5), shY + 1], [X(shX * 0.5 + 5.2), hipY - 4], [X(5), hipY + 3], [X(-4.8), hipY + 3], [X(shX * 0.5 - 4.8), hipY - 6],
     ], MAT.top);
-    R.capsule(X(-4.6), hipY + 1.2, X(5), hipY + 1.2, 0.8, 0.8, MAT.belt);
-    R.ellipse(X(shX + 2.2), shY + 0.8, 1.8, 1.1, MAT.collar);
   }
   drawLeg(legs[0], 0);
   // neck & head
@@ -268,20 +235,11 @@ function drawSide(R, C, ox, f, p) {
   } else {
     R.ellipse(X(headX - 2.2), headY - 0.2, 3.2, 4.4, MAT.hair);
   }
-  // the face shows below the hairline: skin, a fringe, an eye and a blush
-  R.ellipse(X(headX + 1.3), headY + 1.3, C.headRx - 1.3, C.headRy - 2.2, MAT.skin, 0, (p.headTilt || 0) * f);
-  R.put(Math.floor(X(headX + C.headRx) + R.ox + (f > 0 ? 0 : -1)), Math.floor(headY + 0.5 + R.oy), MAT.skin, 0);
-  R.ellipse(X(headX + (C.girl ? 1.4 : 1.8)), headY - C.headRy + 2.4, C.girl ? 3.2 : 2.8, 1.3, MAT.hair);
-  R.capsule(X(headX - 2.5), headY - C.headRy + 1.6, X(headX + 0.5), headY - C.headRy + 1.1, 0.5, 0.5, MAT.shine);
-  const ex = Math.floor(X(headX + C.headRx * 0.42) + R.ox), ey = Math.floor(headY - 0.4 + R.oy);
-  if (p.happy) { R.put(ex, ey + 1, MAT.eye, 0); R.put(ex + (f > 0 ? -1 : 1), ey, MAT.eye, 0); }
-  else { R.put(ex, ey, MAT.eye, 0); R.put(ex, ey + 1, MAT.eye, 0); if (C.girl) R.put(ex + f, ey - 1, MAT.eye, 0); }
-  const bx = Math.floor(X(headX + C.headRx * 0.2) + R.ox), by = Math.floor(headY + 2 + R.oy);
-  R.put(bx, by, MAT.blush, 0); R.put(bx + (f > 0 ? 1 : -1), by, MAT.blush, 0);
   if (C.girl) {
-    // her bow, seen from the side
-    R.ellipse(X(headX - 3.6), headY - 3.2, 1.6, 1.3, MAT.bow);
-    R.ellipse(X(headX - 5.2), headY - 2.2, 1.4, 1.2, MAT.bow);
+    // her bow, from the side
+    const bx = X(headX - 2.4), by = headY - C.headRy + 0.4;
+    R.ellipse(bx, by - 0.9, 1.7, 1.3, MAT.bow, 0, 0.5 * f);
+    R.ellipse(bx - f * 2.4, by + 0.2, 1.6, 1.2, MAT.bow, 0, -0.4 * f);
   }
   armFor(0, 0);
 }
@@ -347,9 +305,9 @@ export class Couple {
       const handY = lerp(-GUY.leg + 1, -GUY.leg - 11, k);
       const hA = [[-1.2, handY - 1], [-0.6, handY + 1.2]];
       const hB = [[1.2, handY], [0.6, handY + 1.6]];
-      drawSide(R, GUY, -g, 1, { hands: hA, lean: 0.13 * k, headX: 0.6 * k, headY: 1.2 * k, headTilt: 0.2 * k, happy: k > 0.3 });
+      drawSide(R, GUY, -g, 1, { hands: hA, lean: 0.13 * k, headX: 0.6 * k, headY: 1.2 * k, headTilt: 0.2 * k });
       drawSide(R, GIRL, g, -1, {
-        hands: hB, tip: 3 * k, lean: 0.11 * k, headTilt: -0.3 * k, headX: 0.8 * k, headY: -0.5 * k, happy: k > 0.3,
+        hands: hB, tip: 3 * k, lean: 0.11 * k, headTilt: -0.3 * k, headX: 0.8 * k, headY: -0.5 * k,
         hairSway: Math.sin(t * 0.9) * 0.8, flutter: Math.sin(t * 1.3) * 0.6,
       });
     }
@@ -357,34 +315,28 @@ export class Couple {
     return this.canvas;
   }
 
-  // Colour each material from its own ramp, backlit by the tank: cool rim
-  // light on the edges, soft shade in the middle, a little darker lower down.
+  // A backlit silhouette: solid shadow, with the tank's glow catching the top
+  // and sides of the outline and fading a pixel or two in.
   shade() {
     const { W, H } = this;
     const m = this.R.m, s = this.R.s, d = this.buf.d;
     const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : m[y * W + x]);
     d.fill(0);
     for (let y = 0; y < H; y++) {
-      const low = clamp((y / H - 0.62) * 1.1);
+      // light spills down from the tank, so edges glow less near the floor
+      const fall = 1 - clamp((y / H - 0.5) * 2.2) * 0.8;
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
-        const mt = m[i];
-        if (!mt) continue;
-        const [dk, md, lt] = TONE[mt];
-        let c = mixRGB(md, dk, 0.22 + low * 0.35);
-        if (s[i] < 0) c = mixRGB(c, dk, 0.55);
-        if (s[i] > 0) c = mixRGB(c, lt, 0.35);
-        if (mt === MAT.eye || mt === MAT.blush) { c = md; }
-        else {
-          let rim = 0;
-          if (!at(x, y - 1)) rim = 1;
-          else if (!at(x - 1, y) || !at(x + 1, y)) rim = 0.7;
-          else if (!at(x, y - 2)) rim = 0.4;
-          else if (!at(x - 2, y) || !at(x + 2, y)) rim = 0.22;
-          if (!at(x, y + 1)) c = mixRGB(c, DEEP, 0.35);
-          if (rim >= 0.7) c = mixRGB(mixRGB(c, lt, 0.5), RIMC, rim >= 1 ? 0.55 : 0.35);
-          else if (rim > 0) c = mixRGB(c, lt, rim);
-        }
+        if (!m[i]) continue;
+        let c = s[i] < 0 ? FAR : BODY;
+        let rim = 0;
+        if (!at(x, y - 1)) rim = 1;
+        else if (!at(x - 1, y) || !at(x + 1, y)) rim = 0.62;
+        else if (!at(x, y - 2)) rim = 0.3;
+        else if (!at(x - 2, y) || !at(x + 2, y)) rim = 0.14;
+        rim *= fall;
+        if (rim >= 0.5) c = mixRGB(c, GLOW, rim * 0.55);
+        else if (rim > 0) c = mixRGB(c, HAZE, rim * 1.6);
         const o = i * 4;
         d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
       }
