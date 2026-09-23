@@ -708,26 +708,41 @@ export class Story {
     const y = low ? Math.round(Math.min(this.H - 12 - 7 * sc, sill + 4)) : Math.round(Math.max(10, top + 12));
     // one line at a time: an earlier line gives way
     for (const o of this.lyrics) o.life = Math.min(o.life, o.age + 0.3);
-    this.lyrics.push({ text, sc, x: this.W / 2, y, age: 0, life: clamp(gap - 0.4, 2.6, 6), w: textWidth(text) * sc, n: chars(text).length, love: L.t >= 57.5 });
+    // too wide for the screen: break at the space nearest the middle
+    let lines = [text];
+    if (textWidth(text) * sc + 20 > this.W) {
+      const words = text.split(' ');
+      let best = 1, bd = 1e9;
+      for (let k = 1; k < words.length; k++) { const d = Math.abs(textWidth(words.slice(0, k).join(' ')) - textWidth(words.slice(k).join(' '))); if (d < bd) { bd = d; best = k; } }
+      lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+    }
+    const yy = low && lines.length > 1 ? y - 10 * sc : y;
+    this.lyrics.push({ text, lines, sc, x: this.W / 2, y: yy, age: 0, life: clamp(gap - 0.4, 2.6, 6), w: Math.max(...lines.map((l) => textWidth(l))) * sc, n: chars(text).length, love: L.t >= 57.5 });
   }
 
   drawLyrics(ctx) {
     for (const L of this.lyrics) {
       const a = clamp(L.age / 0.35) * clamp((L.life - L.age) / 0.6);
       if (a <= 0) continue;
-      const count = Math.min(L.n, Math.floor(L.age * 38) + 1);
-      const pw = L.w + 18, ph = 7 * L.sc + 9;
+      let count = Math.min(L.n, Math.floor(L.age * 38) + 1);
+      const lh = 10 * L.sc;
+      const pw = L.w + 18, ph = 7 * L.sc + 9 + (L.lines.length - 1) * lh;
       const px = Math.round(L.x - pw / 2), py = Math.round(L.y - 4 - (L.sc - 1));
       ctx.globalAlpha = a * 0.5;
-      ctx.fillStyle = L.love ? '#2a0418' : '#040c26';
+      ctx.fillStyle = L.love ? '#06204e' : '#040c26';
       ctx.fillRect(px + 2, py, pw - 4, ph);
       ctx.fillRect(px, py + 2, pw, ph - 4);
       ctx.fillRect(px + 1, py + 1, pw - 2, ph - 2);
       ctx.globalAlpha = 1;
       const rise = Math.round((1 - ease.outCubic(clamp(L.age / 0.5))) * 3);
-      drawText(ctx, L.text, L.x, L.y + rise, L.love
-        ? { align: 'center', scale: L.sc, count, color: '#fff0f7', outline: '#4a0a30', shadow: '#ff6aa6', alpha: a }
-        : { align: 'center', scale: L.sc, count, color: '#f2fbff', outline: '#0b2a5c', shadow: '#5ac0ff', alpha: a });
+      L.lines.forEach((line, li) => {
+        const c = Math.max(0, count);
+        count -= chars(line).length + 1;
+        if (c <= 0) return;
+        drawText(ctx, line, L.x, L.y + rise + li * lh, L.love
+          ? { align: 'center', scale: L.sc, count: c, color: '#ffffff', outline: '#08265e', shadow: '#3aa8ff', alpha: a }
+          : { align: 'center', scale: L.sc, count: c, color: '#dff2ff', outline: '#0b2a5c', shadow: '#2a86d8', alpha: a });
+      });
     }
     ctx.globalAlpha = 1;
   }
@@ -738,22 +753,14 @@ export class Story {
     if (!C || C.a <= 0) return;
     const st = this.stage;
     const [cx, cy] = st.toScreen(st.coupleX, st.coupleY - 64, 0);
-    const text = 'this could be us';
+    const text = 'this could be us but u playin 😭';
     const tw = textWidth(text);
     const bob = Math.round(Math.sin(this.t * 3) * 1.5);
     let tx = Math.round(cx + 34), ty = Math.round(cy - 34 + bob);
     if (tx + tw + 18 > this.W - 4) { tx = Math.round(cx - 34 - tw - 16); }
     const leftSide = tx < cx;
     ctx.globalAlpha = C.a;
-    drawText(ctx, text, tx, ty, { color: '#ffffff', outline: '#0a1a44', shadow: '#ff6aa6' });
-    // pixel 👀: two eyes glancing at the couple
-    const ex = tx + tw + 4, ey = ty - 1;
-    const look = (leftSide ? 1 : -1) * (Math.sin(this.t * 1.7) > -0.3 ? 1 : 0);
-    for (const k of [0, 6]) {
-      ctx.fillStyle = '#0a1a44'; ctx.fillRect(ex + k - 1, ey - 1, 7, 9);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(ex + k, ey, 5, 7); ctx.fillRect(ex + k + 1, ey - 1, 3, 9);
-      ctx.fillStyle = '#10142a'; ctx.fillRect(ex + k + 2 - look * 1 - (leftSide ? 0 : 0), ey + 3, 2, 3);
-    }
+    drawText(ctx, text, tx, ty, { color: '#ffffff', outline: '#0a1a44', shadow: '#3aa8ff' });
     // a hand-drawn arrow curving down to them
     const sx = leftSide ? tx + tw - 4 : tx + 4, sy = ty + 10;
     const hx = cx + (leftSide ? -10 : 10), hy = cy - 4;
@@ -1033,10 +1040,10 @@ export class Story {
       if (n <= 0) return;
       const len = chars(line).length;
       const special = i === 0 || i === L.lines.length - 1;
-      drawText(ctx, line, x + 17, top + i * L.lh, { color: special ? '#b8285a' : '#3e2544', count: n });
+      drawText(ctx, line, x + 17, top + i * L.lh, { color: special ? '#1e5aa8' : '#1c2e4e', count: n });
       if (n < len && n > 0 && Math.floor(this.t * 6) % 2 === 0) {
         const cx = x + 17 + charX(line, n);
-        ctx.fillStyle = '#b8285a';
+        ctx.fillStyle = '#1e5aa8';
         ctx.fillRect(cx, top + i * L.lh + 7, 3, 1);
       }
       n -= len;
@@ -1056,7 +1063,7 @@ export class Story {
     const y = Math.max(8, Math.round(wt / 2 - (7 * sc) / 2) - 2);
     const t = this.t;
     drawText(ctx, str, this.W / 2, y, {
-      scale: sc, align: 'center', color: '#ffffff', outline: '#3a0a2a', shadow: '#ff5a9a', alpha: Q.a,
+      scale: sc, align: 'center', color: '#ffffff', outline: '#08265e', shadow: '#3aa8ff', alpha: Q.a,
       wave: (i) => Math.sin(t * 3 - i * 0.45) * 1.6,
     });
   }
@@ -1069,10 +1076,10 @@ export class Story {
     const y = Math.max(6, Math.round(wt / 2 - (7 * sc) / 2) - 5);
     const t = this.t;
     drawText(ctx, str, this.W / 2, y, {
-      scale: sc, align: 'center', color: '#fff4fa', outline: '#4a0a30', shadow: '#ff4f98', alpha: F.a,
+      scale: sc, align: 'center', color: '#ffffff', outline: '#08265e', shadow: '#3aa8ff', alpha: F.a,
       wave: (i) => Math.sin(t * 2.4 - i * 0.5) * 1.5,
     });
-    drawText(ctx, fill(CONFIG.finaleSub), this.W / 2, y + 7 * sc + 6, { align: 'center', color: '#ffc4e0', outline: '#2a0a24', alpha: F.a * 0.9 });
+    drawText(ctx, fill(CONFIG.finaleSub), this.W / 2, y + 7 * sc + 6, { align: 'center', color: '#bfe4ff', outline: '#08265e', alpha: F.a * 0.9 });
   }
 
   draw(ctx) {

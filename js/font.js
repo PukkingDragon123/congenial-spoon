@@ -91,7 +91,41 @@ const ALIAS = { '’': "'", '‘': "'", '“': '"', '”': '"', '–': '-', '—
 export const LINE_H = 11;
 const glyphs = new Map();
 
+const EMOJI = /\p{Extended_Pictographic}/u;
+
+// Emoji keep their colours: drawn small with the system emoji font, then
+// snapped to hard pixels so they sit in the pixel text.
+function buildEmoji(ch) {
+  const size = 10;
+  const c = makeCanvas(size * 2, size * 2);
+  const ctx = c.ctx;
+  ctx.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(ch, 1, size);
+  const d = ctx.getImageData(0, 0, c.width, c.height).data;
+  let x0 = 99, x1 = -1, y0 = 99, y1 = -1;
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 90) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  if (x1 < 0) return null;
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  const img = makeCanvas(w, h);
+  const out = img.ctx.createImageData(w, h);
+  const px = [];
+  const top = 7 - h; // sit on the baseline like the letters
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = ((y + y0) * c.width + x + x0) * 4, o = (y * w + x) * 4;
+    if (d[i + 3] > 90) {
+      const a = d[i + 3] / 255;
+      out.data[o] = Math.min(255, d[i] / a); out.data[o + 1] = Math.min(255, d[i + 1] / a); out.data[o + 2] = Math.min(255, d[i + 2] / a); out.data[o + 3] = 255;
+      px.push([x, y + top]);
+    }
+  }
+  img.ctx.putImageData(out, 0, 0);
+  img.top = top;
+  return { w, px, img };
+}
+
 function buildGlyph(ch) {
+  if (EMOJI.test(ch)) { const e = buildEmoji(ch); if (e) return e; }
   const rows = G[ch];
   if (rows) {
     const w = Math.max(...rows.map((r) => r.length), 1);
@@ -197,11 +231,17 @@ export function drawText(ctx, str, x, y, opts = {}) {
   for (const [lx, ly, col] of layers) {
     ctx.fillStyle = col;
     let px = cx;
+    const main = lx === 0 && ly === 0 && col === (opts.color || '#fff');
     for (let i = 0; i < cs.length && i < n; i++) {
       const g = glyph(cs[i]);
       const dy = opts.wave ? Math.round(opts.wave(i)) : 0;
       const gs = opts.charScale ? opts.charScale(i) : 1;
-      for (const [gx, gy] of g.px) ctx.fillRect(px + gx * s + lx, Math.round(y) + gy * s + ly + dy, s, s * gs);
+      if (g.img && main) {
+        const sm = ctx.imageSmoothingEnabled;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(g.img, px, Math.round(y) + g.img.top * s + dy, g.img.width * s, g.img.height * s);
+        ctx.imageSmoothingEnabled = sm;
+      } else for (const [gx, gy] of g.px) ctx.fillRect(px + gx * s + lx, Math.round(y) + gy * s + ly + dy, s, s * gs);
       px += (g.w + (g.zero ? 0 : 1)) * s;
     }
   }
