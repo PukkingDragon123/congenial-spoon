@@ -568,8 +568,9 @@ export class Story {
     await this.wait(1.2);
     const whale = aq.spawnWhaleShark();
     whale.x = CX + this.W / 2 + 170;
-    whale.speed = 21;
-    whale.vx = -21;
+    // slower on narrow screens so it stays in view for the chorus
+    whale.speed = clamp(this.W * 0.045, 11, 21);
+    whale.vx = -whale.speed;
     this.sound.sfx('chime');
     const s = Math.min(46, this.W * 0.2);
     const center = () => [whale.x - 24, whale.y - 60];
@@ -592,7 +593,6 @@ export class Story {
     aq.sendWave(CX + 700, -1, { speed: 600, amp: 7, width: 240, life: 3.5 });
     // the song winds down; the light softens and the replay appears
     await this.until(() => this.songT >= 203 || whale.x < CX - this.W / 2 - 200);
-    this.chorus = false;
     // the minnows leave the whale and come home to frame the Buddha
     this.whaleGlow = null;
     this.formHeart(aq.bait, CX + 34, 146, 0.3, Math.min(96, this.W * 0.36), aq.t, true);
@@ -600,6 +600,8 @@ export class Story {
     glow.x = CX + 34; glow.y = 160;
     this.heartSparkle = { cx: CX + 34, cy: 146, cz: 0.3, s: Math.min(96, this.W * 0.36) };
     this.tween(5, (k) => { for (const f of aq.bait) f.formK = k; }, ease.inOutSine);
+    await this.atSong(203);
+    this.chorus = false;
     this.tween(8, (k) => { aq.light = 1.35 - 0.3 * k; p.bloom = 1 - 0.15 * k; });
     await this.wait(3);
     this.replay = { a: 0 };
@@ -651,9 +653,12 @@ export class Story {
     const sill = st.curves && st.curves.sill ? st.curves.sill(this.W / 2) : this.H * 0.8;
     const high = L.band !== 'low' && !this.question && !this.finale;
     this.lyricSide = -(this.lyricSide || 1);
-    const x = high ? this.W / 2 : this.W / 2 + this.lyricSide * this.W * 0.25;
+    const w = textWidth(text) * sc;
+    const half = w / 2 + 8;
+    let x = high ? this.W / 2 : this.W / 2 + this.lyricSide * this.W * 0.25;
+    x = half * 2 > this.W ? this.W / 2 : clamp(x, half, this.W - half);
     const y = high ? Math.max(14, top + 18) : sill - 34;
-    this.lyrics.push({ text, cs, sc, x, y, r: Math.round(3.2 * sc + 0.5), age: 0, life: 5.4, popped: false, nPop: 0, w: textWidth(text) * sc });
+    this.lyrics.push({ text, cs, sc, x, y, r: Math.round(3.2 * sc + 0.5), age: 0, life: 5.4, popped: false, nPop: 0, w });
   }
 
   lyricPos(L, i) {
