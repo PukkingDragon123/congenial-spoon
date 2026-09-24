@@ -21,7 +21,7 @@ export const SPECIES = {
   snapper: ['Snapper', 1], minnow: ['Minnow', 1], trevally: ['Trevally', 1], crab: ['Crab', 1], me: ['Just Me', 1],
   nettle: ['Sea Nettle', 2], batfish: ['Batfish', 2], giant: ['Giant GT', 2], grouper: ['Grouper', 2],
   bigjelly: ['Giant Jelly', 3], shark: ['Sand Tiger', 3], reefshark: ['Reef Shark', 3], ray: ['Stingray', 3], turtle: ['Sea Turtle', 3],
-  whaleshark: ['Whale Shark', 4], bean: ['Bean Pup', 4], treefriend: ['Tree Friend', 4], us: ['Us ♥', 4],
+  whaleshark: ['Whale Shark', 4], bean: ['Bean Pup', 4], treefriend: ['Tree Friend', 4], us: ['Us Two', 4],
 };
 const ORDER = Object.keys(SPECIES).sort((a, b) => SPECIES[a][1] - SPECIES[b][1]);
 const RARITY_PTS = [0, 10, 25, 60, 150];
@@ -736,7 +736,7 @@ export class PhotoMode {
     ctx.fillStyle = '#ffffff'; ctx.fillRect(sx, sy, 16, 18);
     for (let i = 0; i < 16; i += 2) { ctx.fillStyle = '#f7ecd4'; ctx.fillRect(sx + i, sy, 1, 1); ctx.fillRect(sx + i, sy + 17, 1, 1); }
     ctx.fillStyle = RARITY_COL[r]; ctx.fillRect(sx + 2, sy + 2, 12, 14);
-    drawText(ctx, '♥', sx + 4, sy + 5, { color: '#ffffff' });
+    drawStickerIcon(ctx, 'fish', sx + 8, sy + 9);
     ctx.fillStyle = 'rgba(60,40,80,0.55)';
     for (let a = 0; a < TAU; a += 0.35) ctx.fillRect(Math.round(sx - 4 + Math.cos(a) * 8), Math.round(sy + 12 + Math.sin(a) * 8), 1, 1);
     for (let i = 0; i < 3; i++) for (let k = 0; k < 14; k++) ctx.fillRect(sx - 20 + k, sy + 8 + i * 4 + Math.round(Math.sin(k * 0.8) * 1), 1, 1);
@@ -772,5 +772,5 @@ function drawBook(ctx, x, y) {
   ctx.fillStyle = '#ff7aa8'; ctx.fillRect(x + 1, y + 1, 13, 12);
   ctx.fillStyle = '#c2466e'; ctx.fillRect(x + 1, y + 1, 2, 12);
   ctx.fillStyle = '#fff4e0'; ctx.fillRect(x + 13, y + 2, 1, 10);
-  drawText(ctx, '♥', x + 4, y + 3, { color: '#ffffff' });
+  drawStickerIcon(ctx, 'fish', x + 8, y + 7);
 }

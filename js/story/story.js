@@ -356,7 +356,7 @@ export class Story {
     A.emote(her, '?', 0.8, '#3a6aff');
     await this.wait(0.5);
     this.tween(0.4, (k) => { c.girlWave = k; }, ease.outBack);
-    A.emote(her, '♥', 1.2);
+    A.emote(her, 'hi!', 1.2, '#ff5aa0');
     await this.atSong(29.0);
     // he can't keep still
     c.mode = 'front'; c.pose = 'cheer';
@@ -1266,7 +1266,7 @@ export class Story {
     if (this.replay) {
       const [x, y, w] = this.replayRect();
       const hv = this.replayHover();
-      drawText(ctx, '♥ replay', x + w / 2, y + 2, { align: 'center', color: hv ? '#ffffff' : '#ffb3d4', outline: '#2a0a24', alpha: this.replay.a * (hv ? 1 : 0.75) });
+      drawText(ctx, '✦ replay', x + w / 2, y + 2, { align: 'center', color: hv ? '#ffffff' : '#ffb3d4', outline: '#2a0a24', alpha: this.replay.a * (hv ? 1 : 0.75) });
     }
     if (this.showSpeaker) { const [x, y] = this.speakerRect(); drawSpeaker(ctx, x + 2, y + 2, this.speakerOn, this.speakerHover()); }
     this.photo.draw(ctx);

@@ -1,36 +1,18 @@
 // The couple: procedurally rigged pixel figures, back-lit by the tank.
 // Both characters rasterize into one shared buffer so joined hands and hugs
-// merge into one shape, then a lighting pass colours it: the hall is dark, so
-// they read almost as shadows, with the tank's light wrapping round the edges.
+// merge into one shape, then it's filled as a pure silhouette: solid dark,
+// with only a thin edge of the tank's light where it wraps the outline.
 //
 // Walking is keyframed from a classic 8-frame side-view cycle (contact, down,
 // passing, up for each leg): legs straighten at the heel strike and through
 // the stance, the knee only folds in the swing, and the body rises and dips
 // a pixel or two as the lowest heel or toe sets the hip height.
-import { clamp, lerp, segDist, pointInPoly, hex, Buf, makeCanvas } from '../util.js';
+import { clamp, lerp, segDist, pointInPoly, Buf, makeCanvas } from '../util.js';
 
-const MAT = { skin: 1, hair: 2, top: 3, bottom: 4, shoe: 5, tee: 6, shoeW: 7, print: 8, sock: 9, clip: 10, skirt: 11, shine: 12, sole: 13 };
-// [shadow, mid, light] albedo for each material. Two teenagers: him in an
-// oversized black tee with a pink print, baggy jeans and chunky sneakers; her
-// in a white tee, a pleated navy skirt, knee socks and sneakers.
-const TONES = {
-  1: ['#5a3a44', '#a0706a', '#e6b8a0'],
-  2: ['#0e0a12', '#221a26', '#4a3a58'],
-  3: ['#0c0c14', '#1e1e2c', '#4a4a66'],
-  4: ['#142038', '#2e4670', '#6a88b8'],
-  5: ['#7a8090', '#d8dce6', '#ffffff'],
-  6: ['#7a7890', '#dcdaf0', '#ffffff'],
-  7: ['#7a8090', '#d8dce6', '#ffffff'],
-  8: ['#a02a5a', '#ff6a9a', '#ffd0e0'],
-  9: ['#8a8aa0', '#e8e8f4', '#ffffff'],
-  10: ['#a02a5a', '#ff6a9a', '#ffc4d8'],
-  11: ['#141a30', '#2e3a64', '#5a6aa0'],
-  12: ['#4e3a58', '#7a64a0', '#b8a4e0'],
-  13: ['#303040', '#606070', '#9090a0'],
-};
-const TONE = {};
-for (const k in TONES) TONE[k] = TONES[k].map(hex);
-const HALL = hex('#03050e');
+// Body parts. In silhouette they all fill the same, but they're still drawn
+// as separate pieces so the outline carries the clothes and hair.
+const MAT = { skin: 1, hair: 2, top: 3, bottom: 4, shoe: 5, tee: 6, shoeW: 7, sock: 9, clip: 10, skirt: 11, shine: 12, sole: 13 };
+const INK = [4, 5, 12]; // the silhouette
 const RAD = Math.PI / 180;
 
 class Raster {
@@ -88,7 +70,7 @@ function ik(sx, sy, tx, ty, a, b, bend) {
 }
 
 // Proportions: about six and a half heads tall, legs half the height.
-export const GUY = { headRx: 5.2, headRy: 5.8, neck: 2.6, sh: 9, torso: 22, leg: 35, foot: 4.4, ua: 12.5, fa: 12, girl: false };
+export const GUY = { headRx: 5.0, headRy: 5.7, neck: 2.8, sh: 10, torso: 22, leg: 36, foot: 4.4, ua: 12.8, fa: 12.2, girl: false };
 export const GIRL = { headRx: 4.8, headRy: 5.4, neck: 2.8, sh: 7.4, torso: 19.5, leg: 32, foot: 3.8, ua: 11.2, fa: 10.6, girl: true };
 
 // ----------------------------------------------------------------- gait --
@@ -135,13 +117,6 @@ function shoe(R, X, hipY, L, big, sh, f) {
   const mx = (hx + tx) / 2 + Math.sin(ang) * 1.3, my = (hy + ty) / 2 - Math.abs(Math.cos(ang)) * 1.3 - 0.4;
   R.ellipse(mx - f * 0.3, my, Math.hypot(tx - hx, ty - hy) / 2 + 0.5, big ? 2.0 : 1.7, big ? MAT.shoe : MAT.shoeW, sh, ang);
 }
-// A little pink heart print (the graphic on his tee).
-function heartPrint(R, cx, cy, big) {
-  const pts = big ? ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'] : ['#.#', '###', '.#.'];
-  const w = pts[0].length, h = pts.length;
-  pts.forEach((row, j) => { for (let i = 0; i < w; i++) if (row[i] === '#') R.put(Math.floor(cx - w / 2 + i + R.ox), Math.floor(cy - h / 2 + j + R.oy), MAT.print, 0); });
-}
-
 // ---------------------------------------------------------------- views --
 // Standing, seen from behind (facing the tank), or with p.front facing us.
 // p: { breath, tilt, lhand, rhand, sway, tip, headX, headY, weight, front, bend, hairSway, flutter }
@@ -162,8 +137,9 @@ function drawBack(R, C, ox, p) {
       R.ellipse(lerp(kx, ax, 0.3), lerp(kneeY, ay, 0.3), 2.4, 3.2, MAT.skin);
       R.capsule(lerp(kx, ax, 0.38), lerp(kneeY, ay, 0.38), ax, ay, 1.9, 1.6, MAT.sock);
     } else {
-      R.capsule(hx, hipY + 1, kx, kneeY, 3.8, 3.4, MAT.bottom);
-      R.capsule(kx, kneeY, ax, ay - 0.4, 3.4, 3.5, MAT.bottom);
+      // straight-leg jeans
+      R.capsule(hx, hipY + 1, kx, kneeY, 3.5, 3.0, MAT.bottom);
+      R.capsule(kx, kneeY, ax, ay - 0.4, 3.0, 2.8, MAT.bottom);
     }
     R.ellipse(ax + s * 0.4, ay + 1.1, C.girl ? 2.2 : 2.9, 1.2, MAT.sole);
     R.ellipse(ax + s * 0.4, ay + 0.2, C.girl ? 2.0 : 2.7, 1.5, C.girl ? MAT.shoeW : MAT.shoe);
@@ -178,12 +154,15 @@ function drawBack(R, C, ox, p) {
       (x, y) => (y > waistY - 2 && Math.round(x - ox) % 3 === 0 ? -1 : 0));
     R.capsule(ox - 5.8 + bx, shY + 1.4, ox + 5.8 + bx, shY + 1.4, 1.6, 1.6, MAT.tee);
   } else {
-    const hemY = hipY + 4, b = bx * 0.5;
-    R.ellipse(ox + bx * 0.6, hipY, 5.8, 3.6, MAT.bottom);
+    // broad shoulders tapering to the waist: a fitted tee
+    const hemY = hipY + 2.6, b = bx * 0.5;
+    R.ellipse(ox + bx * 0.6, hipY, 5.2, 3.4, MAT.bottom);
     R.poly([
-      [ox - 4 + b, shY - 1], [ox + 4 + b, shY - 1], [ox + C.sh - 1.2 + b, shY + 1.2], [ox + C.sh + 0.2 + b, shY + 5], [ox + 7.6 + b, shY + 10], [ox + 7.4, hemY - 3], [ox + 7.8, hemY], [ox - 7.8, hemY], [ox - 7.4, hemY - 3], [ox - 7.6 + b, shY + 10], [ox - C.sh - 0.2 + b, shY + 5], [ox - C.sh + 1.2 + b, shY + 1.2],
-    ], MAT.top, 0, (x, y) => ((Math.round(x - ox) === -4 || Math.round(x - ox) === 3) && y > hemY - 8 ? -1 : 0));
-    heartPrint(R, ox + b + (p.front ? 2.5 : 0), shY + (p.front ? 6 : 8), !p.front);
+      [ox - 3.6 + b, shY - 1.2], [ox + 3.6 + b, shY - 1.2], [ox + C.sh - 0.6 + b, shY + 1.6], [ox + C.sh + 0.4 + b, shY + 4.6], [ox + 8.2 + b, shY + 8.5],
+      [ox + 6.4 + b * 0.6, hipY - 3], [ox + 6.6, hemY], [ox - 6.6, hemY], [ox - 6.4 + b * 0.6, hipY - 3],
+      [ox - 8.2 + b, shY + 8.5], [ox - C.sh - 0.4 + b, shY + 4.6], [ox - C.sh + 0.6 + b, shY + 1.6],
+    ], MAT.top);
+    for (const s2 of [-1, 1]) R.ellipse(ox + b + s2 * (C.sh - 1.4), shY + 2.6, 2.6, 2.4, MAT.top);
   }
   // arms
   for (const s of [-1, 1]) {
@@ -191,20 +170,31 @@ function drawBack(R, C, ox, p) {
     const tgt = s < 0 ? p.lhand : p.rhand;
     const tx = tgt ? tgt[0] : sx + s * 1.8 + wt * 0.3, ty = tgt ? tgt[1] : sy + C.ua + C.fa - 1.2;
     const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, p.bend ? p.bend[s < 0 ? 0 : 1] : s > 0 ? 1 : -1);
-    const r0 = C.girl ? 1.6 : 2.1, r1 = C.girl ? 1.3 : 1.7, r2 = C.girl ? 1.1 : 1.4;
+    const r0 = C.girl ? 1.6 : 2.4, r1 = C.girl ? 1.3 : 1.8, r2 = C.girl ? 1.1 : 1.4;
     R.capsule(sx, sy, ex, ey, r0, r1, MAT.skin);
     R.capsule(ex, ey, wx, wy, r1, r2, MAT.skin);
     R.ellipse(wx + Math.sign(wx - ex) * 0.5, wy + 1.1, r2 + 0.4, r2 + 0.8, MAT.skin);
     if (C.girl) R.capsule(sx, sy, lerp(sx, ex, 0.35), lerp(sy, ey, 0.35), 2.5, 2.2, MAT.tee);
-    else R.capsule(sx, sy, lerp(sx, ex, 0.62), lerp(sy, ey, 0.62), 3.1, 2.8, MAT.top);
+    else R.capsule(sx, sy, lerp(sx, ex, 0.4), lerp(sy, ey, 0.4), 2.9, 2.7, MAT.top);
   }
   // neck & head
   const hx = ox + headX, rot = (p.tilt || 0) * 0.25;
-  R.capsule(ox + bx * 0.5, shY + 1, hx, headY + 3, 2.0, 1.8, MAT.skin);
+  R.capsule(ox + bx * 0.5, shY + 1, hx, headY + 3, C.girl ? 2.0 : 2.3, C.girl ? 1.8 : 2.1, MAT.skin);
   R.ellipse(hx - C.headRx + 0.2, headY + 1.2, 1.0, 1.6, MAT.skin);
   R.ellipse(hx + C.headRx - 0.2, headY + 1.2, 1.0, 1.6, MAT.skin);
-  R.ellipse(hx, headY - 0.3, C.headRx + 0.5, C.headRy, MAT.hair, 0, rot);
-  if (p.front) {
+  if (!C.girl) {
+    // two-block cut: the sides and back cropped close to the head (ears
+    // showing), a fuller rounded top sitting over them, and from the front a
+    // middle part with the curtain ends peeking out at the temples
+    const tx = hx + (p.tilt || 0) * 0.6;
+    R.ellipse(hx, headY + 0.5, C.headRx - 0.4, C.headRy - 0.4, MAT.hair, 0, rot);
+    if (p.front) {
+      R.ellipse(tx - 1.0, headY - 2.5, 4.6, 3.8, MAT.hair, 0, rot);
+      R.ellipse(tx + 1.0, headY - 2.5, 4.6, 3.8, MAT.hair, 0, rot);
+      for (const s2 of [-1, 1]) R.ellipse(tx + s2 * 5.0, headY - 0.4, 1.0, 1.8, MAT.hair, 0, s2 * 0.3);
+    } else R.ellipse(tx, headY - 2.5, C.headRx + 0.6, 3.8, MAT.hair, 0, rot);
+  } else R.ellipse(hx, headY - 0.3, C.headRx + 0.5, C.headRy, MAT.hair, 0, rot);
+  if (p.front && C.girl) {
     R.ellipse(hx, headY + 1.6, C.headRx - 0.8, C.headRy - 2, MAT.skin, 0, rot);
     R.ellipse(hx - 1.3, headY - 0.6, 3.8, 2.4, MAT.hair);
     R.ellipse(hx + 2, headY - 0.9, 3.0, 2.2, MAT.hair);
@@ -249,9 +239,9 @@ function drawSide(R, C, ox, f, p) {
       R.capsule(lerp(kx, ax, 0.4), lerp(ky, ay, 0.4), ax, ay, 1.8, 1.5, MAT.sock, sh);
       shoe(R, X, hipY, L, false, sh, f);
     } else {
-      // baggy jeans, wide all the way down
-      R.capsule(hx, hy, kx, ky, 3.8, 3.2, MAT.bottom, sh);
-      R.capsule(kx, ky, ax, ay - 0.5, 3.2, 3.3, MAT.bottom, sh);
+      // straight-leg jeans
+      R.capsule(hx, hy, kx, ky, 3.6, 2.9, MAT.bottom, sh);
+      R.capsule(kx, ky, ax, ay - 0.5, 2.9, 2.6, MAT.bottom, sh);
       shoe(R, X, hipY, L, true, sh, f);
     }
   };
@@ -266,12 +256,12 @@ function drawSide(R, C, ox, f, p) {
       ex = sx + Math.sin(up) * C.ua * f; ey = sy + Math.cos(up) * C.ua;
       wx = ex + Math.sin(up + el) * C.fa * f; wy = ey + Math.cos(up + el) * C.fa;
     }
-    const r0 = C.girl ? 1.6 : 2.1, r1 = C.girl ? 1.3 : 1.7, r2 = C.girl ? 1.1 : 1.4;
+    const r0 = C.girl ? 1.6 : 2.4, r1 = C.girl ? 1.3 : 1.8, r2 = C.girl ? 1.1 : 1.4;
     R.capsule(sx, sy, ex, ey, r0, r1, MAT.skin, sh);
     R.capsule(ex, ey, wx, wy, r1, r2, MAT.skin, sh);
     R.ellipse(wx, wy + 0.8, r2 + 0.4, r2 + 0.8, MAT.skin, sh);
     if (C.girl) R.capsule(sx, sy, lerp(sx, ex, 0.35), lerp(sy, ey, 0.35), 2.4, 2.1, MAT.tee, sh);
-    else R.capsule(sx, sy, lerp(sx, ex, 0.62), lerp(sy, ey, 0.62), 3.0, 2.7, MAT.top, sh);
+    else R.capsule(sx, sy, lerp(sx, ex, 0.4), lerp(sy, ey, 0.4), 2.9, 2.6, MAT.top, sh);
   };
   armFor(1, -1);
   drawLeg(legs[1], -1);
@@ -291,12 +281,12 @@ function drawSide(R, C, ox, f, p) {
       [X(shX * 0.4 - 3.8), waistY + 1.4], [X(shX * 0.4 - 3.4), waistY], [X(shX * 0.8 - 4.2), shY + 6],
     ], MAT.tee, 0, (x, y) => (y > waistY - 2 && Math.round(x - ox) % 3 === 0 ? -1 : 0));
   } else {
-    R.ellipse(X(-0.3), hipY - 0.4, 4.9, 3.6, MAT.bottom);
-    // oversized tee hanging past the hips
+    R.ellipse(X(-0.4), hipY - 0.4, 4.6, 3.4, MAT.bottom);
+    // fitted tee: chest out front, shoulder blade behind, narrowing to the waist
     R.poly([
-      [X(shX - 4.8), shY - 0.2], [X(shX + 4.4), shY + 0.6], [X(shX * 0.8 + 5.4), shY + 6], [X(shX * 0.4 + 5.4), hipY - 3], [X(5.8), hipY + 4], [X(-5.8), hipY + 4], [X(shX * 0.4 - 5.4), hipY - 4], [X(shX * 0.8 - 5.2), shY + 5],
-    ], MAT.top, 0, (x, y) => (Math.round((x - ox) * f) === -2 && y > hipY - 6 ? -1 : 0));
-    heartPrint(R, X(shX * 0.7 + 3), shY + 7, false);
+      [X(shX - 3.8), shY - 0.4], [X(shX + 3.2), shY + 0.2], [X(shX + 5.4), shY + 4.4], [X(shX * 0.8 + 5.0), shY + 9], [X(shX * 0.4 + 4.0), hipY - 3],
+      [X(4.4), hipY + 2.4], [X(-4.6), hipY + 2.4], [X(shX * 0.4 - 3.8), hipY - 4.5], [X(shX * 0.8 - 5.0), shY + 7], [X(shX - 5.2), shY + 3],
+    ], MAT.top);
   }
   // neck & head: the face stays in shadow, the fringe falling over the eyes
   const rot = (p.headTilt || 0) * f;
@@ -304,9 +294,9 @@ function drawSide(R, C, ox, f, p) {
   R.ellipse(X(headX), headY, C.headRx, C.headRy, MAT.skin, 0, rot);
   R.put(Math.floor(X(headX + C.headRx) + R.ox + (f > 0 ? 0 : -1)), Math.floor(headY + 0.5 + R.oy), MAT.skin, 0);
   R.put(Math.floor(X(headX + C.headRx - 0.5) + R.ox + (f > 0 ? 0 : -1)), Math.floor(headY + 3 + R.oy), MAT.skin, 0);
-  R.ellipse(X(headX - 1), headY - 1.4, C.headRx + 0.4, C.headRy - 1.2, MAT.hair, 0, rot);
-  R.ellipse(X(headX + 1.8), headY - 1.5, 3.4, 2.2, MAT.hair);
   if (C.girl) {
+    R.ellipse(X(headX - 1), headY - 1.4, C.headRx + 0.4, C.headRy - 1.2, MAT.hair, 0, rot);
+    R.ellipse(X(headX + 1.8), headY - 1.5, 3.4, 2.2, MAT.hair);
     const hs = (p.hairSway || 0) - 1.4 * moving + Math.sin(ph * Math.PI / 2 - 1.2) * 0.5 * moving;
     R.poly([
       [X(headX - 1), headY - C.headRy + 0.5], [X(headX + 3.2), headY - 3], [X(headX - 1.4), headY + 3], [X(shX - 1.4), shY + 5.5],
@@ -314,9 +304,14 @@ function drawSide(R, C, ox, f, p) {
     ], MAT.hair);
     R.ellipse(X(headX - 2.8), headY - 3.4, 1.2, 0.8, MAT.clip);
   } else {
-    R.ellipse(X(headX - 2.2), headY - 0.2, 3.0, 4.2, MAT.hair);
-    R.ellipse(X(headX - 1.4), headY - C.headRy + 1.1, 2.8, 1.6, MAT.hair);
-    R.ellipse(X(headX + 1.4), headY - C.headRy + 1.3, 2.4, 1.5, MAT.hair);
+    // two-block: cropped close at the back and sides, the longer top sitting
+    // over it with a step at the back, and a curtain bang falling forward
+    // over the forehead to the brow
+    R.ellipse(X(headX - 1.3), headY + 0.4, C.headRx - 0.9, C.headRy - 1.1, MAT.hair, 0, rot);
+    R.ellipse(X(headX - 0.5), headY - 2.7, C.headRx + 1.1, 3.3, MAT.hair, 0, rot);
+    R.poly([
+      [X(headX + 0.6), headY - 5.6], [X(headX + 5.4), headY - 3.4], [X(headX + 6.0), headY - 0.8], [X(headX + 4.6), headY - 0.2], [X(headX + 3.6), headY - 2.0], [X(headX + 0.4), headY - 2.4],
+    ], MAT.hair);
   }
   R.capsule(X(headX - 2.4), headY - C.headRy + 1.5, X(headX + 0.4), headY - C.headRy + 1.0, 0.5, 0.5, MAT.shine);
   armFor(0, 0);
@@ -411,7 +406,7 @@ export class Couple {
     else if (this.mode === 'front') {
       const w = Math.sin(t * 14);
       const P = {
-        cheer: { lhand: [gx - 13 + w, gs - 19], rhand: [gx + 13 - w, gs - 19], bend: [1, -1] },
+        cheer: { lhand: [gx - 18 + w, gs - 18], rhand: [gx + 18 - w, gs - 18], bend: [1, -1] },
         wave: { rhand: [gx + 11 + Math.sin(t * 9) * 2, gs - 9] },
         surprised: { lhand: [gx - 11, gs + 9], rhand: [gx + 11, gs + 9] },
       }[this.pose] || {};
@@ -436,52 +431,32 @@ export class Couple {
     }
   }
 
-  // Lighting. The hall is dark and the tank is behind them, so the side we
-  // see is deep in shadow: the clothes are only just there, a hint of colour
-  // in near-black. The tank's light wraps round the outline as a rim tinted
-  // by the light and the material, rippling as if through water and swelling
-  // a little on the beat.
+  // A pure silhouette: every part fills the same solid dark. The only light
+  // is a thin line of the tank's glow along the top and sides of the outline,
+  // fading towards the floor, so the shape still reads against dark ground.
   shade(light, wx, pulse) {
     const { W, H } = this;
-    const m = this.R.m, s = this.R.s, d = this.buf.d;
+    const m = this.R.m, d = this.buf.d;
     const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : m[y * W + x]);
     const t = this.t;
-    const lr = light[0] / 255, lg = light[1] / 255, lb = light[2] / 255;
-    const boost = 1 + pulse * 0.25;
+    const boost = 1 + pulse * 0.2;
     d.fill(0);
     for (let y = 0; y < H; y++) {
-      const low = clamp((y / H - 0.5) * 1.8); // 0 at the chest, 1 at the feet
-      const fall = 1 - low * 0.7;
+      const fall = 1 - clamp((y / H - 0.5) * 1.8) * 0.75;
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
-        const mt = m[i];
-        if (!mt) continue;
-        const [dk, md, lt] = TONE[mt];
-        const o = i * 4;
-        d[o + 3] = 255;
-        const wxp = x + wx;
-        const ripple = Math.sin(wxp * 0.31 + t * 2.1) * Math.sin(y * 0.23 - t * 1.6 + wxp * 0.07);
-        let k = (0.16 - low * 0.06) * (1 + ripple * 0.08);
-        if (s[i] < 0) k *= 0.55;
-        if (s[i] > 0) k *= 1.25;
-        let r = (dk[0] * 0.4 + md[0] * k) * 0.42, g = (dk[1] * 0.4 + md[1] * k) * 0.44, b = (dk[2] * 0.4 + md[2] * k) * 0.56;
-        r = r * 0.7 + HALL[0] * 0.3; g = g * 0.7 + HALL[1] * 0.3; b = b * 0.7 + HALL[2] * 0.3;
-        // rim: strongest on top edges, softer on the sides, a pixel or two deep
+        if (!m[i]) continue;
+        let r = INK[0], g = INK[1], b = INK[2];
         let rim = 0;
-        if (!at(x, y - 1)) rim = 1;
-        else if (!at(x - 1, y) || !at(x + 1, y)) rim = 0.72;
-        else if (!at(x, y - 2)) rim = 0.3;
-        else if (!at(x - 2, y) || !at(x + 2, y)) rim = 0.14;
-        else if (m[i - W] && m[i - W] !== mt && s[i - W] >= s[i]) rim = 0.08; // a seam where one part meets another
-        if (mt === MAT.shine) rim = Math.max(rim, 0.3);
+        if (!at(x, y - 1)) rim = 0.55;
+        else if (!at(x - 1, y) || !at(x + 1, y)) rim = 0.38;
         if (rim > 0) {
-          const a = clamp(rim * fall * (0.8 + ripple * 0.3) * boost * (s[i] < 0 ? 0.55 : 1));
-          const cr = Math.min(255, lt[0] * lr * 0.9 + 255 * lr * 0.2);
-          const cg = Math.min(255, lt[1] * lg * 0.9 + 255 * lg * 0.2);
-          const cb = Math.min(255, lt[2] * lb * 0.9 + 255 * lb * 0.2);
-          r += (cr - r) * a; g += (cg - g) * a; b += (cb - b) * a;
+          const ripple = Math.sin((x + wx) * 0.31 + t * 2.1) * Math.sin(y * 0.23 - t * 1.6);
+          const a = clamp(rim * fall * (0.85 + ripple * 0.2) * boost);
+          r += (light[0] - r) * a; g += (light[1] - g) * a; b += (light[2] - b) * a;
         }
-        d[o] = r; d[o + 1] = g; d[o + 2] = b;
+        const o = i * 4;
+        d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = 255;
       }
     }
     this.canvas.ctx.putImageData(this.img, 0, 0);

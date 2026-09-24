@@ -99,7 +99,7 @@ export const LINE_H = 11;
 const glyphs = new Map();
 
 const EMOJI = /\p{Extended_Pictographic}/u;
-const PIXEL_FIRST = new Set(['★', '✦']); // drawn as pixel glyphs, not emoji
+const PIXEL_FIRST = new Set(['★', '✦', '♥', '♡']); // drawn as pixel glyphs, never as emoji
 
 // Emoji keep their colours: drawn small with the system emoji font, then
 // snapped to hard pixels so they sit in the pixel text.
