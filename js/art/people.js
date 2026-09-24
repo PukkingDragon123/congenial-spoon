@@ -226,7 +226,10 @@ function drawSide(R, C, ox, f, p) {
   // near leg on the cycle, far leg half a cycle on; at rest, a relaxed stance
   const legs = [0, 1].map((i) => {
     const k = keyAt(LEG_KEYS, ph + i * 4), rest = i ? [-2, 1, 0] : [3, 2, 0];
-    const [th, kn, ft] = k.map((v, j) => lerp(rest[j], v, moving));
+    let [th, kn, ft] = k.map((v, j) => lerp(rest[j], v, moving));
+    // down on one knee: the near leg's thigh level and shin upright, the far
+    // knee on the floor with the foot tucked behind
+    if (p.kneel) { const K = i ? [-10, 84, 95] : [82, 82, 0]; th = lerp(th, K[0], p.kneel); kn = lerp(kn, K[1], p.kneel); ft = lerp(ft, K[2], p.kneel); }
     return legFK(C, th, kn, ft + tip * 12); // on tiptoe the toes point down and lift her
   });
   let low = 0;
@@ -401,9 +404,13 @@ export class Couple {
       const handY = lerp(-GUY.leg - 1, -GUY.leg - 12, k);
       const hA = [[-1.2, handY - 1], [-0.6, handY + 1.2]];
       const hB = [[1.2, handY], [0.6, handY + 1.6]];
-      drawSide(R, GUY, -g, 1, { hands: hA, lean: 0.13 * k, headX: 0.6 * k, headY: 1.2 * k, headTilt: 0.2 * k });
+      // proposing: he kneels and holds the clam up to her; she covers her mouth
+      const kn = this.kneel || 0, gp = this.gasp || 0;
+      if (kn > 0) { hA[0] = [lerp(hA[0][0], -2, kn), lerp(hA[0][1], -GUY.leg * 0.55 - GUY.torso + 2, kn)]; hA[1] = [lerp(hA[1][0], -1.4, kn), lerp(hA[1][1], -GUY.leg * 0.55 - GUY.torso + 4, kn)]; }
+      if (gp > 0) { const fy = -GIRL.leg - GIRL.torso - 6; hB[0] = [lerp(hB[0][0], g - 3, gp), lerp(hB[0][1], fy, gp)]; hB[1] = [lerp(hB[1][0], g - 2.4, gp), lerp(hB[1][1], fy + 1.5, gp)]; }
+      drawSide(R, GUY, -g, 1, { hands: hA, lean: 0.13 * k + 0.1 * kn, headX: 0.6 * k, headY: 1.2 * k - kn * 1.5, headTilt: 0.2 * k - 0.25 * kn, kneel: kn });
       drawSide(R, GIRL, g, -1, {
-        hands: hB, tip: k, lean: 0.11 * k, headTilt: -0.3 * k, headX: 0.8 * k, headY: -0.5 * k,
+        hands: hB, tip: k, lean: 0.11 * k, headTilt: -0.3 * k + 0.15 * gp, headX: 0.8 * k, headY: -0.5 * k,
         hairSway: Math.sin(t * 0.9) * 0.8, flutter: Math.sin(t * 1.3) * 0.6,
       });
     }
@@ -416,7 +423,9 @@ export class Couple {
     const gs = -2.4 - GUY.leg - GUY.torso; // his shoulder height
     // shaking hands: their near hands meet halfway, pumping up and down
     const sk = this.shake, mid = (gx + qx) / 2, pump = Math.sin(t * 16) * 1.6 * sk;
-    const shakeAt = (dx) => [mid + dx, -GUY.leg - 4 + pump];
+    // five: the hands go up high and meet in a high five instead
+    const five = this.five || 0;
+    const shakeAt = (dx) => [mid + dx * (1 + five), lerp(-GUY.leg - 4 + pump, -GUY.leg - GUY.torso - 9, five)];
     if (!this.guyOn) { /* she's on her own */ } else if (this.mode === 'walk') drawSide(R, GUY, gx, 1, { dist: this.walk * 7.5 + 9, moving: this.moving });
     else if (this.mode === 'side') drawSide(R, GUY, gx, 1, { hands: sk > 0 ? [shakeAt(-0.6), null] : null });
     else if (this.mode === 'front') {

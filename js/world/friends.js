@@ -23,22 +23,26 @@ function prof(pts, u) {
   }
   return pts[pts.length - 1][1];
 }
-// long and slim, with a narrow tail stock and a long beak
-const TOP = [[0, 1.1], [0.12, 1.9], [0.25, 3.4], [0.4, 5.6], [0.55, 6.8], [0.68, 6.7], [0.78, 6.0], [0.85, 4.7], [0.885, 3.1], [0.9, 2.3], [1, 1.4]];
-const BOT = [[0, 1.0], [0.12, 1.7], [0.25, 3.0], [0.4, 4.9], [0.55, 5.8], [0.68, 5.5], [0.78, 4.4], [0.86, 3.0], [0.92, 2.0], [1, 1.1]];
+// A bottlenose's side profile, tail (0) to beak tip (1): a sturdy torpedo
+// with a rounded melon, a crease where the short beak starts, and a firm
+// tail stock.
+const TOP = [[0, 1.9], [0.1, 2.9], [0.22, 4.4], [0.38, 7.0], [0.52, 8.7], [0.64, 8.9], [0.74, 8.2], [0.8, 7.5], [0.845, 6.6], [0.87, 5.0], [0.885, 3.2], [0.9, 2.6], [0.97, 2.1], [1, 1.4]];
+const BOT = [[0, 1.6], [0.1, 2.5], [0.22, 3.9], [0.38, 6.4], [0.52, 7.9], [0.64, 7.6], [0.74, 6.5], [0.82, 5.0], [0.88, 3.3], [0.92, 2.4], [1, 1.2]];
+const CAPE = ramp(['#081226', '#0e1c38', '#16294c'], 3);
 
-// A long, slim bottlenose dolphin facing right: a rounded melon over a short beak
-// with a smile, a swept-back dorsal fin, a pectoral flipper, dark back fading
-// through the flank to a pale belly, and flukes that beat up and down while
-// the body flexes. frame 0..5.
+// A bottlenose dolphin facing right: dark cape along the back, grey flanks,
+// a pale belly from chin to tail, a curved dorsal fin, swept-back flippers,
+// and flukes seen edge-on that beat up and down as the body flexes. A little
+// smile, a bright eye, a blowhole. frame 0..5.
 export function dolphinSprite(frame) {
   const k = 'd' + frame;
   if (cache.has(k)) return cache.get(k);
-  const W = 118, H = 40, cy = 20, X0 = 11, L = 100;
+  const W = 112, H = 48, cy = 24, X0 = 15, L = 92;
   const beat = Math.sin((frame / DOLPHIN_FRAMES) * Math.PI * 2);
-  const mid = (u) => cy + beat * 3.8 * Math.pow(1 - u, 2.2) - beat * 0.6 * u;
-  const finBase = mid(0.57) - prof(TOP, 0.57);
-  const fa = -beat * 0.55, ca = Math.cos(fa), sa = Math.sin(fa);
+  // the spine: a gentle arch, flexing most towards the tail
+  const mid = (u) => cy - Math.sin(u * Math.PI) * 1.2 + beat * 4 * Math.pow(1 - u, 2.4) - beat * 0.5 * u;
+  const slope = (u) => (mid(u + 0.01) - mid(u - 0.01)) / (0.02 * L);
+  const finBase = (u) => mid(u) - prof(TOP, u);
   const field = (x, y) => {
     let h = -1, m = 0;
     const put = (hh, mm) => { if (hh > h) { h = hh; m = mm; } };
@@ -47,40 +51,63 @@ export function dolphinSprite(frame) {
       const t = prof(TOP, u), b = prof(BOT, u), mu = mid(u);
       if (y > mu - t && y < mu + b) {
         const c = mu + (b - t) / 2, half = (t + b) / 2;
-        const d = Math.sqrt(Math.max(0, 1 - ((y - c) / half) ** 2)) * half * 1.15;
-        const bellyLine = mu + b * (0.05 + 0.18 * Math.sin(u * 9 + 0.6));
-        put(d, y > bellyLine && u > 0.26 && u < 0.95 ? 3 : y > mu - t * 0.3 ? 2 : 1);
+        const d = Math.sqrt(Math.max(0, 1 - ((y - c) / half) ** 2)) * half * 1.2;
+        // colour bands: cape on the back, flank, and the pale belly, whose
+        // edge sweeps up behind the eye and fades out towards the tail
+        const belly = mu + b * (0.1 - 0.5 * Math.max(0, Math.min(1, (u - 0.72) / 0.14)) + 0.25 * Math.max(0, 0.3 - u) / 0.3);
+        const cape = mu - t * (0.45 + 0.2 * Math.sin(u * 7));
+        put(d, y > belly && u > 0.12 ? 3 : y < cape && u > 0.2 && u < 0.82 ? 4 : y < mu - t * 0.1 ? 1 : 2);
       }
     }
-    // swept-back dorsal fin
-    const v = finBase - y;
-    if (v > -1 && v < 9) {
-      const x0 = X0 + 0.52 * L, x1 = X0 + 0.62 * L;
-      const lead = x1 - v * 0.95 - v * v * 0.03, trail = x0 + 2 * (v / 9) - 4 * (v / 9) ** 2;
-      if (x > trail && x < lead) put(2.6 + (9 - v) * 0.12, 1);
+    // the dorsal fin: curved, its tip swept back
+    const u0 = 0.47, u1 = 0.61, fh = 10;
+    {
+      const v = finBase(0.55) + 1 - y;
+      if (v > -1 && v < fh) {
+        const f = v / fh;
+        const lead = X0 + L * (u1 - f * 0.1 - f * f * 0.06), trail = X0 + L * (u0 + f * 0.04 - f * f * 0.1);
+        if (x > trail && x < lead) put(2.4 + (1 - f) * 1.4, 4);
+      }
     }
     // pectoral flipper, angled back and down
-    put(up(tube(x, y, X0 + 0.75 * L, mid(0.75) + 3.4, X0 + 0.66 * L, mid(0.66) + 9, 1.8, 0.7, 1), 4), 1);
-    // flukes, tilting with the beat
-    const lx0 = x - X0, ly0 = y - mid(0);
-    const lx = lx0 * ca + ly0 * sa, ly = -lx0 * sa + ly0 * ca;
-    if (lx > -10 && lx < 1.5 && Math.abs(ly) < 0.8 + -lx * 0.85 && !(lx < -6.4 && Math.abs(ly) < (-lx - 6.4) * 1.4)) put(2.0, 1);
+    {
+      const ax = X0 + 0.77 * L, ay = mid(0.77) + 3.2;
+      put(up(tube(x, y, ax, ay, ax - 8, ay + 6.5, 2.1, 0.6, 1), 5), 1);
+    }
+    // the flukes: two swept lobes with a notch between, flattening and
+    // opening as they beat
+    {
+      const tx = X0 + 1, ty = mid(0), tilt = -beat * 0.35 + slope(0) * 0.6;
+      const c = Math.cos(tilt), sn = Math.sin(tilt);
+      const lx = (x - tx) * c + (y - ty) * sn, ly = -(x - tx) * sn + (y - ty) * c;
+      const open = 0.55 + 0.45 * Math.abs(beat);
+      if (lx < 1.5 && lx > -14) {
+        const q = -lx / 14;                        // 0 at the root, 1 at the tips
+        const spread = open * (1.4 + q * 6.2);     // how far the lobes reach up/down
+        const thick = 1.3 + 1.6 * Math.sin(Math.PI * Math.min(1, q * 1.3));
+        // one solid swept shape: wide at the tips, a notch in the middle of
+        // the trailing edge
+        const reach = spread * q + thick * (1 - q * 0.6);
+        const edge = 0.74 + 0.26 * Math.min(1, Math.abs(ly) / Math.max(1, spread * 0.7));
+        if (Math.abs(ly) < reach && q < edge) put(2.2 + (1 - q) * 0.8, ly < 0 ? 1 : 2);
+      }
+    }
     if (h <= 0) return null;
-    // eye, blowhole and the smile along the beak
-    const ue = 0.845, ex = X0 + ue * L, ey = mid(ue) - 1.1;
-    if (((x - ex) / 1.3) ** 2 + ((y - ey) / 1.0) ** 2 < 1) return [h, Math.hypot(x - ex + 0.4, y - ey + 0.4) < 0.5 ? 6 : 5];
-    if (u > 0.755 && u < 0.775 && y < mid(u) - prof(TOP, u) + 1.3) return [h, 5];
-    if (u > 0.855 && u < 0.99) {
-      const ym = mid(u) + 0.9 - Math.max(0, 0.9 - u) * 14;
+    // eye, blowhole and the smile
+    const ue = 0.855, ex = X0 + ue * L, ey = mid(ue) - 0.6;
+    if (((x - ex) / 1.4) ** 2 + ((y - ey) / 1.2) ** 2 < 1) return [h, Math.hypot(x - ex + 0.5, y - ey + 0.5) < 0.6 ? 6 : 5];
+    if (u > 0.76 && u < 0.78 && y < mid(u) - prof(TOP, u) + 1.2) return [h, 5];
+    if (u > 0.865 && u < 0.995) {
+      const ym = mid(u) + 0.6 - Math.max(0, 0.905 - u) * 22;
       if (Math.abs(y - ym) < 0.5) return [h, 5];
     }
     return [h, m];
   };
   const c = sculpt(W, H, field, {
-    1: { pal: BACK, gloss: 0.8 }, 2: { pal: FLANK, gloss: 0.7 }, 3: { pal: BELLY, gloss: 0.5, bias: -0.4 },
-    5: { pal: INK, flat: true }, 6: { pal: WHITE, flat: true },
+    1: { pal: BACK, gloss: 0.9, dither: 0.5 }, 2: { pal: FLANK, gloss: 0.8, dither: 0.5 }, 3: { pal: BELLY, gloss: 0.6, bias: -0.3, dither: 0.5 },
+    4: { pal: CAPE, gloss: 0.9, bias: 0.3, dither: 0.4 }, 5: { pal: INK, flat: true }, 6: { pal: WHITE, flat: true },
   });
-  c.ox = 59; c.oy = cy;
+  c.ox = 56; c.oy = cy;
   cache.set(k, c);
   return c;
 }

@@ -23,18 +23,30 @@ export const CONFIG = {
   letter: [
     'Dear {to},',
     '',
-    "I'm not good at saying this out loud,",
-    'so I wrote it down instead.',
+    "Okay. If you're reading this, you found the bottle. Good job. The bean would be proud.",
     '',
-    'Every time I am with you, the day feels calmer.',
-    'You make ordinary things feel special,',
-    "and I don't think you even notice.",
+    "I've wanted to tell you something for a while, and every time I tried to say it out loud it came out as a joke. So I made a whole game instead. Very normal behaviour.",
     '',
-    "I'd like to keep going places with you.",
-    'This one, and all the ones after.',
+    "I like your humour. You're the only person who can make me laugh at the worst possible moment.",
+    "I like your little quirks, the things you probably think nobody notices. I notice.",
+    "I like that you're just cool. Not trying to be. You just are.",
+    "And your music taste is genuinely top 1. Every song you've shown me lives in my head now, rent free.",
+    '',
+    'Being around you makes ordinary days feel like a day at the aquarium: quieter, brighter, and I never want to leave.',
+    '',
+    'So I made you a tiny playlist. Three songs that sound like you:',
+    '{gift}',
     '',
     'Love, {from}',
   ],
+
+  // A little gift at the end of the letter: tap a song to open it on Spotify.
+  gift: [
+    { title: 'Blue Hair', artist: 'TV Girl', url: 'https://open.spotify.com/search/Blue%20Hair%20TV%20Girl' },
+    { title: 'Harvey', artist: "Her's", url: "https://open.spotify.com/search/Harvey%20Her's" },
+    { title: 'Lovefool', artist: 'The Cardigans', url: 'https://open.spotify.com/search/Lovefool%20The%20Cardigans' },
+  ],
+
 
   question: '{to}, will you be mine?',
   yes: 'yes',

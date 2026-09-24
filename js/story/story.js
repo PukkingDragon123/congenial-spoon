@@ -19,6 +19,7 @@ const LOVE_WORDS = ['I', 'LOVE', 'YOU'];
 // where the full song picks up when the quest is done: just before the
 // first sung line
 const VOCALS_AT = 18.6;
+const GIFT_ROWS = () => (CONFIG.gift || []).length;
 const CROWD_KINDS = ['tang', 'butterfly', 'snapper', 'batfish', 'giant'];
 
 const WHALE_Z = 0.62;
@@ -246,7 +247,11 @@ export class Story {
     return () => {
       const st = this.stage, c = this.aq.couple, gh = c.gap / 2;
       const x = st.coupleX + (who === 'guy' ? -gh + (c.apart ? c.guyDX : 0) : gh + (c.apart ? c.girlDX : 0));
-      const [sx, sy] = st.toScreen(x, st.coupleY - (who === 'guy' ? 76 : 70) - (who === 'guy' ? c.hop : 0), 0);
+      let [sx, sy] = st.toScreen(x, st.coupleY - (who === 'guy' ? 76 - (c.kneel || 0) * 18 : 70) - (who === 'guy' ? c.hop : 0), 0);
+      // through the close-up, when there is one
+      const Z = this.post.p.zoom;
+      const ZT = this.post.p.zoomTo;
+      if (Z && Z[2] !== 1) { sx = ZT[0] * this.W + (sx - Z[0] * this.W) * Z[2]; sy = ZT[1] * this.H + (sy - Z[1] * this.H) * Z[2]; }
       return [Math.round(sx), Math.round(sy)];
     };
   }
@@ -491,8 +496,21 @@ export class Story {
       await this.go(reef, new LightBloom(this.W, this.H, 2.6, [190, 240, 255]), () => { this.enterRoom(reef, CX - 160, CX - 150); meet(); });
     } else meet();
     this.grade(2.5, { tint: [0.96, 1.07, 1.08], sat: 1.28, vig: 0.48, sun: 0.35, light: 1.1 });   // the reef: bright daylight
-    const st = this.stage, A = this.anime;
+    const st = this.stage, A = this.anime, D = this.dialog;
     const him = this.headAt('guy'), her = this.headAt('girl');
+    // what they say to each other, pinned to the song
+    for (const [t, who, line, life] of [
+      [27.6, 'me', 'Wait... is that you?', 1.0],
+      [29.0, 'her', "No, I'm a very tall clownfish.", 1.1],
+      [30.4, 'me', 'See, THAT. Nobody else talks like that.', 1.1],
+      [32.0, 'her', 'Why are you jumping?', 0.9],
+      [33.3, 'me', 'The floor is bouncy. Obviously.', 1.0],
+      [34.9, 'her', 'Okay, what are you listening to?', 1.0],
+      [36.4, 'me', 'Nothing good. Your playlists ruined everyone else\'s for me.', 1.1],
+      [38.0, 'me', 'Top 1 music taste. GOAT. I don\'t make the rules.', 1.0],
+      [39.3, 'her', 'Flattery works on me. Keep going.', 0.9],
+      [40.4, 'me', "Come see the big tank. I'll keep going.", 1.4],
+    ]) this.atSong(t).then(() => D.say(who, line, { life }));
     const hop = (h, d) => this.tween(d, (k) => { c.hop = Math.sin(k * Math.PI) * h; });
     // a slow pan along the reef; a narrow screen stays on the two of them
     this.tween(10, (k) => {
@@ -530,8 +548,10 @@ export class Story {
     // he walks over and holds out his hand
     await this.guyWalkTo(Xq - 2 * gh - 4, 32.4);
     c.mode = 'side';
-    this.tween(0.3, (k) => { c.shake = k; }, ease.outCubic);
+    // a high five up high, then the handshake
+    this.tween(0.18, (k) => { c.five = k; c.shake = k; }, ease.outCubic);
     this.sound.sfx('pop'); this.sound.sfx('sparkle');
+    this.wait(0.45).then(() => this.tween(0.25, (k) => { c.five = 1 - k; }));
     {
       const hands = () => { const [x, y] = st.toScreen(Xq - gh - 2, st.coupleY - 40, 0); return [Math.round(x), Math.round(y)]; };
       A.burst(hands, 0.6, '#fff4a0');
@@ -569,6 +589,14 @@ export class Story {
     });
     this.tween(13.5, (k) => { this.camX = lerp(CX - 520, CX, k); }, ease.inOutSine);
     this.grade(3, { tint: [0.84, 0.94, 1.14], sat: 1.0, vig: 0.66, sun: 0, dim: 0.08 });   // deep, cool blue before the hook
+    const D = this.dialog;
+    for (const [t, who, line, life] of [
+      [44.6, 'me', "You know you're kind of the coolest person I know?", 1.1],
+      [47.0, 'her', 'KIND of??', 0.9],
+      [48.6, 'me', 'Fine. Fully. The humour, the weird little quirks, all of it.', 1.2],
+      [51.2, 'her', "You're being weird.", 0.9],
+      [52.8, 'me', 'Yeah. I get like that around you.', 1.1],
+    ]) this.atSong(t).then(() => D.say(who, line, { life }));
     await this.walkTo(CX, 56.6);
   }
 
@@ -779,7 +807,7 @@ export class Story {
     this.sound.sfx('chime');
     { const L = this.letter; await this.tween(1.3, (k) => { L.open = k; }, ease.outBack); }
     // type at a pace that fills the second verse
-    this.letter.rate = clamp(this.letter.total / Math.max(6, 128 - this.songT), 10, 32);
+    this.letter.rate = clamp(this.letter.total / Math.max(6, 128 - this.songT), 10, 50);
     this.letter.typing = true;
     await this.until(() => this.letter.done);
     this.sound.sfx('chime');
@@ -791,17 +819,22 @@ export class Story {
     this.hint = null;
   }
 
+  // The letter is laid out in full; if it's taller than the screen it
+  // scrolls as it types. '{gift}' marks where the song gift goes.
   layoutLetter() {
     const L = this.letter;
     const maxW = Math.min(this.W - 20, 300);
     const inner = maxW - 34;
     const lines = [];
-    for (const raw of CONFIG.letter) for (const l of wrap(fill(raw), inner)) lines.push(l);
-    let lh = LINE_H;
-    let h = lines.length * lh + 44;
-    if (h > this.H - 40) { lh = 9; h = lines.length * lh + 40; }
-    L.lines = lines; L.lh = lh; L.w = maxW; L.h = h;
-    L.total = lines.reduce((a, l) => a + chars(l).length, 0);
+    for (const raw of CONFIG.letter) {
+      if (raw === '{gift}') { for (let i = 0; i < GIFT_ROWS(); i++) lines.push({ gift: i }); continue; }
+      for (const l of wrap(fill(raw), inner)) lines.push(l);
+    }
+    const lh = LINE_H;
+    const full = lines.length * lh + 44;
+    const h = Math.min(full, this.H - 36);
+    L.lines = lines; L.lh = lh; L.w = maxW; L.h = h; L.full = full; L.scroll = 0;
+    L.total = lines.reduce((a, l) => a + (typeof l === 'string' ? chars(l).length : 12), 0);
     L.paper = makePaper(maxW, h);
   }
 
@@ -831,12 +864,26 @@ export class Story {
     this.chorus = true;
     aq.sendWave(CX - 800, 1, { speed: 820, amp: 6, width: 220, life: 3 });
     burstStars(aq.fx, words.center[0], words.center[1], 18, { speed: 80, size: 6 });
-    // he brings out a little clam, like a ring box
-    await this.atSong(142.6);
+    // he goes down on one knee and brings out a little clam, like a ring
+    // box; the view closes in on the two of them
+    await this.atSong(141.8);
+    {
+      // the world point at their middle is brought up to just below the
+      // centre of the screen as the view closes in
+      const [zx, zy] = aq.toScreen(aq.coupleX, aq.coupleY - 36, 0), Z = p.zoom, T = p.zoomTo;
+      const cx = zx / this.W, cy = zy / this.H;
+      Z[0] = cx; Z[1] = cy; T[0] = cx; T[1] = cy;
+      const zmax = this.W > 300 ? 1.9 : 1.6;
+      this.tween(2.4, (k) => { Z[2] = lerp(1, zmax, k); T[0] = lerp(cx, 0.5, k); T[1] = lerp(cy, 0.6, k); }, ease.inOutCubic);
+      this.tween(0.9, (k) => { c.kneel = k; }, ease.inOutSine);
+    }
+    await this.atSong(142.8);
     this.clam = { t: 0, open: 0, a: 0 };
     { const K = this.clam; this.tween(0.6, (k) => { K.a = k; }, ease.outBack); this.sound.sfx('pop'); }
     await this.atSong(144.0);
     { const K = this.clam; this.tween(0.9, (k) => { K.open = k; }, ease.outBack); this.sound.sfx('chime'); this.wait(0.5).then(() => { this.sound.sfx('sparkle'); K.shine = 1; }); }
+    this.tween(0.6, (k) => { c.gasp = k; }, ease.outBack);
+    this.anime.emote(this.headAt('girl'), '!', 1.2, '#ff5aa0');
     // the room goes quiet around them: a soft spotlight, hearts drifting up
     this.grade(2.5, { tint: [1.1, 0.95, 1.08], vig: 0.95, dim: 0.16, sat: 1.12 });
     this.heartRain = 0.5;
@@ -856,6 +903,11 @@ export class Story {
 
   layoutButtons() {
     const [, cy] = this.aq.toScreen(this.aq.coupleX, this.aq.coupleY, 0);
+    if (this.post.p.zoom[2] > 1.05) {
+      // close up: the buttons sit along the bottom, clear of the two of them
+      for (const b of this.buttons) if (!b.free) { b.x = Math.round(this.W / 2 + b.rel[0] * Math.min(70, this.W * 0.28)); b.y = this.H - 16; }
+      return;
+    }
     const below = this.H - cy > 46;
     for (const b of this.buttons) {
       if (b.free) continue;
@@ -1028,6 +1080,8 @@ export class Story {
     this.tween(2.4, (k) => { p.rip[2] = k * 1.8; p.rip[3] = 1 - k; }, ease.outQuad).then(() => { p.rip[3] = 0; });
     burstHearts(this.fx, bx, by, 26, { speed: 110, spread: TAU, ay: -30, life: 2.6 });
     burstSparks(this.fx, bx, by, 40, { speed: 120 });
+    { const Z = this.post.p.zoom, T = this.post.p.zoomTo, z0 = Z[2], t0 = T.slice(); this.tween(2.2, (k) => { Z[2] = lerp(z0, 1, k); T[0] = lerp(t0[0], Z[0], k); T[1] = lerp(t0[1], Z[1], k); }, ease.inOutCubic); }
+    { const c0 = this.aq.couple; this.tween(0.8, (k) => { c0.kneel = 1 - k; c0.gasp = 1 - k; }, ease.inOutSine); }
     if (this.clam) { const K = this.clam, [px, py] = this.aq.toScreen(this.aq.coupleX, this.aq.coupleY - 50, 0); burstStars(this.fx, px, py, 16, { speed: 90, size: 5 }); this.tween(1.2, (k) => { K.a = 1 - k; }).then(() => { this.clam = null; }); }
     const Qf = this.question;
     this.tween(0.6, (k) => { for (const b of this.buttons) b.alpha = 1 - k; if (Qf) Qf.a = 1 - k; }).then(() => { this.buttons = []; this.question = null; });
@@ -1199,6 +1253,23 @@ export class Story {
       // a chunky pixel triangle pointing the way
       for (let j = 0; j < 9; j++) { const w2 = 5 - Math.abs(j - 4); ctx.fillRect(d > 0 ? x + 6 : x + 12 - w2, y + 5 + j, w2, 1); }
       ctx.globalAlpha = 1;
+    }
+    // the song gift, any time
+    const [rx, ry, rw] = this.replayRect(), gb = [rx + rw + 6, ry, textWidth('♫ songs') + 10, 12];
+    this.giftBtn = gb;
+    drawText(ctx, '♫ songs', gb[0] + gb[2] / 2, gb[1] + 2, { align: 'center', color: this.giftOpen ? '#ffffff' : '#9af0b8', outline: '#0a2a14' });
+    if (this.giftOpen) {
+      const G = CONFIG.gift || [], w = Math.min(this.W - 12, 200), h = 18 + G.length * 14, px = 6, py = gb[1] + 16;
+      ctx.fillStyle = '#0a1a10'; ctx.fillRect(px - 1, py - 1, w + 2, h + 2);
+      ctx.fillStyle = '#10261a'; ctx.fillRect(px, py, w, h);
+      drawText(ctx, 'songs that sound like you', px + 5, py + 4, { color: '#9af0b8' });
+      this.giftRects = G.map((g, i) => {
+        const r = [px + 4, py + 16 + i * 14, w - 8, 12];
+        ctx.fillStyle = '#1db954'; ctx.fillRect(r[0], r[1], 12, 12);
+        ctx.fillStyle = '#ffffff'; for (let j = 0; j < 5; j++) ctx.fillRect(r[0] + 4, r[1] + 3 + j, 3 - Math.abs(j - 2), 1);
+        drawText(ctx, `${g.title} · ${g.artist}`, r[0] + 16, r[1] + 2, { color: '#e8fff0' });
+        return { r, url: g.url };
+      });
     }
     if (R.hint > 0) drawText(ctx, 'walk around and fill your notebook!', 6 + 44 + 4, B.left[1] + 5, { color: '#ffe38a', outline: '#1a1020', alpha: clamp(R.hint) });
   }
@@ -1447,6 +1518,7 @@ export class Story {
   pointer(type, x, y) {
     this.mouse = [x, y];
     // the walk arrows after the story: hold to walk
+    if (this.roam && !this.photo.album && type === 'down' && this.giftBtn && this.photo.hit(this.giftBtn, x, y)) { this.giftOpen = !this.giftOpen; this.sound.sfx('pop'); return; }
     if (this.roam && !this.photo.album) {
       if (type === 'up') this.walkKey(0, false), this.roam.keys.clear(), (this.roam.dir = 0);
       if (type === 'down') {
@@ -1457,6 +1529,11 @@ export class Story {
     if (this.photo.album && this.photo.pointer(type, x, y)) return; // the album sits over everything
     if (type === 'down' && this.speakerHover()) { this.speakerOn = !this.speakerOn; this.sound.setEnabled(this.speakerOn); return; }
     if ((type === 'down' || type === 'key') && this.dialog.tap(type === 'key' ? null : x, y)) return;
+    // a song from the gift opens in Spotify
+    if (type === 'down' && (this.letter || this.giftOpen) && this.giftRects) {
+      const g = this.giftRects.find(({ r }) => x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]);
+      if (g) { this.sound.sfx('pop'); try { window.open(g.url, '_blank', 'noopener'); } catch (e) { /* blocked */ } return; }
+    }
     if (this.photo.pointer(type, x, y)) return;
     if (type === 'move') {
       const no = this.buttons.find((b) => b.id === 'no');
@@ -1584,21 +1661,44 @@ export class Story {
     drawRoll(ctx, x, y0 - 1, L.w);
     drawRoll(ctx, x, y0 + vis, L.w);
     if (L.open < 0.98) return;
-    // typed text
-    let n = Math.floor(L.n);
-    const top = y0 + 18;
+    // typed text, scrolling to keep up with the pen
+    let n = Math.floor(L.n), cur = 0;
+    { let m = n; for (let i = 0; i < L.lines.length && m > 0; i++) { const ln = L.lines[i]; m -= typeof ln === 'string' ? chars(ln).length : 12; cur = i; } }
+    const maxScroll = Math.max(0, L.full - L.h);
+    const want = L.done ? maxScroll : clamp((cur + 2) * L.lh - (L.h - 36), 0, maxScroll);
+    L.scroll += (want - L.scroll) * Math.min(1, (this.dt || 0.016) * (L.done ? 1.5 : 6));
+    const top = y0 + 18 - Math.round(L.scroll);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y0 + 6, L.w, vis - 12); ctx.clip();
+    this.giftRects = [];
     L.lines.forEach((line, i) => {
       if (n <= 0) return;
+      const ly = top + i * L.lh;
+      if (typeof line !== 'string') {
+        // a song from the gift: a little Spotify-green play button
+        n -= 12;
+        const g = CONFIG.gift[line.gift];
+        if (!g) return;
+        const bw = L.w - 40, r = [x + 20, ly - 1, bw, L.lh - 1];
+        const hv = this.mouse[0] >= r[0] && this.mouse[0] <= r[0] + r[2] && this.mouse[1] >= r[1] && this.mouse[1] <= r[1] + r[3];
+        ctx.fillStyle = hv ? '#d8f5e0' : '#eef6e6'; ctx.fillRect(r[0], r[1], r[2], r[3]);
+        ctx.fillStyle = '#1db954'; ctx.fillRect(r[0] + 2, r[1] + 1, r[3] - 2, r[3] - 2);
+        ctx.fillStyle = '#ffffff'; for (let j = 0; j < 5; j++) ctx.fillRect(r[0] + 5, r[1] + 3 + j, 3 - Math.abs(j - 2), 1);
+        drawText(ctx, `${g.title} · ${g.artist}`, r[0] + r[3] + 4, ly + 1, { color: '#1c4e2e' });
+        if (ly > y0 + 4 && ly < y0 + vis - 8) this.giftRects.push({ r, url: g.url });
+        return;
+      }
       const len = chars(line).length;
       const special = i === 0 || i === L.lines.length - 1;
-      drawText(ctx, line, x + 17, top + i * L.lh, { color: special ? '#1e5aa8' : '#1c2e4e', count: n });
+      drawText(ctx, line, x + 17, ly, { color: special ? '#1e5aa8' : '#1c2e4e', count: n });
       if (n < len && n > 0 && Math.floor(this.t * 6) % 2 === 0) {
         const cx = x + 17 + charX(line, n);
         ctx.fillStyle = '#1e5aa8';
-        ctx.fillRect(cx, top + i * L.lh + 7, 3, 1);
+        ctx.fillRect(cx, ly + 7, 3, 1);
       }
       n -= len;
     });
+    ctx.restore();
     if (L.seal > 0) {
       ctx.globalAlpha = clamp(L.seal);
       drawSeal(ctx, x + L.w - 20, y0 + vis - 16 + Math.round((1 - clamp(L.seal)) * -6), this.t);
@@ -1612,8 +1712,12 @@ export class Story {
     const K = this.clam, aq = this.aq;
     if (!K || K.a <= 0.01) return;
     K.t += this.dt || 0.016;
-    const s = this.W > 300 ? 2 : 1;
-    const [sx, sy] = aq.toScreen(aq.coupleX, aq.coupleY - 46, 0);
+    const Z = this.post.p.zoom, z = Z[2];
+    const s = Math.max(1, Math.round(z * (this.W > 300 ? 1.25 : 0.9)));
+    // where his hands are, then through the close-up
+    let [sx, sy] = aq.toScreen(aq.coupleX - 3, aq.coupleY - 34 - (1 - (aq.couple.kneel || 0)) * 10, 0);
+    const ZT = this.post.p.zoomTo;
+    sx = ZT[0] * this.W + (sx - Z[0] * this.W) * z; sy = ZT[1] * this.H + (sy - Z[1] * this.H) * z;
     const x = Math.round(sx), y = Math.round(sy + Math.sin(K.t * 2) * 1);
     ctx.save();
     ctx.translate(x, y);
@@ -1637,10 +1741,26 @@ export class Story {
       ctx.fillStyle = `rgba(255,220,240,${0.12 * g})`;
       ctx.beginPath(); ctx.arc(0, -2, 4, 0, TAU); ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#fff8fc'; ctx.fillRect(-1, -4, 3, 3); ctx.fillRect(-2, -3, 5, 1);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(-1, -4, 1, 1);
-      ctx.fillStyle = '#d8b8e0'; ctx.fillRect(0, -2, 2, 1);
-      if (K.shine && Math.sin(K.t * 5) > 0.6) { ctx.fillStyle = '#ffffff'; ctx.fillRect(3, -8, 1, 3); ctx.fillRect(2, -7, 3, 1); }
+      // the ring: a little gold band standing in the shell, a pearl on top
+      ctx.fillStyle = '#8a5a10';
+      for (const [rx, ry] of [[-2, -1], [-3, -2], [-3, -3], [-2, -4], [2, -1], [3, -2], [3, -3], [2, -4], [-1, 0], [0, 0], [1, 0]]) ctx.fillRect(rx, ry, 1, 1);
+      ctx.fillStyle = '#ffd24a';
+      for (const [rx, ry] of [[-2, -2], [-2, -3], [2, -2], [2, -3], [-1, -1], [0, -1], [1, -1]]) ctx.fillRect(rx, ry, 1, 1);
+      ctx.fillStyle = '#fff2a8'; ctx.fillRect(-2, -3, 1, 1);
+      // the pearl, pink-white with a glint
+      ctx.fillStyle = '#e8c8e8'; ctx.fillRect(-2, -7, 5, 3); ctx.fillRect(-1, -8, 3, 5);
+      ctx.fillStyle = '#fff8fc'; ctx.fillRect(-1, -7, 3, 2); ctx.fillRect(-1, -8, 2, 1);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(-1, -8, 1, 1);
+      if (K.shine) {
+        // twinkles that come and go around it
+        for (let i = 0; i < 3; i++) {
+          const ph = K.t * 2.2 + i * 2.1, a = Math.max(0, Math.sin(ph));
+          if (a < 0.4) continue;
+          const tx = Math.round(Math.cos(i * 2.4) * 7), ty = Math.round(-6 + Math.sin(i * 2.4) * 5);
+          ctx.fillStyle = i % 2 ? '#fff6c0' : '#ffffff';
+          ctx.fillRect(tx, ty - 1, 1, 3); ctx.fillRect(tx - 1, ty, 3, 1);
+        }
+      }
     }
     // the lid swings open on its hinge at the back
     ctx.save();

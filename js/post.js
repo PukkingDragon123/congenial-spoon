@@ -16,6 +16,8 @@ uniform float uTime, uBlur, uBloom, uWarp, uDim, uFade, uVig, uUIGlow, uSat;
 uniform vec4 uRip;      // center.xy (uv), radius, strength
 uniform vec4 uFlash;    // rgb, amount
 uniform vec3 uTint;
+uniform vec3 uZoom;     // world only: the world point (uv) and scale, for close-ups
+uniform vec2 uZoomTo;   // where on screen that world point lands
 
 vec3 bloom(sampler2D s, vec2 uv){
   vec3 b = vec3(0.0);
@@ -55,23 +57,25 @@ void main(){
     uv.y += cos(uv.x * 20.0 + uTime * 2.3) * 0.006 * uWarp;
   }
   uv = clamp(uv, vec2(0.0), vec2(0.99999));
-  ivec2 ip = ivec2(floor(uv * uRes));
-  vec3 w = texelFetch(uW, ip, 0).rgb;
+  ivec2 ip = ivec2(floor(uv * uRes));          // the UI, never zoomed
+  vec2 uvw = clamp(uZoom.xy + (uv - uZoomTo) / uZoom.z, vec2(0.0), vec2(0.99999));
+  ivec2 iw = ivec2(floor(uvw * uRes));         // the world, maybe closer
+  vec3 w = texelFetch(uW, iw, 0).rgb;
   // water: refract the tank through the wave slopes. Sampling from the texel
   // centre keeps still water pixel-crisp; as the surface moves, the image
   // slides smoothly between texels instead of jumping.
-  vec4 nm = texture(uN, vUv);
+  vec4 nm = texture(uN, uvw);
   float wm = nm.b * uWater;
   vec2 wn = (nm.rg - 0.5) * 2.0;
   if (wm > 0.01) {
-    vec2 base = (vec2(ip) + 0.5) / uRes;
+    vec2 base = (vec2(iw) + 0.5) / uRes;
     vec2 off = wn * wm * 3.0 / uRes;
     w = mix(w, textureLod(uW, clamp(base + off, vec2(0.0), vec2(0.99999)), 0.0).rgb, clamp(wm * 4.0, 0.0, 1.0));
     // crests a touch brighter, troughs a touch darker
     w *= 1.0 + (nm.a - 0.5) * 0.18 * wm;
   }
-  if (uBlur > 0.001) w = mix(w, blurred(uW, uv, 1.2 + uBlur * 1.6), clamp(uBlur * 1.4, 0.0, 1.0));
-  vec3 bw = bloom(uW, uv);
+  if (uBlur > 0.001) w = mix(w, blurred(uW, uvw, 1.2 + uBlur * 1.6), clamp(uBlur * 1.4, 0.0, 1.0));
+  vec3 bw = bloom(uW, uvw);
   w += max(bw - 0.5, 0.0) * uBloom * 1.3 + bw * uBloom * 0.08;
   w *= (1.0 - uDim);
   // saturation / tint grade
@@ -104,7 +108,7 @@ void main(){
 export class Post {
   constructor(canvas) {
     this.canvas = canvas;
-    this.p = { blur: 0, bloom: 0.75, warp: 0, dim: 0, fade: 0, vig: 0.55, uiGlow: 0.55, sat: 1, tint: [1, 1, 1], rip: [0.5, 0.5, 0, 0], flash: [1, 1, 1, 0] };
+    this.p = { blur: 0, bloom: 0.75, warp: 0, dim: 0, fade: 0, vig: 0.55, uiGlow: 0.55, sat: 1, tint: [1, 1, 1], rip: [0.5, 0.5, 0, 0], flash: [1, 1, 1, 0], zoom: [0.5, 0.5, 1], zoomTo: [0.5, 0.5] };
     let gl = null;
     const noGL = typeof location !== 'undefined' && /[?&]gl=0/.test(location.search);
     if (!noGL) try { gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, powerPreference: 'high-performance' }); } catch (e) { gl = null; }
@@ -152,7 +156,7 @@ export class Post {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128, 128, 0, 128]));
     this.u = {};
-    for (const n of ['uW', 'uU', 'uN', 'uWater', 'uRes', 'uTime', 'uBlur', 'uBloom', 'uWarp', 'uDim', 'uFade', 'uVig', 'uUIGlow', 'uSat', 'uRip', 'uFlash', 'uTint']) this.u[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['uW', 'uU', 'uN', 'uWater', 'uRes', 'uTime', 'uBlur', 'uBloom', 'uWarp', 'uDim', 'uFade', 'uVig', 'uUIGlow', 'uSat', 'uRip', 'uFlash', 'uTint', 'uZoom', 'uZoomTo']) this.u[n] = gl.getUniformLocation(prog, n);
     return true;
   }
 
@@ -206,6 +210,8 @@ export class Post {
     gl.uniform4f(u.uRip, ...p.rip);
     gl.uniform4f(u.uFlash, ...p.flash);
     gl.uniform3f(u.uTint, ...p.tint);
+    gl.uniform3f(u.uZoom, ...p.zoom);
+    gl.uniform2f(u.uZoomTo, ...p.zoomTo);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 }

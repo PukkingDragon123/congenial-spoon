@@ -26,9 +26,9 @@ with the song.
 4. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a fat seal dressed as Cupid sitting on a rock in the middle, anemones, clownfish families and schools of fish. He's already there at the glass. She walks in past him, he spots her ("!" with anime focus lines) and can't keep still, jumping around, then comes over and they shake hands, and they watch the reef together.
 5. **The walk** (0:42): along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
 6. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
-7. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
+7. **Message in a bottle** (1:31): a bottle sinks to the glass and a long letter unrolls over the second verse, scrolling as it's written, with a little gift at the end: three songs (Blue Hair by TV Girl, Harvey by Her's, Lovefool by The Cardigans) that open in Spotify. They stay available after the story under *♫ songs*.
 8. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
-9. **The question**: he brings out a little clam like a ring box; it opens on a glowing pearl as the question appears.
+9. **The question**: the view closes in on the two of them; he goes down on one knee and brings out a little clam like a ring box. It opens on a pearl ring, twinkling, and she covers her mouth.
 10. **Finale**: when she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates. Dolphins and seahorses swim a heart around the couple, and all the fish come to the middle of the window to spell *I*, then *LOVE*, then *YOU*, over and over: the letters light up as they settle, and between words the whole crowd breaks off and circles round before it regroups. A whale shark glides past, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
 ### After the story
