@@ -12,7 +12,7 @@ export const CONFIG = {
 
   // Title card shown before diving in
   title: 'Very Cool Aquarium Game',
-  subtitle: 'a little underwater adventure',
+  subtitle: 'a very cool aquarium game',
   tapToBegin: 'tap to dive in',
 
   // Written by the fish school in the tank (keep it short: 2-10 characters
