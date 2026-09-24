@@ -54,8 +54,10 @@ const CHARM_SPR = {
   tree: ['G.G.G', 'GGtGG', '.ttt.', '.tKt.', '.ttt.', '.t.t.'],
   // the notebook's special prize: a pearl in an open clam
   pearl: ['.eee.', 'eEEEe', 'eEwEe', 'eEEEe', 'ccccc', '.ccc.'],
+  // the photo quest prize: a little fish-headed guy in a blue work polo
+  fishguy: ['...s...', '..sss..', '..sKs..', '..sss..', '..sqs..', 'snnwnns', 'snnnnns', '.nnInn.', '.nnnnn.', '.sssss.', '..s.s..'],
 };
-const CHARM_COL = { ...SPR_COL, g: '#b8dc3a', G: '#5cae3e', t: '#b27e54', c: '#e8a8c8', w: '#ffffff', e: '#c8b0d8', E: '#fff4fa' };
+const CHARM_COL = { ...SPR_COL, s: '#d4d8e0', q: '#e89aa0', n: '#2a4a9a', I: '#e8f4ff', g: '#b8dc3a', G: '#5cae3e', t: '#b27e54', c: '#e8a8c8', w: '#ffffff', e: '#c8b0d8', E: '#fff4fa' };
 export const CHARMS = { heart: 15, star: 15, bell: 20, fish: 20, jelly: 30, bean: 45, tree: 60 };
 
 export const PENS = ['#ffffff', '#1a1020', '#ff5a8a', '#ffcf4a', '#5ad08a', '#4aa8ff', '#a07aff', '#ff8a3a', '#8a5a34'];

@@ -262,7 +262,10 @@ export class Gallery {
       ctx.fillStyle = on ? '#2aa8c8' : '#d4f1f6'; ctx.fillRect(x, y, w, h);
       drawText(ctx, c.k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#1e6a84' });
     }
-    { const [x, y, w, h] = L.saveR; ctx.fillStyle = '#ff6a9a'; ctx.fillRect(x, y, w, h); drawText(ctx, 'save postcard', x + w / 2, y + 2, { align: 'center', color: '#ffffff' }); }
+    { const [x, y, w, h] = L.saveR; ctx.fillStyle = '#ff6a9a'; ctx.fillRect(x, y, w, h); drawText(ctx, 'save postcard', x + w / 2, y + 2, { align: 'center', color: '#ffffff' });
+      // a little note next to it
+      const nx = L.saveR[1] === L.chips[0].r[1] ? null : L.px + 6;
+      if (nx != null) drawText(ctx, fit('you made this. save it as a souvenir', x - nx - 6), nx, y + 2, { color: '#1e6a84' }); }
     for (const it of this.options(L)) {
       const [x, y, w, h] = it.r;
       if (it.kind === 'btn') { ctx.fillStyle = '#ff6a9a'; ctx.fillRect(x, y + 1, w, 11); drawText(ctx, it.label, x + w / 2, y + 3, { align: 'center', color: '#ffffff' }); continue; }

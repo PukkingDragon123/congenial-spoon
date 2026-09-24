@@ -91,6 +91,22 @@ photograph. Two octopuses creep around the reef sand and jet up when you tap
 them. The seahorses in the finale are smaller and come in pink, teal,
 yellow, purple and orange.
 
+### Pufferfish, statues and keychains
+
+- Three pufferfish potter around the front of the big tank. Tap one or
+  take its photo and it gets cross: it puffs up into a spiky ball, bounces
+  around like one with a little anger mark and steam, then calms down.
+  Finishing its jigsaw wins a puffed-up pufferfish keychain.
+- Finishing the first photo quest wins the fish guy keychain (a little
+  fish-headed guy in a blue work polo), clipped straight onto your camera.
+- The big tank's centrepiece is now a round little stone statue dressed as
+  the Statue of Liberty (crown, torch, tablet, plinth). The Buddha has moved
+  over to the right-hand side, and the reef's seal Cupid is all stone now.
+- When she snaps a photo she strikes a pose: a peace sign, a lean, a head
+  tilt, an arm up, a hand on her hip or a one-handed wave. A selfie gets its
+  own pose, camera held out at arm's length, with hearts and sparkles.
+- Postcards and the board say you can tap save to keep them as souvenirs.
+
 ### The gallery
 
 Every photo lands in a cardboard **photo box** under a cork board. Drag

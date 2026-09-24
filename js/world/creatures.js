@@ -3,7 +3,7 @@ import { TAU, clamp, lerp, R } from '../util.js';
 import { glowSprite } from './fx.js';
 import { SPECIES, fishSprite, PITCHES } from '../art/fish.js';
 import { diverSprite, DIVER_FRAMES, treeSprite, TREE_FRAMES } from '../art/divers.js';
-import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES, renderJelly, JELLY_FRAMES, renderCrab, CRAB_FRAMES } from '../art/creatures.js';
+import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES, renderJelly, JELLY_FRAMES, renderCrab, CRAB_FRAMES, renderPuffer, PUFF_FRAMES } from '../art/creatures.js';
 
 export const DEPTH_PX = 120; // how many "pixels" of distance one unit of z represents for steering
 
@@ -474,5 +474,74 @@ export class TreeFriend {
     ctx.setTransform((1 + sq) * Math.cos(sway), Math.sin(sway), -Math.sin(sway), (1 - sq) * Math.cos(sway), Math.round(sx), Math.round(sy + hop));
     ctx.drawImage(img, -img.ox, -img.oy);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+}
+
+// A pufferfish. It potters about near its home; tap it or take its photo and
+// it gets cross: it puffs up into a spiky ball, bounces about like one for a
+// few seconds with a little anger mark and steam, then slowly lets it out.
+export class Puffer {
+  constructor(o) {
+    this.kind = 'puffer';
+    this.x = o.x; this.y = o.y; this.z = o.z; this.home = [o.x, o.y];
+    this.len = 16; this.hitDY = 0;
+    this.t = R() * 10; this.face = R() < 0.5 ? -1 : 1;
+    this.puff = 0; this.mad = 0; this.vx = 0; this.vy = 0; this.spin = 0;
+    this.goal = [o.x, o.y];
+  }
+  react() {
+    if (this.mad <= 0) { this.vx = (R() - 0.5) * 60; this.vy = -30 - R() * 20; }
+    this.mad = 5;
+  }
+  update(dt, aq) {
+    this.t += dt;
+    this.mad = Math.max(0, this.mad - dt);
+    const want = this.mad > 0.6 ? 1 : 0;
+    this.puff += (want - this.puff) * Math.min(1, dt * (want ? 9 : 1.2));
+    if (this.puff > 0.5) {
+      // a ball: sinks a little, bounces off the sand and rolls
+      this.vy += 25 * dt;
+      this.x += this.vx * dt; this.y += this.vy * dt;
+      const fl = aq.floorY(this.z) - 10;
+      if (this.y > fl) { this.y = fl; this.vy = -Math.abs(this.vy) * 0.7 - 6; }
+      if (Math.abs(this.x - this.home[0]) > 120) { this.vx = -this.vx; this.x = this.home[0] + Math.sign(this.x - this.home[0]) * 120; }
+      this.vx *= 1 - dt * 0.3;
+      this.spin += this.vx * dt / 8;
+    } else {
+      // pottering: little hops towards a new spot now and then
+      if (R() < dt * 0.3 || Math.hypot(this.goal[0] - this.x, this.goal[1] - this.y) < 4) this.goal = [this.home[0] + (R() - 0.5) * 120, this.home[1] + (R() - 0.5) * 40];
+      const dx = this.goal[0] - this.x, dy = this.goal[1] - this.y, d = Math.hypot(dx, dy) || 1;
+      this.x += (dx / d) * 9 * dt; this.y += (dy / d) * 6 * dt;
+      if (Math.abs(dx) > 2) this.face = dx > 0 ? 1 : -1;
+      this.spin *= 1 - dt * 4;
+      this.vx = 0; this.vy = 0;
+    }
+  }
+  draw(ctx, aq) {
+    const [sx, sy] = aq.toScreen(this.x, this.y, this.z);
+    const S = Math.max(8, Math.round(16 * (1 - this.z * 0.5)));
+    const img = renderPuffer(S, Math.floor(this.t * 8) % PUFF_FRAMES, this.puff, this.mad > 0);
+    const bob = this.puff > 0.5 ? 0 : Math.sin(this.t * 3) * 1.2;
+    ctx.save();
+    ctx.translate(Math.round(sx), Math.round(sy + bob));
+    ctx.rotate(this.puff > 0.5 ? this.spin : 0);
+    ctx.scale(-this.face, 1);
+    ctx.drawImage(img, -img.ox, -img.oy);
+    ctx.restore();
+    if (this.mad > 0) {
+      // the cross little anger mark, and puffs of steam
+      const ax = Math.round(sx + S * 0.55), ay = Math.round(sy - S * 0.75 - Math.abs(Math.sin(this.t * 8)) * 2);
+      const k = 1 + Math.round(Math.sin(this.t * 12) * 0.5 + 0.5);
+      ctx.fillStyle = '#ff2a3a';
+      for (const [dx, dy] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) { ctx.fillRect(ax + dx * k - (dx < 0 ? 1 : 0), ay + dy * k, 2, 1); ctx.fillRect(ax + dx * k, ay + dy * k - (dy < 0 ? 1 : 0), 1, 2); }
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 3; i++) {
+        const q = ((this.t * 1.5 + i / 3) % 1), px = sx - S * 0.4 - q * 6 + i * 3, py = sy - S * 0.6 - q * 10;
+        ctx.globalAlpha = 0.7 * (1 - q);
+        ctx.fillRect(Math.round(px), Math.round(py), 2 + (i % 2), 2);
+      }
+      ctx.globalAlpha = 1;
+    }
   }
 }

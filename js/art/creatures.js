@@ -465,6 +465,61 @@ export function renderOctopus(S, frame, swim = 0) {
   });
 }
 
+// A pufferfish, nose left: a chubby yellow body covered in dark spots with a
+// white belly, a little fan tail and fluttering fins. puff 0..1 blows it up
+// into a round spiky ball; angry adds cross little brows.
+export const PUFF_FRAMES = 6;
+export function renderPuffer(S, frame, puff = 0, angry = 0) {
+  const pq = Math.round(puff * 4) / 4;
+  return cached(`puff|${S}|${frame}|${pq}|${angry ? 1 : 0}`, () => {
+    const ph = (frame / PUFF_FRAMES) * TAU;
+    const W = Math.ceil(S * 1.9), H = Math.ceil(S * 1.6), cx = W / 2 + S * 0.08 * (1 - pq), cy = H / 2;
+    const rx = S * (0.55 + 0.2 * pq), ry = S * (0.38 + 0.37 * pq);
+    const buf = new Buf(W, H);
+    const YEL = [[150, 96, 8], [214, 150, 10], [246, 196, 22], [255, 220, 60], [255, 238, 140]];
+    const WHT = [[170, 170, 160], [220, 220, 210], [248, 246, 236], [255, 255, 250]];
+    // tail
+    const tx = cx + rx - 1;
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      const u = (px + 0.5 - tx) / (S * 0.32), v = (py + 0.5 - cy) / (S * 0.3);
+      if (u > 0 && u < 1 && Math.abs(v) < u * (0.9 + Math.sin(ph) * 0.15)) buf.set(px, py, YEL[(px + py) % 3 ? 2 : 1], 230);
+    }
+    // body
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      const x = (px + 0.5 - cx) / rx, y = (py + 0.5 - cy) / ry, r = x * x + y * y;
+      if (r > 1) continue;
+      const l = 0.5 - y * 0.35 - x * 0.2 + (1 - r) * 0.4 + (bayer(px, py) - 0.5) * 0.2;
+      const belly = y > 0.25 - x * 0.1;
+      let col = belly ? WHT[clamp(Math.round(l * 3.2), 0, 3)] : YEL[clamp(Math.round(l * 4.2), 0, 4)];
+      // spots
+      // round leopard spots on a jittered grid
+      const gs = Math.max(3, S * 0.2), gx = Math.floor(px / gs), gy = Math.floor(py / gs);
+      const sx0 = (gx + 0.3 + hash2(gx, gy, 3) * 0.4) * gs, sy0 = (gy + 0.3 + hash2(gx, gy, 5) * 0.4) * gs;
+      if (!belly && r < 0.92 && hash2(gx, gy, 9) < 0.75 && Math.hypot(px + 0.5 - sx0, py + 0.5 - sy0) < gs * 0.28 + 0.4) col = [84, 44, 10];
+      buf.set(px, py, col);
+    }
+    // spikes when puffed
+    if (pq > 0.2) for (let k = 0; k < 18; k++) {
+      const a = (k / 18) * TAU, bx = cx + Math.cos(a) * rx, by = cy + Math.sin(a) * ry;
+      for (let i = 0; i < 2 + pq * 2; i++) buf.set(Math.round(bx + Math.cos(a) * i), Math.round(by + Math.sin(a) * i), Math.sin(a) > 0.3 ? [230, 230, 220] : [200, 150, 30]);
+    }
+    // fin
+    const fx = cx + rx * 0.15, fy = cy + ry * 0.1;
+    for (let i = 0; i < 4; i++) buf.set(Math.round(fx + i * 0.6), Math.round(fy - 1 + Math.sin(ph * 2 + i) * 1.2 + i * 0.3), [255, 236, 140], 220);
+    // eye, brows and mouth
+    const ex = Math.round(cx - rx * 0.52), ey = Math.round(cy - ry * 0.28), er = Math.max(1, Math.round(S * 0.09));
+    for (let j = -er - 1; j <= er + 1; j++) for (let i = -er - 1; i <= er + 1; i++) { const d = Math.hypot(i, j); if (d <= er + 0.9) buf.set(ex + i, ey + j, d > er ? [255, 255, 240] : [16, 12, 20]); }
+    buf.set(ex - Math.ceil(er / 2), ey - Math.ceil(er / 2), [255, 255, 255]);
+    if (angry) for (let i = 0; i < 4; i++) buf.set(ex - 2 + i, ey - 3 + Math.floor(i / 2), [40, 20, 10]);
+    const mx = Math.round(cx - rx + 1), my = Math.round(cy + ry * 0.15);
+    buf.set(mx, my, angry ? [200, 60, 60] : [220, 110, 80]); buf.set(mx + 1, my + (angry ? 0 : 1), [220, 110, 80]);
+    edgePass(buf, [255, 250, 210]);
+    const c = buf.toCanvas();
+    c.ox = Math.round(cx); c.oy = Math.round(cy);
+    return c;
+  });
+}
+
 // ------------------------------------------------------------------ crab --
 // Front view, feet on the ground. frame = leg cycle, claw 0 (down) .. 2 (up
 // and waving). Origin (ox, oy) is centre of the feet line.

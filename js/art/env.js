@@ -321,6 +321,11 @@ export function genStatue() {
       }
     }
   }
+  return shadeStone(W, Ht, heights, mask, mossy);
+}
+
+// Lights a carved height field as mossy stone (shared by the statues).
+function shadeStone(W, Ht, heights, mask, mossy) {
   // Cavity (ambient occlusion) from blurred height
   const blur = new Float32Array(W * Ht);
   const R = 3;
@@ -362,6 +367,121 @@ export function genStatue() {
   }
   const c = buf.toCanvas();
   c.light = light.toCanvas();
+  return c;
+}
+
+
+// The main tank's centrepiece: a round little candy character dressed as the
+// Statue of Liberty, crown of spikes, torch held high, a tablet in the other
+// arm and a draped robe, standing on a stepped plinth. All carved in stone.
+export function genLiberty() {
+  const W = 132, Ht = 214, cx = 66;
+  const heights = new Float32Array(W * Ht), mask = new Uint8Array(W * Ht), mossy = new Float32Array(W * Ht);
+  const g = (x, y, mx, my, sx, sy) => Math.exp(-(((x - mx) / sx) ** 2) - (((y - my) / sy) ** 2));
+  const seg = (x, y, ax, ay, bx, by, r, hh) => {
+    const vx = bx - ax, vy = by - ay, t = clamp(((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy));
+    const d = Math.hypot(x - ax - vx * t, y - ay - vy * t);
+    return d < r ? hh * Math.sqrt(1 - (d / r) ** 2) + 4 : -1;
+  };
+  const by0 = 104, bry = 36, brx = 31; // the round body
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+    const X = x + 0.5, dx = X - cx, adx = Math.abs(dx);
+    let h = -1;
+    // plinth: two steps and a block with a doorway
+    if (y >= 176) {
+      const step = y >= 204 ? 40 : y >= 196 ? 34 : 28;
+      if (adx < step) {
+        let ph = 10 - (adx / step) * 3;
+        if (y < 196 && y > 186 && adx < 7) ph -= 5; // doorway
+        if (y === 184 || y === 196 || y === 204) ph -= 1.5;
+        if (y > 178 && y < 183 && adx < 22 && adx % 6 < 3) ph += 1; // little windows
+        h = Math.max(h, ph);
+      }
+    }
+    // robe falling from the body down to the plinth
+    if (y > 120 && y < 178) {
+      const t = (y - 120) / 58, hw = 30 - t * 6;
+      if (adx < hw) {
+        let rh = 13 * Math.sqrt(1 - (dx / hw) ** 2);
+        const fold = ((X * 0.6 + y * 0.35 + 30) % 6);
+        rh += fold < 1.3 ? -1.4 : fold < 3 ? 0.6 : 0;
+        h = Math.max(h, rh);
+      }
+    }
+    // body / face
+    const bx = dx / brx, byy = (y - by0) / bry, br = bx * bx + byy * byy;
+    if (br < 1) {
+      let bh = 22 * Math.sqrt(1 - br);
+      // big eyes: bulging whites with carved pupils and lids
+      for (const sd of [-1, 1]) {
+        const ex = cx + sd * 10, ey = 92;
+        const e = Math.hypot((X - ex) / 6.5, (y - ey) / 8);
+        if (e < 1) { bh += 2.6 * Math.sqrt(1 - e * e); if (Math.hypot((X - ex - sd * 1.5) / 2.2, (y - ey - 1) / 2.8) < 1) bh -= 2.2; }
+        if (Math.abs(y - (ey - 8.5 + 0.08 * (X - ex) ** 2)) < 0.8 && Math.abs(X - ex) < 7) bh += 1.6; // lash line
+        if (Math.abs(y - (ey - 12 - 0.04 * (X - ex) ** 2 - sd * (X - ex) * 0.15)) < 0.9 && Math.abs(X - ex) < 6) bh += 1.8; // brows
+      }
+      // smiling lips
+      const my = 116 - 0.045 * dx * dx;
+      if (adx < 13) {
+        bh += 2.4 * Math.exp(-(((y - my + 1.8) / 1.5) ** 2)) * (1 - adx / 14);
+        bh += 3 * Math.exp(-(((y - my - 2) / 1.8) ** 2)) * (1 - adx / 12);
+        if (Math.abs(y + 0.5 - my) < 0.6) bh -= 2.2;
+      }
+      // robe draped across from one shoulder
+      if (y > 118 - dx * 0.5) { const f = ((X + y * 0.8) % 7); bh += 2 + (f < 1.2 ? -1.2 : 0); }
+      h = Math.max(h, bh);
+    }
+    // crown band and seven spikes
+    if (y > 64 && y < 74 && adx < 26 - Math.abs(y - 69) * 0.5) h = Math.max(h, 24 - adx * 0.2 + (Math.abs(y - 69) < 1 ? 1 : 0));
+    for (let k = 0; k < 7; k++) {
+      const a = -Math.PI / 2 + (k - 3) * 0.36, bxs = cx + Math.cos(a) * 20, bys = 66 + Math.sin(a) * 4;
+      const tx = cx + Math.cos(a) * 44, ty = 70 + Math.sin(a) * 36;
+      const vx = tx - bxs, vy = ty - bys, t = clamp(((X - bxs) * vx + (y - bys) * vy) / (vx * vx + vy * vy));
+      const d = Math.hypot(X - bxs - vx * t, y - bys - vy * t), r = 3.6 * (1 - t) + 0.6;
+      if (d < r) h = Math.max(h, 12 * (1 - t) + 10 + (1 - d / r) * 3);
+    }
+    // raised arm with the torch (viewer's left)
+    h = Math.max(h, seg(X, y, cx - 26, 104, cx - 38, 62, 5.5, 8));
+    h = Math.max(h, seg(X, y, cx - 38, 62, cx - 42, 36, 4.5, 7));
+    const hand = Math.hypot((X - (cx - 42)) / 5.5, (y - 34) / 5);
+    if (hand < 1) h = Math.max(h, 10 * Math.sqrt(1 - hand * hand) + 6);
+    // torch handle, cup and flame
+    if (Math.abs(X - (cx - 43)) < 2.4 && y > 16 && y < 34) h = Math.max(h, 9);
+    if (y > 12 && y < 19 && Math.abs(X - (cx - 43)) < 6 - (19 - y) * 0.3) h = Math.max(h, 11 + ((X | 0) % 2));
+    { const fy = (y - 6) / 8, fx = (X - (cx - 43)) / (5.5 * (1 - Math.max(0, -fy) * 0.9));
+      if (y < 13 && fy > -1.1 && Math.abs(fx) < 1) h = Math.max(h, 12 * Math.sqrt(1 - fx * fx) + 6 + Math.sin(y * 1.3 + X) * 1.2); }
+    // the other arm hugging a tablet (viewer's right)
+    if (X > cx + 18 && X < cx + 46 && y > 96 && y < 142) {
+      const u = X - (cx + 18) - (y - 96) * 0.12;
+      if (u > 2 && u < 26) { let th = 17; if (y < 99 || u < 3.5 || u > 24.5) th += 1.2; if (Math.abs(y - 108) < 0.7 && u > 6 && u < 22) th -= 1.2; h = Math.max(h, th); }
+    }
+    const hand2 = Math.hypot((X - (cx + 20)) / 5.5, (y - 126) / 5);
+    if (hand2 < 1) h = Math.max(h, 12 * Math.sqrt(1 - hand2 * hand2) + 12);
+    if (h > 0) {
+      h += (fbm(X * 0.2, y * 0.2, 61, 3) - 0.5) * 1.8;
+      heights[y * W + x] = h; mask[y * W + x] = 1;
+      mossy[y * W + x] = fbm(X * 0.09, y * 0.09, 67, 3);
+    }
+  }
+  return shadeStone(W, Ht, heights, mask, mossy);
+}
+
+// Turns any sprite into carved stone: its shading is kept, its colours are
+// swapped for the tank's blue-grey stone, with a little speckle.
+export function toStone(img) {
+  const c = makeCanvas(img.width, img.height);
+  c.ctx.drawImage(img, 0, 0);
+  const id = c.ctx.getImageData(0, 0, c.width, c.height), d = id.data;
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+    const i = (y * c.width + x) * 4;
+    if (!d[i + 3]) continue;
+    const l = (d[i] * 0.3 + d[i + 1] * 0.55 + d[i + 2] * 0.15) / 255;
+    const n = (noise2(x * 0.7, y * 0.7, 77) - 0.5) * 0.9 + (bayer(x, y) - 0.5) * 0.7;
+    const col = STONE[clamp(Math.round(1.5 + Math.pow(l, 0.8) * 8.5 + n), 0, STONE.length - 1)];
+    d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+  }
+  c.ctx.putImageData(id, 0, 0);
+  c.ox = img.ox; c.oy = img.oy;
   return c;
 }
 

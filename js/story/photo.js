@@ -26,7 +26,7 @@ const TABS = ['gallery', 'notebook', 'camera'];
 export const SPECIES = {
   jelly: ['Moon Jelly', 1], clown: ['Clownfish', 1], tang: ['Blue Tang', 1], butterfly: ['Butterfly', 1],
   snapper: ['Snapper', 1], minnow: ['Minnow', 1], trevally: ['Trevally', 1], crab: ['Crab', 1], me: ['Just Me', 1],
-  nettle: ['Sea Nettle', 2], batfish: ['Batfish', 2], giant: ['Giant GT', 2], grouper: ['Grouper', 2],
+  puffer: ['Pufferfish', 2], nettle: ['Sea Nettle', 2], batfish: ['Batfish', 2], giant: ['Giant GT', 2], grouper: ['Grouper', 2],
   comb: ['Comb Jelly', 2], crystal: ['Crystal Jelly', 2], manowar: ['Man o\' War', 3], octopus: ['Octopus', 3],
   bigjelly: ['Giant Jelly', 3], shark: ['Sand Tiger', 3], reefshark: ['Reef Shark', 3], ray: ['Stingray', 3], turtle: ['Sea Turtle', 3],
   whaleshark: ['Whale Shark', 4], bean: ['Mameshiba', 4], dolphin: ['Dolphin', 4], seahorse: ['Seahorse', 3], treefriend: ['Tree Friend', 4], us: ['Us Two', 4],
@@ -298,6 +298,12 @@ export class PhotoMode {
     const [ux, uy] = st.toScreen(st.coupleX + (cp.apart ? gh + cp.girlDX : 0), st.coupleY - 40, 0);
     const together = !cp.apart && cp.girlOn !== false && s.songT > 33;
     see(together ? 'us' : 'me', ux, uy);
+    // a selfie! she holds the camera out at arm's length, with hearts
+    if (found.has('me') || found.has('us')) {
+      cp.selfieK = 2.2;
+      if (s.anime && s.headAt) s.anime.emote(s.headAt('girl'), '♥', 1.3, '#ff5a8a');
+      for (let i = 0; i < 8; i++) { const a = R() * TAU; s.fx.add({ kind: 'spark', x: ux + Math.cos(a) * 14, y: uy - 16 + Math.sin(a) * 10, vx: Math.cos(a) * 20, vy: -20 - R() * 15, drag: 2, age: 0, life: 0.8 + R() * 0.4, size: 1 + (R() * 2 | 0), col: R() < 0.5 ? '#ff8ab4' : '#fff4b0' }); }
+    }
     // score it
     const list = [...found.values()].sort((a, b) => SPECIES[b.key][1] - SPECIES[a.key][1] || a.d - b.d);
     const mult = FILM_MULT[this.levels.film] * this.model().mult;
@@ -916,7 +922,7 @@ export class PhotoMode {
       const w = button('undo', bx, y2, () => { C.stickers.pop(); this.camChanged(); });
       button('clear', bx + w + 4, y2, () => { C.stickers = []; this.camChanged(); });
     } else if (A.sub === 'charm') {
-      const prizes = C.charms.filter((id) => id.startsWith('k:') || id === 'pearl');
+      const prizes = C.charms.filter((id) => id.startsWith('k:') || id === 'pearl' || id === 'fishguy');
       flow([{ kind: 'charm', id: null }].concat(Object.keys(CHARMS).concat(prizes).map((id) => ({ kind: 'charm', id }))), 18, 3, by);
     } else if (A.sub === 'banner') {
       [null, ...SETS.map((S) => S.id)].forEach((id, i) => items.push({ kind: 'banner', id, r: [bx, by + i * 15, bw, 13] }));
@@ -1145,6 +1151,8 @@ export class PhotoMode {
     ctx.fillStyle = '#ff6a9a'; ctx.fillRect(bx, by, bw, 11);
     drawText(ctx, label, bx + bw / 2, by + 2, { align: 'center', color: '#ffffff' });
     this.cardBtn = [bx, by, bw, 11];
+    const note = 'tap save to keep the souvenir i made for you';
+    drawText(ctx, fit(note, bx - x - 10), x + 6, by + 2, { color: '#c2466e' });
   }
 
   // ---------------------------------------------------------- souvenirs --

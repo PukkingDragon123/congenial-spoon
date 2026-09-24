@@ -4,7 +4,7 @@
 // coordinates, camera, couple and effect hooks, so the story can drive any of
 // them the same way.
 import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm } from '../util.js';
-import { CX, tallExtra, genCaustics, genSand, genFormation } from '../art/env.js';
+import { CX, tallExtra, genCaustics, genSand, genFormation, toStone } from '../art/env.js';
 import { sealCupidSprite } from '../art/divers.js';
 import { Creature, Crab, School, addBuddy, TreeFriend } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
@@ -707,7 +707,7 @@ export class ReefRoom extends Room {
     // the centrepiece: a fat seal dressed up as Cupid, sitting on a rock
     step(() => {
       const z = 0.36, self = this;
-      const cu = { frames: [sealCupidSprite(0), sealCupidSprite(1)], x: CX + 8, z };
+      const cu = { frames: [toStone(sealCupidSprite(0))], x: CX + 8, z }; // all stone now
       this.cupid = cu;
       this.decor.push({ z, draw(ctx) { self.drawCupid(ctx, cu); } });
     });
@@ -774,13 +774,10 @@ export class ReefRoom extends Room {
   }
 
   drawCupid(ctx, cu) {
-    // it just sits there being a seal: a slow breath and the odd blink
-    const img = cu.frames[(this.t % 4.2) > 4.05 ? 1 : 0];
+    // a stone seal Cupid: it just sits there
+    const img = cu.frames[0];
     const [sx, sy] = this.toScreen(cu.x, this.floorY(cu.z) + 8, cu.z);
-    const br = 1 + Math.sin(this.t * 1.4) * 0.012;
-    ctx.setTransform(1, 0, 0, br, Math.round(sx), Math.round(sy));
-    ctx.drawImage(img, -img.ox, -img.oy);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(img, Math.round(sx) - img.ox, Math.round(sy) - img.oy);
   }
 
   drawAnemone(ctx, a) {

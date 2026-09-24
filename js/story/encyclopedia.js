@@ -4,7 +4,7 @@
 // finishing every animal from one tank earns that tank's camera banner.
 import { makeCanvas, clamp, bayer } from '../util.js';
 import { renderFish, fishSprite, SPECIES as FISH } from '../art/fish.js';
-import { renderJelly, renderComb, renderOctopus, OCTO_FRAMES, renderCrab, renderRay, renderTurtle, JELLY_FRAMES, CRAB_FRAMES, RAY_FRAMES, TURTLE_FRAMES } from '../art/creatures.js';
+import { renderJelly, renderComb, renderOctopus, OCTO_FRAMES, renderPuffer, PUFF_FRAMES, renderCrab, renderRay, renderTurtle, JELLY_FRAMES, CRAB_FRAMES, RAY_FRAMES, TURTLE_FRAMES } from '../art/creatures.js';
 import { diverSprite, treeSprite, DIVER_FRAMES, TREE_FRAMES } from '../art/divers.js';
 import { dolphinSprite, seahorseSprite, DOLPHIN_FRAMES } from '../world/friends.js';
 
@@ -15,6 +15,7 @@ export const NOTES = {
   jelly: ['bell up to 40 cm', 'plankton', 'coastal seas worldwide'],
   nettle: ['bell up to 50 cm', 'plankton, fish eggs, other jellies', 'the Pacific coast'],
   bigjelly: ['bell over 2 m', 'fish, plankton, other jellies', 'cold northern seas'],
+  puffer: ['up to 30 cm (more when puffed)', 'shellfish, snails, coral', 'warm reefs and lagoons'],
   comb: ['a few cm', 'plankton, fish eggs', 'every ocean, even the deep'],
   crystal: ['bell up to 25 cm', 'other jellies, plankton', 'the Pacific coast of North America'],
   manowar: ['float about 30 cm, tentacles 10 m+', 'small fish and shrimp', 'the warm open ocean surface'],
@@ -55,6 +56,12 @@ export const FACTS = {
     'Each tentacle is covered in thousands of tiny stingers.',
     'Leatherback sea turtles eat sea nettles, stings and all.',
     'Jellyfish aren\'t fish at all. Not even a little bit.',
+  ],
+  puffer: [
+    'When scared it gulps water and blows up to about three times its size.',
+    'Most pufferfish carry a toxin that is over a thousand times deadlier than cyanide.',
+    'Its teeth are fused into a beak strong enough to crack shells.',
+    "Puffing up is tiring, so please don't make it do it too much.",
   ],
   comb: [
     'Those rainbow lights are just sunlight bouncing off tiny beating hairs.',
@@ -218,7 +225,7 @@ export const FACTS = {
 export const SETS = [
   { id: 'jelly', name: 'Jelly Hall', keys: ['jelly', 'nettle', 'comb', 'crystal', 'bigjelly', 'manowar'], cols: ['#a878ff', '#ffd6f4'] },
   { id: 'reef', name: 'Coral Reef', keys: ['clown', 'tang', 'butterfly', 'crab', 'octopus'], cols: ['#ff7a2a', '#fff6ea'] },
-  { id: 'deep', name: 'Great Tank', keys: ['trevally', 'minnow', 'snapper', 'batfish', 'giant', 'grouper', 'shark', 'reefshark', 'ray', 'turtle'], cols: ['#2a78f0', '#a8e8ff'] },
+  { id: 'deep', name: 'Great Tank', keys: ['trevally', 'minnow', 'puffer', 'snapper', 'batfish', 'giant', 'grouper', 'shark', 'reefshark', 'ray', 'turtle'], cols: ['#2a78f0', '#a8e8ff'] },
   { id: 'legend', name: 'Legends', keys: ['whaleshark', 'bean', 'dolphin', 'seahorse', 'treefriend'], cols: ['#ffc830', '#ff5ac8'] },
   { id: 'us', name: 'Just Us', keys: ['me', 'us'], cols: ['#ff4a82', '#ffc8dc'] },
 ];
@@ -236,6 +243,7 @@ function animal(key) {
     case 'jelly': return renderJelly(22, 3, 'pink');
     case 'nettle': return renderJelly(16, 3, 'nettle');
     case 'bigjelly': return renderJelly(30, 3, 'violet');
+    case 'puffer': return renderPuffer(20, 0, 1);
     case 'comb': return renderComb(14, 2);
     case 'crystal': return renderJelly(22, 3, 'crystal');
     case 'manowar': return renderJelly(16, 3, 'manowar');
@@ -338,6 +346,7 @@ export function animalFrame(key, t, size = 'big') {
     case 'jelly': return renderJelly(big ? 22 : 12, f(JELLY_FRAMES, 8), 'pink');
     case 'nettle': return renderJelly(big ? 16 : 10, f(JELLY_FRAMES, 8), 'nettle');
     case 'bigjelly': return renderJelly(big ? 30 : 16, f(JELLY_FRAMES, 7), 'violet');
+    case 'puffer': return renderPuffer(big ? 20 : 10, f(PUFF_FRAMES, 8), (Math.floor(t / 3) % 2) ? 1 : 0);
     case 'comb': return renderComb(big ? 14 : 8, f(8, 10));
     case 'crystal': return renderJelly(big ? 22 : 12, f(JELLY_FRAMES, 8), 'crystal');
     case 'manowar': return renderJelly(big ? 16 : 9, f(JELLY_FRAMES, 6), 'manowar');

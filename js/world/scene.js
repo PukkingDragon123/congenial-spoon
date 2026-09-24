@@ -1,12 +1,12 @@
 // The Siam-aquarium panorama: parallax tank layers, creatures, light, glass,
 // the viewing hall, and the couple standing in front of the glow.
 import { TAU, clamp, lerp, smoothstep, R, rng, makeCanvas, ramp, bayer, Buf, heartPoint, hex } from '../util.js';
-import { genFormation, genStatue, genPillar, genSand, genCaustics, genKelp, KELP_FRAMES, genFarRidge, genFrame, genCeilTile, frameCurves, CX } from '../art/env.js';
+import { genFormation, genStatue, genLiberty, genPillar, genSand, genCaustics, genKelp, KELP_FRAMES, genFarRidge, genFrame, genCeilTile, frameCurves, CX } from '../art/env.js';
 import { warmLevel, queueVariants, SPECIES, fishSprite } from '../art/fish.js';
 import { queueWarm } from '../art/budget.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
 import { renderRay, RAY_FRAMES, renderTurtle, TURTLE_FRAMES } from '../art/creatures.js';
-import { Creature, School, Crab, sizeAt, addBuddy, TreeFriend } from './creatures.js';
+import { Creature, School, Crab, sizeAt, addBuddy, TreeFriend, Puffer } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { Couple } from '../art/people.js';
 
@@ -110,7 +110,7 @@ export class Aquarium {
     step(1, () => { this.ceilTile = genCeilTile(); });
     step(1, () => { this.sand = genSand(640, 48, 3); this.caustics = genCaustics(); });
     step(1, () => { this.farRidge = genFarRidge(2200, 120, 5); this.farRidge2 = genFarRidge(2000, 90, 9); });
-    step(1, () => { this.statue = genStatue(); });
+    step(1, () => { this.statue = genStatue(); this.liberty = genLiberty(); });
     const F = (o) => step(1, () => {
       const c = genFormation(o);
       this.props.push({ img: c, light: c.light, x: o.x, z: o.z, y: this.floorY(o.z) + (o.sink ?? 6) - c.height, caus: o.caus ?? 0.3 });
@@ -135,7 +135,11 @@ export class Aquarium {
       const crop = (c) => { const o = makeCanvas(c.width, c.height - sink); o.ctx.drawImage(c, 0, 0); return o; };
       const img = crop(this.statue);
       img.light = crop(this.statue.light);
-      this.props.push({ img, light: img.light, x: CX + 34 - img.width / 2, z, y: this.floorY(z) - img.height, caus: 0.22, statue: true });
+      // the Buddha has moved over to the right-hand side, half behind the rocks
+      this.props.push({ img, light: img.light, x: CX + 560 - img.width / 2, z: 0.7, y: this.floorY(0.7) - img.height, caus: 0.22, statue: true });
+      // and the stone Statue of Liberty stands in the middle
+      const lib = this.liberty;
+      this.props.push({ img: lib, light: lib.light, x: CX + 34 - lib.width / 2, z, y: this.floorY(z) + 6 - lib.height, caus: 0.22, statue: true });
     });
     // mid massifs framing the view (like the reference)
     F({ x: CX - 540, z: 0.46, w: 380, h: 262, seed: 31, profile: (x) => 0.97 - Math.abs(x - 0.42) ** 1.8 * 1.6 + 0.04 * Math.sin(x * 17), size: [16, 48], caus: 0.2, taper: [0.14, 0.12] });
@@ -244,6 +248,8 @@ export class Aquarium {
     for (let i = 0; i < 36; i++) add(new Creature(r() < 0.7 ? 'trevally' : 'snapper', { x: CX + (r() - 0.5) * 1400, y: 90 + r() * 130, z: 0.88 + r() * 0.1, len: 30, speed: 10 + r() * 8, anim: 6, dir: r.sign() }));
     this.trev = trev;
     this.bait = bait;
+    // pufferfish pottering about near the front
+    for (const [px, py, pz] of [[CX - 150, 230, 0.12], [CX + 190, 210, 0.2], [CX - 330, 200, 0.28]]) add(new Puffer({ x: px, y: py, z: pz }));
     // crabs on the sand
     this.crabs = [];
     for (let i = 0; i < 14; i++) this.crabs.push(add(new Crab({ x: CX + (r() - 0.5) * 700, z: 0.04 + r() * 0.3, size: 9 + r() * 4, bounds: [CX - 430, CX + 430] })));
@@ -252,6 +258,7 @@ export class Aquarium {
     this.creatures.push(new TreeFriend({ x: CX + Math.min(this.W / 2 - 34, 290), z: 0.03 }));
     // a warm halo behind the Buddha
     this.glows.push({ x: CX + 34, y: 150, z: 0.66, r: 70, col: '#ffe2a0', a: 0.16 });
+    this.glows.push({ x: CX + 560, y: 170, z: 0.72, r: 50, col: '#ffe2a0', a: 0.1 });
   }
 
   // ------------------------------------------------------------ resize --

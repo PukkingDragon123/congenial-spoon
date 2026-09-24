@@ -373,10 +373,15 @@ export class Couple {
   // A cute pose for the moment she takes a photo: a peace sign, a lean one
   // way or the other, a head tilt or a happy arm up. Blended by snapK.
   snapOpts(qx) {
+    const gsh = -2.4 - GIRL.leg - GIRL.torso, w = Math.sin(this.t * 16) * 0.6;
+    // a selfie: camera held up high at arm's length, head tilted, peace sign
+    const sk = Math.min(1, this.selfieK || 0);
+    if (sk > 0) return { cam: this.girlCam * (1 - sk), rhand: [qx + GIRL.sh + lerp(1, 6, sk), lerp(-GIRL.leg + 6, gsh - 15, sk)], lhand: [qx - GIRL.sh - lerp(1, 4, sk), lerp(-GIRL.leg + 6, gsh - 7 + w, sk)], tilt: 1.3 * sk, headX: 1.4 * sk };
     const k = Math.min(1, this.snapK);
     if (k <= 0) return {};
-    const gsh = -2.4 - GIRL.leg - GIRL.torso, w = Math.sin(this.t * 16) * 0.6;
-    switch (this.snapPose % 5) {
+    switch (this.snapPose % 7) {
+      case 5: return { lhand: [qx - GIRL.sh - 3, lerp(-GIRL.leg + 6, -GIRL.leg - 1, k)], sway: -0.8 * k, weight: -1.4 * k }; // one hand, other on her hip
+      case 6: return { lhand: [qx - GIRL.sh - lerp(1, 7, k) + Math.sin(this.t * 14) * 2 * k, lerp(-GIRL.leg + 6, gsh - 10, k)] }; // one hand, waving
       case 0: return { lhand: [qx - GIRL.sh - lerp(1, 5, k), lerp(-GIRL.leg + 6, gsh - 9 + w, k)] }; // peace!
       case 1: return { sway: -1.6 * k, tilt: -1.2 * k, headX: -2.2 * k, weight: -1.2 * k };
       case 2: return { sway: 1.6 * k, tilt: 1.2 * k, headX: 2.2 * k, weight: 1.2 * k };
