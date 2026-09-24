@@ -166,7 +166,9 @@ export const SETS = [
   { id: 'legend', name: 'Legends', keys: ['whaleshark', 'bean', 'dolphin', 'seahorse', 'treefriend'], cols: ['#ffc830', '#ff5ac8'] },
   { id: 'us', name: 'Just Us', keys: ['me', 'us'], cols: ['#ff4a82', '#ffc8dc'] },
 ];
-export const setOf = (key) => SETS.find((s) => s.keys.includes(key));
+// ...and the whole notebook: the golden Always banner (and a pearl keychain)
+SETS.push({ id: 'always', name: 'Always', keys: SETS.flatMap((q) => q.keys), cols: ['#ffd84a', '#fff6d0'] });
+export const setOf = (key) => SETS.find((s) => s.id !== 'always' && s.keys.includes(key));
 
 // ----------------------------------------------------------------- art --
 const PW = 64, PH = 46;          // jigsaw picture size

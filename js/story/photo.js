@@ -18,7 +18,7 @@ import {
 setPrizeArt({ keychain: keychainIcon, banner: drawBanner });
 
 const SUBTABS = ['model', 'paint', 'sticker', 'charm', 'banner', 'draw', 'upgrade'];
-const TABS = ['album', 'camera', 'encyclopedia'];
+const TABS = ['album', 'camera', 'notebook'];
 
 // key -> [name, rarity 1..4]
 export const SPECIES = {
@@ -142,7 +142,7 @@ export class PhotoMode {
 
   available() {
     const s = this.story;
-    return s.hud && s.photoReady && !s.title && !s.letter && !s.question && !s.buttons.length && !s.replay;
+    return s.hud && s.photoReady && !s.title && !s.letter && !s.question && !s.buttons.length;
   }
 
   wantsPointer([x, y]) {
@@ -265,6 +265,14 @@ export class PhotoMode {
     if (!C.charms.includes(out.keychain)) C.charms.push(out.keychain);
     const S = setOf(key);
     if (S && setDone(this.book, S) && !C.banners.includes(S.id)) { C.banners.push(S.id); out.banner = S; }
+    // the whole notebook: the golden Always banner and a pearl keychain
+    const all = SETS.find((q) => q.id === 'always');
+    if (all && setDone(this.book, all) && !C.banners.includes('always')) {
+      C.banners.push('always');
+      if (!C.charms.includes('pearl')) C.charms.push('pearl');
+      out.banner = all; out.pearl = true;
+      this.say('notebook complete! ✦ pearl + Always banner');
+    }
     return out;
   }
 
@@ -634,8 +642,8 @@ export class PhotoMode {
     if (this.hit(this.closeRect(), x, y)) { this.album = null; snd.sfx('pop'); return; }
     const tabs = this.tabRects();
     for (const k of TABS) if (this.hit(tabs[k], x, y)) { A.tab = k; snd.sfx('type'); return; }
-    if (A.tab === 'album' || A.tab === 'encyclopedia') {
-      const G = this.grid(), nav = this.navRects(), guide = A.tab === 'encyclopedia';
+    if (A.tab === 'album' || A.tab === 'notebook') {
+      const G = this.grid(), nav = this.navRects(), guide = A.tab === 'notebook';
       if (this.hit(nav.prev, x, y)) { A.page = (A.page + G.pages - 1) % G.pages; snd.sfx('type'); return; }
       if (this.hit(nav.next, x, y)) { A.page = (A.page + 1) % G.pages; snd.sfx('type'); return; }
       for (let i = 0; i < G.per; i++) {
@@ -666,7 +674,7 @@ export class PhotoMode {
     const found = ORDER.filter((k) => this.book[k]).length;
     if (pw > 150) drawText(ctx, `✦${this.points}`, cx - 6, py + 6, { align: 'right', color: '#c27a10' });
     if (A.tab === 'album') this.drawGrid(ctx, found);
-    else if (A.tab === 'encyclopedia') this.drawGuide(ctx);
+    else if (A.tab === 'notebook') this.drawGuide(ctx);
     else this.drawWorkshop(ctx);
     if (A.card) this.drawPostcard(ctx, A.card);
     if (A.entry) this.drawEntry(ctx, A.entry);
@@ -827,6 +835,7 @@ export class PhotoMode {
     const button = (label, x, y, act) => { const w = textWidth(label) + 8; items.push({ kind: 'btn', label, act, r: [x, y, w, 11] }); return w; };
     if (A.sub === 'model') {
       Object.keys(MODELS).forEach((k, i) => items.push({ kind: 'model', id: k, r: [bx, by + i * 18, bw, 16] }));
+      button('share my camera', bx, by + Object.keys(MODELS).length * 18 + 4, () => this.shareCamera());
     } else if (A.sub === 'paint') {
       const list = (slot) => Object.keys(PAINTS).map((id) => ({ kind: 'paint', slot, id }));
       items.push({ kind: 'label', label: 'body', r: [bx, by, 0, 0] });
@@ -840,7 +849,7 @@ export class PhotoMode {
       const w = button('undo', bx, y2, () => { C.stickers.pop(); this.camChanged(); });
       button('clear', bx + w + 4, y2, () => { C.stickers = []; this.camChanged(); });
     } else if (A.sub === 'charm') {
-      const prizes = C.charms.filter((id) => id.startsWith('k:'));
+      const prizes = C.charms.filter((id) => id.startsWith('k:') || id === 'pearl');
       flow([{ kind: 'charm', id: null }].concat(Object.keys(CHARMS).concat(prizes).map((id) => ({ kind: 'charm', id }))), 18, 3, by);
     } else if (A.sub === 'banner') {
       [null, ...SETS.map((S) => S.id)].forEach((id, i) => items.push({ kind: 'banner', id, r: [bx, by + i * 15, bw, 13] }));
@@ -1108,6 +1117,48 @@ export class PhotoMode {
     for (let a = 0; a < TAU; a += 0.2) x.fillRect(Math.round(stx - 4 * sk + Math.cos(a) * 9 * sk), Math.round(sty + 13 * sk + Math.sin(a) * 9 * sk), g, g);
     for (let i = 0; i < 3; i++) for (let j = 0; j < 20; j++) x.fillRect(Math.round(stx - 26 * sk + j * sk), Math.round(sty + 8 * sk + i * 5 * sk + Math.sin(j * 0.8) * sk), g, g);
     return c;
+  }
+
+  // Your camera design as a picture to show people: blown up big on a
+  // little card with its model, colours and prizes.
+  cameraCard() {
+    const k = 10, img = this.camImage(), C = this.cam, M = this.model();
+    const W = CAM_W * k + 160, H = CAM_H * k + 200;
+    const c = makeCanvas(W, H), x = c.ctx;
+    x.imageSmoothingEnabled = false;
+    x.fillStyle = '#f3e6c8'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#d9c49a'; for (let j = 10; j < H; j += 16) x.fillRect(0, j, W, 3);
+    x.fillStyle = 'rgba(60,40,20,0.25)'; x.fillRect(80 + 2 * k, 70 + (CAM_H - 2) * k, (CAM_W - 4) * k, 3 * k);
+    x.drawImage(img, 80, 70, CAM_W * k, CAM_H * k);
+    drawCharm(x, C.charm, 80 + img.lug[0] * k, 70 + img.lug[1] * k, 0.25, Math.round(k * 0.75));
+    drawText(x, 'my camera', W / 2, 20, { align: 'center', scale: 4, color: '#3a2a4a' });
+    const line = `${M.name} · ${C.body} & ${C.trim}${C.banner ? ' · ' + (SETS.find((q) => q.id === C.banner) || {}).name + ' banner' : ''}`;
+    drawText(x, line, W / 2, H - 70, { align: 'center', scale: 2, color: '#6a4a2a' });
+    drawText(x, `notebook ${ORDER.filter((q) => puzzleDone(this.book, q)).length}/${ORDER.length} · Very Cool Aquarium Game`, W / 2, H - 40, { align: 'center', scale: 2, color: '#a08060' });
+    return c;
+  }
+
+  async shareCamera() {
+    const c = this.cameraCard();
+    const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+    if (!blob) return;
+    const filename = 'my-camera.png';
+    // the system share sheet where there is one, otherwise save it
+    try {
+      const file = typeof File !== 'undefined' ? new File([blob], filename, { type: 'image/png' }) : null;
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'my camera' }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    const dl = await this.downloads();
+    if (dl) {
+      try { await dl.save({ filename, data: blob }); this.say('camera saved'); } catch (err) { if (!err || err.code !== 'declined') this.say('saving isn\'t available here'); }
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    this.say('camera saved');
   }
 
   // Resolves the claude.ai downloads capability, or null outside the viewer.

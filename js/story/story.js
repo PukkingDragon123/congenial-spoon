@@ -830,7 +830,12 @@ export class Story {
     this.chorus = true;
     aq.sendWave(CX - 800, 1, { speed: 820, amp: 6, width: 220, life: 3 });
     burstStars(aq.fx, words.center[0], words.center[1], 18, { speed: 80, size: 6 });
+    // he brings out a little clam, like a ring box
+    await this.atSong(142.6);
+    this.clam = { t: 0, open: 0, a: 0 };
+    { const K = this.clam; this.tween(0.6, (k) => { K.a = k; }, ease.outBack); this.sound.sfx('pop'); }
     await this.atSong(144.0);
+    { const K = this.clam; this.tween(0.9, (k) => { K.open = k; }, ease.outBack); this.sound.sfx('chime'); this.wait(0.5).then(() => { this.sound.sfx('sparkle'); K.shine = 1; }); }
     // the room goes quiet around them: a soft spotlight, hearts drifting up
     this.grade(2.5, { tint: [1.1, 0.95, 1.08], vig: 0.95, dim: 0.16, sat: 1.12 });
     this.heartRain = 0.5;
@@ -1022,6 +1027,7 @@ export class Story {
     this.tween(2.4, (k) => { p.rip[2] = k * 1.8; p.rip[3] = 1 - k; }, ease.outQuad).then(() => { p.rip[3] = 0; });
     burstHearts(this.fx, bx, by, 26, { speed: 110, spread: TAU, ay: -30, life: 2.6 });
     burstSparks(this.fx, bx, by, 40, { speed: 120 });
+    if (this.clam) { const K = this.clam, [px, py] = this.aq.toScreen(this.aq.coupleX, this.aq.coupleY - 50, 0); burstStars(this.fx, px, py, 16, { speed: 90, size: 5 }); this.tween(1.2, (k) => { K.a = 1 - k; }).then(() => { this.clam = null; }); }
     const Qf = this.question;
     this.tween(0.6, (k) => { for (const b of this.buttons) b.alpha = 1 - k; if (Qf) Qf.a = 1 - k; }).then(() => { this.buttons = []; this.question = null; });
     // release the fish words in a burst
@@ -1092,6 +1098,80 @@ export class Story {
     await this.wait(3);
     this.replay = { a: 0 };
     { const Rp = this.replay; this.tween(1, (k) => { Rp.a = k; }); }
+    this.startRoam();
+  }
+
+  // ------------------------------------------------------------- roam --
+  // After the confession the game stays open: walk the two of them along
+  // the glass (the arrows, or the arrow keys), wander from tank to tank, and
+  // keep filling the notebook.
+  startRoam() {
+    const c = this.aq.couple;
+    this.roam = { dir: 0, keys: new Set(), idle: 0, hint: 6 };
+    this.tween(1.2, (k) => { c.hug = 1 - k; }).then(() => { c.mode = 'back'; c.hold = 1; c.hug = 0; });
+    this.photoReady = true;
+    this.hud = true;
+  }
+  walkKey(dir, down) {
+    if (!this.roam) return;
+    const K = this.roam.keys;
+    if (down) K.add(dir); else K.delete(dir);
+    this.roam.dir = K.has(1) && !K.has(-1) ? 1 : K.has(-1) && !K.has(1) ? -1 : 0;
+  }
+  roamRects() { const s = 18, y = this.H - s - 22; return { left: [6, y, s, s], right: [6 + s + 4, y, s, s] }; }
+  // the tanks in walking order, left to right
+  roamOrder() { return [this.rooms.jelly, this.rooms.reef, this.aq].filter(Boolean); }
+  updateRoam(dt) {
+    const R = this.roam, st = this.stage, c = this.aq.couple;
+    if (R.hint > 0) R.hint -= dt;
+    if (this.trans || this.photo.album) return;
+    const dir = R.dir;
+    if (dir) {
+      if (c.mode !== 'walk') { c.mode = 'walk'; c.hold = 0; c.lean = 0; c.hug = 0; }
+      c.dir = dir;
+      const step = dir * 30 * dt;
+      st.coupleX += step;
+      c.walk += Math.abs(step) / 7.5;
+      c.moving += (1 - c.moving) * Math.min(1, dt * 5);
+      R.idle = 0;
+    } else if (c.mode === 'walk') {
+      c.moving *= Math.max(0, 1 - dt * 6);
+      R.idle += dt;
+      if (R.idle > 0.4) { c.mode = 'back'; c.dir = 1; c.hold = 1; c.moving = 0; }
+    }
+    this.camX += (st.coupleX - this.camX) * Math.min(1, dt * 2);
+    // off the end of this tank: on to the next one
+    const span = st === this.aq ? 470 : (st.span || 260) - 20;
+    const order = this.roamOrder(), i = order.indexOf(st);
+    const to = st.coupleX > CX + span ? order[i + 1] : st.coupleX < CX - span ? order[i - 1] : null;
+    if (to !== null && to !== undefined) {
+      const fromRight = st.coupleX < CX;
+      const toSpan = to === this.aq ? 470 : (to.span || 260) - 20;
+      this.sound.sfx('whoosh');
+      this.go(to, new Sweep(this.W, this.H, 1.8), () => {
+        this.setStage(to);
+        to.coupleX = fromRight ? CX + toSpan - 10 : CX - toSpan + 10;
+        this.camX = to.coupleX; to.cam.x = to.coupleX;
+      });
+    } else if (to === undefined || to === null) {
+      st.coupleX = clamp(st.coupleX, CX - span - 1, CX + span + 1);
+    }
+  }
+  drawRoam(ctx) {
+    const R = this.roam;
+    if (!R || this.photo.album) return;
+    const B = this.roamRects();
+    for (const [k, d] of [['left', -1], ['right', 1]]) {
+      const [x, y, w, h] = B[k], on = R.dir === d;
+      ctx.globalAlpha = on ? 0.95 : 0.7;
+      ctx.fillStyle = '#10142a'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+      ctx.fillStyle = on ? '#ff8ab4' : '#3a4a86'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#ffffff';
+      // a chunky pixel triangle pointing the way
+      for (let j = 0; j < 9; j++) { const w2 = 5 - Math.abs(j - 4); ctx.fillRect(d > 0 ? x + 6 : x + 12 - w2, y + 5 + j, w2, 1); }
+      ctx.globalAlpha = 1;
+    }
+    if (R.hint > 0) drawText(ctx, 'walk around and fill your notebook!', 6 + 44 + 4, B.left[1] + 5, { color: '#ffe38a', outline: '#1a1020', alpha: clamp(R.hint) });
   }
 
   // ------------------------------------------------------------ lyrics --
@@ -1246,6 +1326,7 @@ export class Story {
     this.anime.update(dt);
     this.photo.update(dt);
     if (this.quest) this.quest.update(dt);
+    if (this.roam) this.updateRoam(dt);
     this.dialog.update(dt);
     // she raises the camera to her eye when you do
     { const c = aq.couple, up = this.photo.on && !this.photo.album ? 1 : 0; c.girlCam += (up - c.girlCam) * Math.min(1, dt * 9); }
@@ -1330,11 +1411,20 @@ export class Story {
   // -------------------------------------------------------------- input --
   speakerRect() { return [this.W - 16, 6, 12, 11]; }
   speakerHover() { const [x, y, w, h] = this.speakerRect(); return this.showSpeaker && this.mouse[0] >= x && this.mouse[0] <= x + w && this.mouse[1] >= y && this.mouse[1] <= y + h; }
-  replayRect() { const w = textWidth('replay') + 14; return [this.W - w - 6, this.H - 16, w, 12]; }
+  // top left, clear of the camera once you can roam about
+  replayRect() { const w = textWidth('replay') + 14; return [6, 6, w, 12]; }
   replayHover() { const [x, y, w, h] = this.replayRect(); return this.mouse[0] >= x && this.mouse[0] <= x + w && this.mouse[1] >= y && this.mouse[1] <= y + h; }
 
   pointer(type, x, y) {
     this.mouse = [x, y];
+    // the walk arrows after the story: hold to walk
+    if (this.roam && !this.photo.album) {
+      if (type === 'up') this.walkKey(0, false), this.roam.keys.clear(), (this.roam.dir = 0);
+      if (type === 'down') {
+        const B = this.roamRects();
+        for (const [k, d] of [['left', -1], ['right', 1]]) if (this.photo.hit(B[k], x, y)) { this.roam.keys.clear(); this.walkKey(d, true); return; }
+      }
+    }
     if (this.photo.album && this.photo.pointer(type, x, y)) return; // the album sits over everything
     if (type === 'down' && this.speakerHover()) { this.speakerOn = !this.speakerOn; this.sound.setEnabled(this.speakerOn); return; }
     if ((type === 'down' || type === 'key') && this.dialog.tap(type === 'key' ? null : x, y)) return;
@@ -1487,6 +1577,53 @@ export class Story {
     }
   }
 
+  // The clam in their hands: it pops up, opens like a ring box, and the pearl
+  // inside glows.
+  drawClam(ctx) {
+    const K = this.clam, aq = this.aq;
+    if (!K || K.a <= 0.01) return;
+    K.t += this.dt || 0.016;
+    const s = this.W > 300 ? 2 : 1;
+    const [sx, sy] = aq.toScreen(aq.coupleX, aq.coupleY - 46, 0);
+    const x = Math.round(sx), y = Math.round(sy + Math.sin(K.t * 2) * 1);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = clamp(K.a);
+    ctx.scale(s * K.a, s * K.a);
+    const shell = (up) => {
+      // a fluted shell: ribs radiating from the hinge
+      for (let i = -7; i <= 7; i++) {
+        const h = Math.round(Math.sqrt(Math.max(0, 1 - (i / 7.6) ** 2)) * 5) + 1;
+        ctx.fillStyle = i % 2 ? '#c87a9e' : '#a85a80';
+        ctx.fillRect(i, up ? -h : 0, 1, h);
+      }
+      ctx.fillStyle = '#3a1428';
+      for (let i = -7; i <= 7; i++) { const h = Math.round(Math.sqrt(Math.max(0, 1 - (i / 7.6) ** 2)) * 5) + 1; ctx.fillRect(i, up ? -h - 1 : h, 1, 1); }
+    };
+    shell(false);
+    // the pearl, glowing more as the lid opens
+    if (K.open > 0.2) {
+      const g = clamp((K.open - 0.2) / 0.5) * (0.7 + Math.sin(K.t * 3) * 0.3);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = `rgba(255,220,240,${0.12 * g})`;
+      ctx.beginPath(); ctx.arc(0, -2, 4, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#fff8fc'; ctx.fillRect(-1, -4, 3, 3); ctx.fillRect(-2, -3, 5, 1);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(-1, -4, 1, 1);
+      ctx.fillStyle = '#d8b8e0'; ctx.fillRect(0, -2, 2, 1);
+      if (K.shine && Math.sin(K.t * 5) > 0.6) { ctx.fillStyle = '#ffffff'; ctx.fillRect(3, -8, 1, 3); ctx.fillRect(2, -7, 3, 1); }
+    }
+    // the lid swings open on its hinge at the back
+    ctx.save();
+    ctx.translate(-7, 0);
+    ctx.rotate(-K.open * 1.9);
+    ctx.translate(7, 0);
+    shell(true);
+    ctx.restore();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   drawQuestion(ctx) {
     const Q = this.question;
     const str = fill(CONFIG.question);
@@ -1578,6 +1715,7 @@ export class Story {
     this.drawCredit(ctx);
     if (this.letter) this.drawLetter(ctx);
     if (this.question) this.drawQuestion(ctx);
+    this.drawClam(ctx);
     for (const b of this.buttons) drawBubbleButton(ctx, b, this.t);
     if (this.hint) this.drawHint(ctx);
     this.fx.draw(ctx);
@@ -1589,6 +1727,7 @@ export class Story {
       drawText(ctx, '✦ replay', x + w / 2, y + 2, { align: 'center', color: hv ? '#ffffff' : '#ffb3d4', outline: '#2a0a24', alpha: this.replay.a * (hv ? 1 : 0.75) });
     }
     if (this.showSpeaker) { const [x, y] = this.speakerRect(); drawSpeaker(ctx, x + 2, y + 2, this.speakerOn, this.speakerHover()); }
+    this.drawRoam(ctx);
     this.photo.draw(ctx);
     if (!this.photo.album) {
       // over the viewfinder, under the album; on a narrow screen the quest

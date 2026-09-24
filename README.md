@@ -28,9 +28,19 @@ with the song.
 6. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
 7. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
 8. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
-9. **Finale**: when she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates. Dolphins and seahorses swim a heart around the couple, and all the fish come to the middle of the window to spell *I*, then *LOVE*, then *YOU*, over and over: the letters light up as they settle, and between words the whole crowd breaks off and circles round before it regroups. A whale shark glides past, the crabs line up to dance, and the minnows come home to frame the Buddha.
+9. **The question**: he brings out a little clam like a ring box; it opens on a glowing pearl as the question appears.
+10. **Finale**: when she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates. Dolphins and seahorses swim a heart around the couple, and all the fish come to the middle of the window to spell *I*, then *LOVE*, then *YOU*, over and over: the letters light up as they settle, and between words the whole crowd breaks off and circles round before it regroups. A whale shark glides past, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
-### Photo mode and the encyclopedia
+### After the story
+
+The game stays open after the confession: walk the two of them along the
+glass with the arrow buttons (or arrow keys), wander between the big tank,
+the reef and the jellyfish hall, and keep filling the notebook. Finishing
+every page wins the golden Always banner and a pearl keychain. In the
+camera workshop, *share my camera* saves (or shares) a card of your
+customised camera.
+
+### Photo mode and the notebook
 
 Tap the little camera (bottom right) to raise the viewfinder, then tap to
 snap. The shot prints out of the camera, develops, and is scored: rarer
@@ -48,7 +58,7 @@ two of them together.
 
 The viewfinder locks onto the best subject in the frame (its name and
 stars show), and that subject's page in the **encyclopedia** (the album's
-third tab) gets a jigsaw piece and a fun fact with each photo: four pieces
+third tab, the notebook) gets a jigsaw piece and a fun fact with each photo: four pieces
 and four real facts per animal (the made-up friends get made-up facts). The
 fact appears on a little card under the print. Finishing a jigsaw wins that
 animal's keychain for the camera strap, and finishing every animal from one

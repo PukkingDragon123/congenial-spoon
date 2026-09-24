@@ -10,8 +10,8 @@ import { diverSprite, DIVER_FRAMES } from '../art/divers.js';
 
 const WHO = {
   bean: { name: () => 'Mameshiba', col: '#c4f27a', bg: ['#1c3a10', '#0a1806'] },
-  me: { name: () => CONFIG.from, col: '#8ad0ff', bg: ['#0e2a5a', '#06122a'] },
-  her: { name: () => CONFIG.to, col: '#ffa8d0', bg: ['#4a1438', '#1c0616'] },
+  me: { name: () => 'ME', col: '#8ad0ff', bg: ['#0e2a5a', '#06122a'] },
+  her: { name: () => 'YOU', col: '#ffa8d0', bg: ['#4a1438', '#1c0616'] },
 };
 const PORT = 30;       // portrait size
 const CPS = 42;        // letters typed per second

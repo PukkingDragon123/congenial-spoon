@@ -48,6 +48,11 @@ export class SoundEngine {
       el.src = this.src;
     }
     el.load();
+    // a twin, queued at the start of the loop so the jump back is a
+    // handover, not a seek
+    const tw = (this.el2 = new Audio());
+    tw.preload = 'auto'; tw.playsInline = true; tw.setAttribute('playsinline', '');
+    tw.src = el.src; tw.load();
     this.ready = true;
   }
 
@@ -96,6 +101,9 @@ export class SoundEngine {
       const pr = el.play();
       if (pr && pr.catch) pr.catch((e) => { console.warn('play blocked:', e.message); this.blocked = true; });
       this.source = el;
+      // wake the twin inside the same tap, silently
+      const tw = this.el2;
+      if (tw) { tw.muted = true; const p2 = tw.play(); if (p2 && p2.then) p2.then(() => { if (this.source !== tw) tw.pause(); }).catch(() => {}); }
     }
   }
 
@@ -131,12 +139,33 @@ export class SoundEngine {
     else this.free = el.currentTime;
     // looping the opening: past the end, jump back by exactly one loop so
     // the beat carries straight on
+    // the old player fades out after a handover
+    if (this.fading) {
+      const f = this.fading;
+      f.volume = Math.max(0, f.volume - dt * 14);
+      if (f.volume <= 0) { f.pause(); f.volume = 1; this.fading = null; }
+    }
     if (this.loop) {
       const [a, b] = this.loop, t0 = this.time;
-      if (t0 >= b) {
+      const live = el && !this.sim && !this.blocked;
+      const twin = live && this.el2 ? (el === this.el ? this.el2 : this.el) : null;
+      // cue the twin at the loop start a moment ahead
+      if (twin && t0 >= b - 0.8 && !this.cued) {
+        this.cued = true;
+        try { twin.pause(); twin.currentTime = a; } catch (e) { /* ignore */ }
+      }
+      if (twin && this.cued && t0 >= b - 0.035) {
+        // hand over: the twin picks up on the beat, the old one fades away
+        twin.muted = !this.enabled; twin.volume = 1;
+        twin.play().catch(() => {});
+        this.fading = el;
+        this.source = twin;
+        this.cued = false;
+        this.free = a;
+      } else if (!twin && t0 >= b) {
         const to = a + ((t0 - b) % (b - a));
         this.free = to;
-        if (el && !this.sim && !this.blocked) { try { el.currentTime = to; } catch (e) { /* not seekable yet */ } }
+        if (live) { try { el.currentTime = to; } catch (e) { /* not seekable yet */ } }
       }
     }
     this.pulse = Math.max(0, this.pulse - dt * 3.2);
@@ -154,7 +183,8 @@ export class SoundEngine {
 
   setEnabled(on) {
     this.enabled = on;
-    if (this.el) this.el.muted = !on;
+    if (this.source) this.source.muted = !on;
+    else if (this.el) this.el.muted = !on;
     if (this.sfxBus && this.ctx) this.sfxBus.gain.setTargetAtTime(on ? 0.34 : 0, this.ctx.currentTime, 0.05);
   }
 

@@ -377,9 +377,9 @@ export class Couple {
     const gh = this.gap / 2;
     if (this.apart) this.renderApart(t, breath, gh);
     else if (this.mode === 'walk') {
-      const dist = this.walk * 7.5;
-      drawSide(R, GUY, -gh, 1, { dist: dist + 9, moving: this.moving });
-      drawSide(R, GIRL, gh, 1, { dist, moving: this.moving, hairSway: Math.sin(t * 2) * 0.6 });
+      const dist = this.walk * 7.5, f = this.dir || 1;
+      drawSide(R, GUY, -gh, f, { dist: dist + 9, moving: this.moving });
+      drawSide(R, GIRL, gh, f, { dist, moving: this.moving, hairSway: Math.sin(t * 2) * 0.6 });
     } else if (this.mode === 'back') {
       const h = this.hold, ln = this.lean, pt = this.point, gl = this.glance;
       const meetX = 0, meetY = -GIRL.leg - 3 + (1 - h) * 3;

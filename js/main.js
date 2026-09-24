@@ -75,6 +75,10 @@ view.addEventListener('pointerdown', (e) => { if (story) { story.sound.unlock();
 view.addEventListener('pointermove', (e) => { if (story) { const [x, y] = toLow(e); story.pointer('move', x, y); view.classList.toggle('pointer', story.hoverClickable); } });
 view.addEventListener('pointerup', (e) => { if (story) { const [x, y] = toLow(e); story.pointer('up', x, y); } });
 window.addEventListener('keydown', (e) => { if (story && (e.key === ' ' || e.key === 'Enter')) { story.sound.unlock(); story.pointer('key', W / 2, H / 2); } });
+// after the story: walk around with the arrow keys
+const WALK_KEYS = { ArrowLeft: -1, a: -1, ArrowRight: 1, d: 1 };
+window.addEventListener('keydown', (e) => { if (story && WALK_KEYS[e.key]) story.walkKey(WALK_KEYS[e.key], true); });
+window.addEventListener('keyup', (e) => { if (story && WALK_KEYS[e.key]) story.walkKey(WALK_KEYS[e.key], false); });
 window.addEventListener('resize', () => resize());
 document.addEventListener('visibilitychange', () => {
   const snd = story && story.sound;
