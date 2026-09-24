@@ -374,6 +374,16 @@ function shadeStone(W, Ht, heights, mask, mossy, PAL = STONE, mossAmt = 0.4) {
 // The main tank's centrepiece: a round little candy character dressed as the
 // Statue of Liberty, crown of spikes, torch held high, a tablet in the other
 // arm and a draped robe, standing on a stepped plinth. All carved in stone.
+// a chunky lowercase m inside the box (x0, y0, w, h)
+function mGlyph(X, Y, x0, y0, w, h) {
+  const u = (X - x0) / w, v = (Y - y0) / h;
+  if (u < 0 || u > 1 || v < 0 || v > 1) return false;
+  const sw = 0.2;
+  if (v > 0.35 && (u < sw || Math.abs(u - 0.5) < sw / 2 || u > 1 - sw)) return true;   // three legs
+  for (const c of [0.28, 0.72]) { const d = Math.hypot((u - c) / 0.28, (v - 0.42) / 0.42); if (d < 1 && d > 0.45 && v < 0.42) return true; } // two arches
+  return false;
+}
+
 export function genLiberty() {
   const W = 132, Ht = 214, cx = 66;
   const heights = new Float32Array(W * Ht), mask = new Uint8Array(W * Ht), mossy = new Float32Array(W * Ht);
@@ -389,12 +399,15 @@ export function genLiberty() {
     let h = -1;
     // plinth: two steps and a block with a doorway
     if (y >= 176) {
-      const step = y >= 204 ? 40 : y >= 196 ? 34 : 28;
+      // a spiky star-shaped base under the plinth
+      const step = y >= 204 ? Math.min(52, 42 + Math.abs(Math.sin(X * 0.35)) * 9) : y >= 196 ? 30 : 28;
       if (adx < step) {
         let ph = 10 - (adx / step) * 3;
-        if (y < 196 && y > 186 && adx < 7) ph -= 5; // doorway
+        if (y < 204 && y > 194 && adx < 7) ph -= 5; // doorway
         if (y === 184 || y === 196 || y === 204) ph -= 1.5;
         if (y > 178 && y < 183 && adx < 22 && adx % 6 < 3) ph += 1; // little windows
+        if (mGlyph(X, y, cx - 8, 186, 16, 7)) ph += 1.6;             // the m on the plinth
+        if (y > 197 && y < 200 && (adx > 9 && adx < 20) && adx % 4 < 2) ph += 1; // little studs
         h = Math.max(h, ph);
       }
     }
@@ -412,23 +425,37 @@ export function genLiberty() {
     const bx = dx / brx, byy = (y - by0) / bry, br = bx * bx + byy * byy;
     if (br < 1) {
       let bh = 22 * Math.sqrt(1 - br);
-      // big eyes: bulging whites with carved pupils and lids
+      // big sassy eyes: bulging whites, heavy half-closed lids, big pupils
+      // low in the eye, flicked lashes at the outer corners, thin brows
       for (const sd of [-1, 1]) {
-        const ex = cx + sd * 10, ey = 92;
-        const e = Math.hypot((X - ex) / 6.5, (y - ey) / 8);
-        if (e < 1) { bh += 2.6 * Math.sqrt(1 - e * e); if (Math.hypot((X - ex - sd * 1.5) / 2.2, (y - ey - 1) / 2.8) < 1) bh -= 2.2; }
-        if (Math.abs(y - (ey - 8.5 + 0.08 * (X - ex) ** 2)) < 0.8 && Math.abs(X - ex) < 7) bh += 1.6; // lash line
-        if (Math.abs(y - (ey - 12 - 0.04 * (X - ex) ** 2 - sd * (X - ex) * 0.15)) < 0.9 && Math.abs(X - ex) < 6) bh += 1.8; // brows
+        const ex = cx + sd * 11, ey = 91;
+        const e = Math.hypot((X - ex) / 8, (y - ey) / 6.5);
+        if (e < 1) {
+          bh += 3 * Math.sqrt(1 - e * e);
+          const lid = ey - 1.2 + 0.03 * (X - ex) ** 2;
+          if (y < lid) bh += 1.6;                                        // the lid comes down over the top half
+          if (Math.abs(y - lid) < 0.7) bh += 1.2;                        // lid edge
+          if (y > lid && Math.hypot((X - ex + sd * 1.5) / 3, (y - ey - 2) / 2.6) < 1) bh -= 2.6; // pupil
+        }
+        for (let q = 0; q < 3; q++) { // lashes
+          const lx = ex + sd * (6.5 + q * 1.2), ly = ey - 3 + q * 1.4;
+          if (Math.hypot(X - lx - sd * 1.4, y - ly + 1.4) < 0.9) bh += 2.6;
+        }
+        const brow = ey - 10 - 0.05 * (X - ex) ** 2 + sd * (X - ex) * 0.1;
+        if (Math.abs(y - brow) < 0.9 && Math.abs(X - ex) < 7) bh += 1.8;
       }
-      // smiling lips
-      const my = 116 - 0.045 * dx * dx;
-      if (adx < 13) {
-        bh += 2.4 * Math.exp(-(((y - my + 1.8) / 1.5) ** 2)) * (1 - adx / 14);
-        bh += 3 * Math.exp(-(((y - my - 2) / 1.8) ** 2)) * (1 - adx / 12);
-        if (Math.abs(y + 0.5 - my) < 0.6) bh -= 2.2;
+      // full, pouty lips in a little smile
+      const lipY = 104 - 0.02 * dx * dx;
+      if (adx < 11) {
+        const up = Math.exp(-(((y - (lipY - 1.6)) / 1.6) ** 2)) * (1 - (adx / 11) ** 2);
+        const lo = Math.exp(-(((y - (lipY + 2)) / 2) ** 2)) * (1 - (adx / 9.5) ** 2);
+        bh += 3 * up + 3.6 * Math.max(0, lo);
+        if (Math.abs(y - lipY) < 0.6) bh -= 2;
       }
+      // the little "m" on the tummy, just above the robe
+      if (mGlyph(X, y, cx - 7, 111, 14, 8)) bh += 2.2;
       // robe draped across from one shoulder
-      if (y > 118 - dx * 0.5) { const f = ((X + y * 0.8) % 7); bh += 2 + (f < 1.2 ? -1.2 : 0); }
+      if (y > 124 - dx * 0.5) { const f = ((X + y * 0.8) % 7); bh += 2 + (f < 1.2 ? -1.2 : 0); }
       h = Math.max(h, bh);
     }
     // crown band and seven spikes
@@ -494,7 +521,7 @@ export function genBunny() {
   const W = 128, Ht = 122;
   const buf = new Buf(W, Ht);
   const P = STONE, N = P.length - 1;   // carved stone, like the tank's rocks
-  const L = [-0.55, -0.62, 0.56];                      // light from the top left
+  const L = [0.55, -0.62, 0.56];                       // light from the top right (it gets mirrored)
   const idx = new Int8Array(W * Ht).fill(-1);          // ramp index per pixel
   const put = (x, y, i) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < Ht) idx[y * W + x] = clamp(Math.round(i), 0, N); };
   const get = (x, y) => (x < 0 || y < 0 || x >= W || y >= Ht ? -1 : idx[y * W + x]);
@@ -514,8 +541,8 @@ export function genBunny() {
   blob(bx, by, br, br * 1.02);
   // carved fur: short strokes radiating back from the face, each a dark
   // groove with a lit edge beside it
-  const fx = 28, fy = 44;
-  for (let gy = by - br; gy < by + br; gy += 3.2) for (let gx = bx - br; gx < bx + br; gx += 3.2) {
+  const fx = 34, fy = 46;
+  for (let gy = by - br; gy < by + br; gy += 3.6) for (let gx = bx - br; gx < bx + br; gx += 3.6) {
     const jx = gx + (hash2(gx | 0, gy | 0, 5) - 0.5) * 2.4, jy = gy + (hash2(gx | 0, gy | 0, 7) - 0.5) * 2.4;
     if (Math.hypot(jx - bx, jy - by) > br - 5 || Math.hypot(jx - fx - 8, jy - fy - 2) < 20) continue;
     let dx = jx - fx, dy = jy - fy; const d = Math.hypot(dx, dy); dx /= d; dy /= d;
@@ -523,13 +550,13 @@ export function genBunny() {
     for (let i = 0; i < len; i++) {
       const x = jx + dx * i, y = jy + dy * i, cur = get(x, y);
       if (cur < 0) continue;
-      put(x, y, cur - 1.4);
+      put(x, y, cur - 1.1);
       const hx = x - dy, hy = y + dx, ch = get(hx, hy);
       if (ch >= 0 && i > 0 && i < len - 1) put(hx, hy, ch + 1);
     }
   }
   // ears laid back along the top: long, flat, with a groove down the middle
-  for (const [ax, ay, ex, ey, wd] of [[58, 24, 104, 30, 7], [62, 32, 108, 50, 6]]) {
+  for (const [ax, ay, ex, ey, wd] of [[70, 22, 110, 32, 7], [74, 30, 112, 52, 6]]) {
     const n = 60;
     for (let i = 0; i <= n; i++) {
       const t = i / n, x = lerp(ax, ex, t), y = lerp(ay, ey, t) - Math.sin(t * Math.PI) * 5, w = wd * (0.5 + Math.sin(Math.min(1, t * 1.3) * Math.PI) * 0.55);
@@ -540,19 +567,23 @@ export function genBunny() {
   // the face: cheek, then a snout that pokes out past the ball
   blob(fx + 12, fy + 6, 14, 11, 0.6);
   blob(fx - 1, fy + 1, 10, 7.5, 0.9);
-  // smug closed smile, nose, chin
-  for (let x = fx - 10; x <= fx + 7; x++) { const y = fy + 4 + 0.055 * (x - fx) ** 2 - (x - fx) * 0.22; put(x, y, 1); }
+  // nose, and a little open smiling mouth under it
   put(fx - 10, fy - 2, 1); put(fx - 9, fy - 2, 1); put(fx - 10, fy - 1, 2);
-  for (let x = fx - 4; x <= fx + 4; x++) { const c = get(x, fy + 9); if (c >= 0) put(x, fy + 9, c + 1); }
-  // the eye: a dark almond, a heavy lit lid over it, a catchlight
-  const ex = fx + 17, ey = fy - 9;
-  for (let y = -6; y <= 6; y++) for (let x = -9; x <= 9; x++) {
-    const e = (x / 8) ** 2 + (y / 4.4) ** 2, lid = -4.4 + 0.06 * x * x;
-    if (e < 1 && y > lid) put(ex + x, ey + y, e < 0.5 ? 0 : e < 0.8 ? 1 : 3);
+  for (let y = -4; y <= 4; y++) for (let x = -8; x <= 8; x++) {
+    const m = (x / 6.5) ** 2 + ((y - 1) / 3) ** 2, top = -0.9 + 0.035 * x * x;
+    if (m < 1 && y > top) put(fx - 3 + x, fy + 5 + y, m < 0.6 ? 0 : 1);                       // the open mouth
+    if (Math.abs(y - top) < 0.8 && Math.abs(x) < 7) put(fx - 3 + x, fy + 5 + y, N - 2);       // upper lip catching the light
+  }
+  for (let x = -5; x <= 5; x++) { const c = get(fx - 3 + x, fy + 10); if (c >= 0) put(fx - 3 + x, fy + 10, c + 1.5); } // lower lip
+  put(fx - 10, fy + 3, 1); put(fx + 4, fy + 4, 1);                                            // smile corners
+  // the eye: an empty carved almond, like a real stone statue, under a heavy lid
+  const ex = fx + 16, ey = fy - 8;
+  for (let y = -7; y <= 7; y++) for (let x = -10; x <= 10; x++) {
+    const e = (x / 9) ** 2 + (y / 5) ** 2, lid = -4.6 + 0.055 * x * x;
+    if (e < 1 && y > lid) put(ex + x, ey + y, e > 0.7 ? 1 : y > 2 ? N - 5 : N - 3);  // a blank stone eyeball, no pupil
     if (Math.abs(y - lid) < 1.1 && Math.abs(x) < 8.5) put(ex + x, ey + y, y < lid ? N : N - 2);  // the heavy lid
     if (Math.abs(y - (lid - 2.2)) < 0.6 && Math.abs(x) < 7) put(ex + x, ey + y, 3);             // crease above it
   }
-  put(ex - 3, ey - 1, N); put(ex - 2, ey - 1, N); put(ex - 3, ey, N - 1); put(ex + 2, ey + 1, N - 3);
   // tiny front paws folded on the tummy, toes to the left
   blob(72, 90, 17, 6.5, 1.3, 0.28);
   for (let i = 0; i < 3; i++) { put(57, 86 + i * 2, 2); put(58, 86 + i * 2, 2); }
@@ -565,12 +596,12 @@ export function genBunny() {
     const i = get(x, y);
     if (i < 0) continue;
     const edge = get(x - 1, y) < 0 || get(x + 1, y) < 0 || get(x, y - 1) < 0 || get(x, y + 1) < 0;
-    buf.set(x, y, P[edge ? Math.min(i, 1) : i]);
+    buf.set(W - 1 - x, y, P[edge ? Math.min(i, 1) : i]);   // mirrored: it faces right
   }
   const c = buf.toCanvas();
   // a light mask for the water caustics: the lit upper faces
   const lb = new Buf(W, Ht);
-  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) { const i = get(x, y); if (i >= N - 3) lb.set(x, y, [255, 255, 255], 160); }
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) { const i = get(x, y); if (i >= N - 3) lb.set(W - 1 - x, y, [255, 255, 255], 160); }
   c.light = lb.toCanvas();
   return c;
 }

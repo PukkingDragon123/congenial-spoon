@@ -19,7 +19,7 @@ const DISC = 37; // the record, in pixels across
 export class Vinyl {
   constructor(story) {
     this.story = story;
-    this.unlocked = [];
+    this.unlocked = ['always'];
     this.found = [];
     this.playing = null;
     this.audio = null;
@@ -35,6 +35,7 @@ export class Vinyl {
     try {
       const d = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
       this.unlocked = (d.unlocked || []).filter((id) => TRACKS.some((q) => q.id === id));
+      if (!this.unlocked.includes('always')) this.unlocked.unshift('always'); // Always comes with the player
       this.found = d.found || [];
     } catch (e) { /* no storage */ }
     for (const tr of TRACKS) {
@@ -64,7 +65,7 @@ export class Vinyl {
   get W() { return this.story.W; }
   get H() { return this.story.H; }
   // shows once the photo quest is done
-  visible() { const s = this.story; return s.photoReady && !s.quest && !(s.photo && s.photo.album); }
+  visible() { const s = this.story; return !s.title && s.hud && !s.quest && !(s.photo && s.photo.album); }
   rect() { return [6, this.story.replay ? 22 : 6, DISC, DISC]; }
   crateRect() { const [x, y, , h] = this.rect(); return [x, y + h + 6, Math.min(150, this.W - 12), 14 + TRACKS.length * 20 + 12]; }
   rowRect(i) { const [x, y, w] = this.crateRect(); return [x + 3, y + 13 + i * 20, w - 6, 18]; }
@@ -103,6 +104,7 @@ export class Vinyl {
     snd.sfx('type');
   }
   stop(quiet) {
+    if (!quiet) this.stopped = true; // you turned it off: don't start it again by itself
     if (this.audio) { try { this.audio.pause(); } catch (e) { /* fine */ } this.audio = null; }
     if (this.playing && !quiet) this.story.sound.sfx('type');
     this.playing = null;
@@ -131,9 +133,14 @@ export class Vinyl {
   }
 
   // --------------------------------------------------------------- update --
+  // during the story the song on is Always itself, so the disc shows it
+  storyPlaying() { const s = this.story; return !this.playing && !s.roam && s.sound && s.sound.playing; }
   update(dt) {
     this.t += dt;
-    const on = !!this.playing;
+    const s = this.story;
+    // once the story's song has finished, Always carries on on the record
+    if (s.roam && !this.playing && !this.stopped) { const el = s.sound.el; if (!el || el.ended || el.paused) this.play('always'); }
+    const on = !!this.playing || this.storyPlaying();
     this.speed += ((on ? 1 : 0) - this.speed) * Math.min(1, dt * (on ? 3 : 1.5));
     this.spin += this.speed * dt * 3.5;
     this.arm += ((on ? 1 : 0) - this.arm) * Math.min(1, dt * 4);
@@ -165,13 +172,13 @@ export class Vinyl {
     }
     // just the record, floating and spinning, drawn pixel by pixel so it
     // stays crisp: grooves, a fixed sheen, and the album cover as its label
-    const tr = TRACKS.find((q) => q.id === this.playing) || TRACKS.find((q) => this.unlocked.includes(q.id));
+    const tr = TRACKS.find((q) => q.id === (this.playing || (this.storyPlaying() ? 'always' : null))) || TRACKS.find((q) => this.unlocked.includes(q.id));
     const bob = Math.round(Math.sin(t * 1.6) * 2);
     this.renderDisc(tr);
     // soft shadow and a glow when it plays
     ctx.globalAlpha = 0.25; ctx.fillStyle = '#02081a';
     ctx.beginPath(); ctx.ellipse(x + w / 2, y + h + 4, w * 0.36 - bob, 2, 0, 0, TAU); ctx.fill();
-    if (this.playing || this.flash > 0) {
+    if (this.playing || this.storyPlaying() || this.flash > 0) {
       ctx.globalAlpha = 0.18 + 0.12 * Math.sin(t * 4) + this.flash * 0.4; ctx.fillStyle = '#9ae8ff';
       ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2 + bob, w / 2 + 3, 0, TAU); ctx.fill();
     }
@@ -180,7 +187,7 @@ export class Vinyl {
     // what's playing, next to it
     const tx = x + w + 5, ty = y + h / 2 + bob - 8;
     if (!this.open) {
-      if (this.playing) {
+      if (this.playing || this.storyPlaying()) {
         drawText(ctx, '♪ now playing', tx, ty, { color: '#9ae8ff', outline: '#0a1030' });
         const line = `${tr.title} · ${tr.artist}`, room = Math.min(120, this.W - tx - 8), lw = textWidth(line);
         if (lw <= room) drawText(ctx, line, tx, ty + 9, { color: '#ffffff', outline: '#0a1030' });

@@ -723,7 +723,7 @@ export class ReefRoom extends Room {
     // the centrepiece: a fat seal dressed up as Cupid, sitting on a rock
     step(() => {
       const z = 0.36, self = this;
-      const cu = { frames: [toStone(sealCupidSprite(0))], x: CX + 8, z }; // all stone now
+      const cu = { frames: [toStone(sealCupidSprite(0))], x: CX + 130 * k, z }; // all stone now, over on the right
       this.cupid = cu;
       this.decor.push({ z, draw(ctx) { self.drawCupid(ctx, cu); } });
     });
@@ -733,7 +733,7 @@ export class ReefRoom extends Room {
       const statue = (img, x, z, sink) => this.decor.push({ z, draw(ctx) { const [sx, sy] = self.toScreen(x, self.floorY(z) + sink, z); ctx.drawImage(img, Math.round(sx - img.width / 2), Math.round(sy - img.height)); } });
       // the bunny sits back by the big left-hand rock, the frog out on the right
       statue(genBunny(), CX - hw * 0.5, 0.47, 8);
-      statue(genFrog(), CX + hw * 0.55, 0.22, 4);
+      statue(genFrog(), CX + hw * 0.78, 0.22, 4);
     });
     // a second, nearer coral garden along the front edges, and starfish and
     // urchins scattered over the sand
