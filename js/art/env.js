@@ -521,7 +521,7 @@ export function genBunny() {
   const W = 128, Ht = 122;
   const buf = new Buf(W, Ht);
   const P = STONE, N = P.length - 1;   // carved stone, like the tank's rocks
-  const L = [0.55, -0.62, 0.56];                       // light from the top right (it gets mirrored)
+  const L = [-0.55, -0.62, 0.56];                      // light from the top left
   const idx = new Int8Array(W * Ht).fill(-1);          // ramp index per pixel
   const put = (x, y, i) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < Ht) idx[y * W + x] = clamp(Math.round(i), 0, N); };
   const get = (x, y) => (x < 0 || y < 0 || x >= W || y >= Ht ? -1 : idx[y * W + x]);
@@ -539,69 +539,50 @@ export function genBunny() {
   // the ball of a body
   const bx = 70, by = 64, br = 50;
   blob(bx, by, br, br * 1.02);
-  // carved fur: short strokes radiating back from the face, each a dark
-  // groove with a lit edge beside it
-  const fx = 34, fy = 46;
-  for (let gy = by - br; gy < by + br; gy += 3.6) for (let gx = bx - br; gx < bx + br; gx += 3.6) {
-    const jx = gx + (hash2(gx | 0, gy | 0, 5) - 0.5) * 2.4, jy = gy + (hash2(gx | 0, gy | 0, 7) - 0.5) * 2.4;
-    if (Math.hypot(jx - bx, jy - by) > br - 5 || Math.hypot(jx - fx - 8, jy - fy - 2) < 20) continue;
-    let dx = jx - fx, dy = jy - fy; const d = Math.hypot(dx, dy); dx /= d; dy /= d;
-    const len = 4 + hash2(gx | 0, gy | 0, 9) * 3;
-    for (let i = 0; i < len; i++) {
-      const x = jx + dx * i, y = jy + dy * i, cur = get(x, y);
-      if (cur < 0) continue;
-      put(x, y, cur - 1.1);
-      const hx = x - dy, hy = y + dx, ch = get(hx, hy);
-      if (ch >= 0 && i > 0 && i < len - 1) put(hx, hy, ch + 1);
-    }
+  // (smooth stone, no fur) the face looks out at you from the upper left
+  const fx = 40, fy = 46;
+  // ears: one flopped down the right side, the other just peeking over the top
+  blob(80, 20, 9, 6, 0.4, -0.2);
+  for (let i = 0; i <= 40; i++) { const t = i / 40; blob(lerp(84, 112, t), lerp(24, 50, t) - Math.sin(t * Math.PI) * 6, 8 - t * 2, 6 - t * 1.5, 0.7, 0.7); }
+  for (let i = 6; i < 34; i++) { const t = i / 40; put(lerp(84, 112, t) - 1, lerp(24, 50, t) - Math.sin(t * Math.PI) * 6 + 1, 3); }
+  // soft cheeks and a round snout
+  blob(fx + 1, fy + 2, 11, 8, 1.1);
+  // nose
+  put(fx - 9, fy - 3, 1); put(fx - 8, fy - 3, 1); put(fx - 9, fy - 2, 2);
+  // a little open smile
+  for (let y = -3; y <= 4; y++) for (let x = -8; x <= 8; x++) {
+    const m = (x / 6.5) ** 2 + ((y - 1) / 2.6) ** 2, top = -0.8 + 0.03 * x * x;
+    if (m < 1 && y > top) put(fx - 3 + x, fy + 5 + y, m < 0.6 ? 0 : 1);
+    if (Math.abs(y - top) < 0.8 && Math.abs(x) < 7) put(fx - 3 + x, fy + 5 + y, N - 2);
   }
-  // ears laid back along the top: long, flat, with a groove down the middle
-  for (const [ax, ay, ex, ey, wd] of [[70, 22, 110, 32, 7], [74, 30, 112, 52, 6]]) {
-    const n = 60;
-    for (let i = 0; i <= n; i++) {
-      const t = i / n, x = lerp(ax, ex, t), y = lerp(ay, ey, t) - Math.sin(t * Math.PI) * 5, w = wd * (0.5 + Math.sin(Math.min(1, t * 1.3) * Math.PI) * 0.55);
-      blob(x, y, w, w * 0.8, 0.8);
-    }
-    for (let i = 8; i < n - 8; i++) { const t = i / n; put(lerp(ax, ex, t) + 1, lerp(ay, ey, t) - Math.sin(t * Math.PI) * 5 + 1, 2); }
-  }
-  // the face: cheek, then a snout that pokes out past the ball
-  blob(fx + 12, fy + 6, 14, 11, 0.6);
-  blob(fx - 1, fy + 1, 10, 7.5, 0.9);
-  // nose, and a little open smiling mouth under it
-  put(fx - 10, fy - 2, 1); put(fx - 9, fy - 2, 1); put(fx - 10, fy - 1, 2);
-  for (let y = -4; y <= 4; y++) for (let x = -8; x <= 8; x++) {
-    const m = (x / 6.5) ** 2 + ((y - 1) / 3) ** 2, top = -0.9 + 0.035 * x * x;
-    if (m < 1 && y > top) put(fx - 3 + x, fy + 5 + y, m < 0.6 ? 0 : 1);                       // the open mouth
-    if (Math.abs(y - top) < 0.8 && Math.abs(x) < 7) put(fx - 3 + x, fy + 5 + y, N - 2);       // upper lip catching the light
-  }
-  for (let x = -5; x <= 5; x++) { const c = get(fx - 3 + x, fy + 10); if (c >= 0) put(fx - 3 + x, fy + 10, c + 1.5); } // lower lip
-  put(fx - 10, fy + 3, 1); put(fx + 4, fy + 4, 1);                                            // smile corners
-  // the eye: an empty carved almond, like a real stone statue, under a heavy lid
-  const ex = fx + 16, ey = fy - 8;
+  put(fx - 10, fy + 3, 1); put(fx + 4, fy + 4, 1);
+  // a big glossy eye with a heavy lid
+  const ex = fx + 20, ey = fy - 8;
   for (let y = -7; y <= 7; y++) for (let x = -10; x <= 10; x++) {
-    const e = (x / 9) ** 2 + (y / 5) ** 2, lid = -4.6 + 0.055 * x * x;
-    if (e < 1 && y > lid) put(ex + x, ey + y, e > 0.7 ? 1 : y > 2 ? N - 5 : N - 3);  // a blank stone eyeball, no pupil
-    if (Math.abs(y - lid) < 1.1 && Math.abs(x) < 8.5) put(ex + x, ey + y, y < lid ? N : N - 2);  // the heavy lid
-    if (Math.abs(y - (lid - 2.2)) < 0.6 && Math.abs(x) < 7) put(ex + x, ey + y, 3);             // crease above it
+    const e = (x / 8.5) ** 2 + (y / 5.2) ** 2, lid = -4.4 + 0.05 * x * x;
+    if (e < 1 && y > lid) put(ex + x, ey + y, e > 0.75 ? 1 : 0);
+    if (Math.abs(y - lid) < 1.2 && Math.abs(x) < 9) put(ex + x, ey + y, y < lid ? N : N - 2);
+    if (Math.abs(y - (lid - 2.4)) < 0.6 && Math.abs(x) < 7) put(ex + x, ey + y, 3);
   }
-  // tiny front paws folded on the tummy, toes to the left
-  blob(72, 90, 17, 6.5, 1.3, 0.28);
-  for (let i = 0; i < 3; i++) { put(57, 86 + i * 2, 2); put(58, 86 + i * 2, 2); }
-  // a foot poking out underneath, and a paw peeking round the side
-  blob(56, 112, 12, 6, 0.6);
-  for (let i = 0; i < 3; i++) put(46 + i * 3, 114, 2);
-  blob(19, 70, 5, 9, 0.3);
+  put(ex - 3, ey - 1, N); put(ex - 2, ey - 1, N); put(ex - 3, ey, N - 1); put(ex + 3, ey + 2, 4);
+  // an arm resting across the tummy, toes at its left end
+  for (let i = 0; i <= 30; i++) { const t = i / 30; blob(lerp(52, 88, t), lerp(84, 98, t), 7 - t * 1.5, 5.5, 1.2); }
+  for (let i = 0; i < 3; i++) put(47, 82 + i * 2, 2);
+  // a foot underneath and a paw peeking round the left side
+  blob(50, 112, 12, 6, 0.6);
+  for (let i = 0; i < 3; i++) put(41 + i * 3, 114, 2);
+  blob(18, 64, 5, 9, 0.3);
   // outline, then paint
   for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
     const i = get(x, y);
     if (i < 0) continue;
     const edge = get(x - 1, y) < 0 || get(x + 1, y) < 0 || get(x, y - 1) < 0 || get(x, y + 1) < 0;
-    buf.set(W - 1 - x, y, P[edge ? Math.min(i, 1) : i]);   // mirrored: it faces right
+    buf.set(x, y, P[edge ? Math.min(i, 1) : i]);
   }
   const c = buf.toCanvas();
   // a light mask for the water caustics: the lit upper faces
   const lb = new Buf(W, Ht);
-  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) { const i = get(x, y); if (i >= N - 3) lb.set(W - 1 - x, y, [255, 255, 255], 160); }
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) { const i = get(x, y); if (i >= N - 3) lb.set(x, y, [255, 255, 255], 160); }
   c.light = lb.toCanvas();
   return c;
 }
