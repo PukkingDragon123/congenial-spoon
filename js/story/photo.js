@@ -134,7 +134,7 @@ export class PhotoMode {
 
   available() {
     const s = this.story;
-    return s.hud && !s.title && !s.letter && !s.question && !s.buttons.length && !s.replay && s.songT > 9;
+    return s.hud && s.photoReady && !s.title && !s.letter && !s.question && !s.buttons.length && !s.replay;
   }
 
   wantsPointer([x, y]) {
@@ -225,6 +225,7 @@ export class PhotoMode {
     this.checkMilestones();
     this.camDirty = true; // photo stickers may show the new shot
     this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0 });
+    if (this.onSnap) this.onSnap({ keys: list.map((f) => f.key), main: main ? main.key : null, pts });
     if (this.prints.length === 1) s.sound.sfx('print');
     this.save();
   }

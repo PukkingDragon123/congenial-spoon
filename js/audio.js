@@ -54,11 +54,59 @@ export class SoundEngine {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (AC && !this.ctx) { try { this.ctx = new AC(); } catch (e) { this.ctx = null; } }
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    this.bus();
     if (this.armed && !this.playing) { this.start(); return; }
     if (this.el && !this.primed && !this.playing) {
+      // play a silent moment inside the tap so the song may start later
+      // without one
       this.primed = true;
+      this.el.muted = true;
       const pr = this.el.play();
       if (pr && pr.then) pr.then(() => { if (!this.playing) { this.el.pause(); this.el.currentTime = 0; } }).catch(() => {});
+    }
+  }
+
+  // The effects mix, ready as soon as there's an audio context.
+  bus() {
+    const ctx = this.ctx;
+    if (!ctx || this.sfxBus) return;
+    this.master = ctx.createGain();
+    this.master.gain.value = 1;
+    this.master.connect(ctx.destination);
+    this.sfxBus = ctx.createGain();
+    this.sfxBus.gain.value = this.enabled ? 0.34 : 0;
+    this.sfxBus.connect(this.master);
+  }
+
+  // Before the song: a low, soft wash of water, like standing by the glass.
+  ambience(on) {
+    const ctx = this.ctx;
+    if (!ctx || !this.sfxBus) return;
+    const t = ctx.currentTime;
+    if (on && !this.amb) {
+      const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.2; }
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.6;
+      const lfo = ctx.createOscillator(), lg = ctx.createGain();
+      lfo.frequency.value = 0.07; lg.gain.value = 160;
+      lfo.connect(lg).connect(lp.frequency);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.5, t + 2.5);
+      src.connect(lp).connect(g).connect(this.sfxBus);
+      src.start(t); lfo.start(t);
+      this.amb = { src, lfo, g };
+    } else if (!on && this.amb) {
+      const a = this.amb;
+      this.amb = null;
+      a.g.gain.cancelScheduledValues(t);
+      a.g.gain.setValueAtTime(a.g.gain.value, t);
+      a.g.gain.linearRampToValueAtTime(0.0001, t + 2.5);
+      a.src.stop(t + 2.6); a.lfo.stop(t + 2.6);
     }
   }
 
@@ -68,13 +116,9 @@ export class SoundEngine {
     const ctx = this.ctx;
     if (ctx) {
       if (ctx.state === 'suspended') ctx.resume();
-      this.master = ctx.createGain();
-      this.master.gain.value = 1;
-      this.master.connect(ctx.destination);
-      this.sfxBus = ctx.createGain();
-      this.sfxBus.gain.value = this.enabled ? 0.34 : 0;
-      this.sfxBus.connect(this.master);
+      this.bus();
     }
+    this.ambience(false);
     if (this.el) {
       const el = this.el;
       try { el.currentTime = 0; } catch (e) { /* not seekable yet */ }
@@ -244,6 +288,12 @@ export class SoundEngine {
         break;
       case 'escape':
         this.bubble(t, 0.9); this.bubble(t + 0.05, 0.9); this.bubble(t + 0.1, 0.7);
+        break;
+      case 'blub':
+        for (let i = 0; i < 3; i++) this.bubble(t + i * (0.08 + Math.random() * 0.1), 0.35);
+        break;
+      case 'talk':
+        this.note(88 + ((Math.random() * 7) | 0), t, 0.07, 0.12);
         break;
       default:
     }

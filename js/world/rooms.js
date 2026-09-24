@@ -4,7 +4,8 @@
 // coordinates, camera, couple and effect hooks, so the story can drive any of
 // them the same way.
 import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm } from '../util.js';
-import { CX, tallExtra, genCaustics, genSand, genFormation, genCupid } from '../art/env.js';
+import { CX, tallExtra, genCaustics, genSand, genFormation } from '../art/env.js';
+import { sealCupidSprite } from '../art/divers.js';
 import { Creature, Crab, School, addBuddy, TreeFriend } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
@@ -343,7 +344,7 @@ export class JellyRoom extends Room {
     for (let i = 0; i < 12; i++) this.combs.push({ x: CX + (r() - 0.5) * this.spread, y: top + r() * (bot - top), z: 0.1 + r() * 0.7, ph: r() * TAU, s: 3 + ((r() * 3) | 0), vx: (r() - 0.5) * 6, vy: -1 - r() * 2 });
     const self = this;
     for (const cb of this.combs) this.decor.push({ get z() { return cb.z; }, draw(ctx) { self.drawComb(ctx, cb); } });
-    addBuddy(this.creatures, CX - 120, 190 - this.extra * 0.3, 0.1, [CX - 260, CX + 260]);
+    this.bean = addBuddy(this.creatures, CX - 120, 190 - this.extra * 0.3, 0.1, [CX - 260, CX + 260]);
     for (let i = 0; i < 6; i++) this.shafts.push({ x: CX + (i - 2.5) * 150 + (r() - 0.5) * 60, z: 0.5 + r() * 0.4, w: 26 + r() * 30, f: 0.2 + r() * 0.3, ph: r() * TAU });
     this.makeMotes(130, ['#ffffff', '#ffd6f0', '#d8c8ff', '#bff4ff', '#fff2c0'], { rise: 2.5, a: 0.9 });
     // warm the jelly sprites that are on screen at the title
@@ -654,13 +655,12 @@ export class ReefRoom extends Room {
       }
       this.layers.push({ img: P.canvas(), x: X0, z: 0.32, sink: 6 });
     });
-    // the centrepiece: a stone Cupid on a pedestal, lit rose-pink from behind
+    // the centrepiece: a fat seal dressed up as Cupid, sitting on a rock
     step(() => {
       const z = 0.36, self = this;
-      const cu = { img: genCupid(), x: CX + 8, z };
+      const cu = { frames: [sealCupidSprite(0), sealCupidSprite(1)], x: CX + 8, z };
       this.cupid = cu;
       this.decor.push({ z, draw(ctx) { self.drawCupid(ctx, cu); } });
-      this.glows.push({ x: cu.x, y: this.floorY(z) - 130, z: z + 0.01, r: 96, col: '#ff7ab4', a: 0.3 });
     });
     // anemones with clownfish families
     step(() => {
@@ -723,18 +723,13 @@ export class ReefRoom extends Room {
   }
 
   drawCupid(ctx, cu) {
-    const img = cu.img;
-    const [sx, sy] = this.toScreen(cu.x, this.floorY(cu.z) + 10, cu.z);
-    const x = Math.round(sx - img.width / 2), y = Math.round(sy - img.height);
-    ctx.drawImage(img, x, y);
-    // sunlight rippling over the stone
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.16 + 0.08 * Math.sin(this.t * 1.3) + (this.pulse || 0) * 0.08;
-    ctx.drawImage(img.light, x, y);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    // now and then a little heart-shaped bubble drifts up from the arrow tip
-    if (Math.random() < 0.012) this.fx.add({ kind: 'heart', x: cu.x - img.width / 2 + 9, y: this.floorY(cu.z) + 10 - img.height + 81, z: cu.z - 0.01, vx: -2, vy: -9, age: 0, life: 4, size: 0, ph: Math.random() * 6, wob: 6, wobF: 2, alpha: 0.8 });
+    // it just sits there being a seal: a slow breath and the odd blink
+    const img = cu.frames[(this.t % 4.2) > 4.05 ? 1 : 0];
+    const [sx, sy] = this.toScreen(cu.x, this.floorY(cu.z) + 8, cu.z);
+    const br = 1 + Math.sin(this.t * 1.4) * 0.012;
+    ctx.setTransform(1, 0, 0, br, Math.round(sx), Math.round(sy));
+    ctx.drawImage(img, -img.ox, -img.oy);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   drawAnemone(ctx, a) {

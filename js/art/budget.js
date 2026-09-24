@@ -11,6 +11,11 @@ const queue = [];
 export function queueWarm(fn) { queue.push(fn); }
 export function pumpWarm(ms) {
   const end = performance.now() + ms;
+  // the queue keeps its own time; a spent frame budget mustn't turn its
+  // renders into fallbacks
+  const left = B.left;
+  B.left = Infinity;
   while (queue.length && performance.now() < end) queue.shift()();
+  B.left = left;
   return queue.length;
 }

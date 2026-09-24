@@ -2,7 +2,8 @@
 import { TAU, clamp, lerp, ease, R, heartPoint, heartArc } from '../util.js';
 import { CONFIG, fill } from '../config.js';
 import { CX, CY } from '../world/scene.js';
-import { Creature } from '../world/creatures.js';
+import { Creature, sizeAt } from '../world/creatures.js';
+import { queueVariants } from '../art/fish.js';
 import { Particles, burstSparks, burstHearts, burstStars, popRing, bubbleSprite } from '../world/fx.js';
 import { drawText, textWidth, textPixels, textPixelsBold, wrap, chars, charX, LINE_H } from '../font.js';
 import { bottleSprite, makePaper, drawRoll, drawSeal, drawBubbleButton, drawSpeaker, Sweep, BubbleCurtain, LightBloom, bubbleLetter, heartFish } from './ui.js';
@@ -10,6 +11,11 @@ import { SoundEngine } from '../audio.js';
 import { AnimeFX } from './anime.js';
 import { heartFriends } from '../world/friends.js';
 import { PhotoMode } from './photo.js';
+import { Dialog } from './dialog.js';
+
+// the finale: the whole tank spells these out, one after another
+const LOVE_WORDS = ['I', 'LOVE', 'YOU'];
+const CROWD_KINDS = ['tang', 'butterfly', 'snapper', 'batfish', 'giant'];
 
 const WHALE_Z = 0.62;
 
@@ -61,6 +67,8 @@ export class Story {
     post.p.dim = 0.4;
     this.debug = opts.debug;
     this.photo = new PhotoMode(this);
+    this.dialog = new Dialog(this);
+    this.photoReady = false; // the camera comes out once the bean mentions it
   }
 
   start() { this.run(this.debug).catch((e) => console.error(e)); }
@@ -105,6 +113,7 @@ export class Story {
       this.post.p.blur = 0; this.post.p.dim = 0;
       const jump = { jelly: 8, reef: 23, walk: 41, hook: 54.5, bottle: 90, letter: 110, question: 136, finale: 151 };
       this.songOffset = jump[debug] ?? 0;
+      this.photoReady = true;
       this.sound.start();
       this.showSpeaker = CONFIG.sound;
       const order = ['jelly', 'reef', 'walk', 'hook', 'bottle', 'letter', 'question', 'finale'];
@@ -125,6 +134,7 @@ export class Story {
     }
     await this.titleScene();
     await this.dive();
+    await this.photoTutorial();
     await this.jellyScene();
     await this.reefScene();
     await this.mainWalk();
@@ -153,15 +163,16 @@ export class Story {
     if (this.trans === trans) this.trans = null;
   }
 
-  // Walk the couple to x1, timed to arrive as the song reaches `until`.
-  // Speed eases in and out, so steps start and settle gently.
-  walkTo(x1, until) {
+  // Walk the couple to x1, timed to arrive as the song reaches `until` (or
+  // another clock, before the song has started). Speed eases in and out, so
+  // steps start and settle gently.
+  walkTo(x1, until, clock = () => this.songT) {
     const st = this.stage, c = this.aq.couple;
     c.mode = 'walk';
     let v = 0;
     return this.until(() => {
       const d = x1 - st.coupleX;
-      const remain = Math.max(0.35, until - this.songT);
+      const remain = Math.max(0.35, until - clock());
       const want = clamp(Math.min(d / remain * 1.15, Math.sqrt(Math.max(0, d)) * 5), 0, 36);
       const dt = this.dt || 0.016;
       v += (want - v) * Math.min(1, dt * 2.2);
@@ -169,7 +180,7 @@ export class Story {
       st.coupleX += step;
       c.walk += step / 7.5;
       c.moving += (clamp(v / 18) - c.moving) * Math.min(1, dt * 5);
-      if (d < 0.4 || this.songT >= until) {
+      if (d < 0.4 || clock() >= until) {
         st.coupleX = x1;
         // let the last step settle instead of freezing mid-stride
         const settle = c.walk;
@@ -196,6 +207,24 @@ export class Story {
       const [sx, sy] = st.toScreen(x, st.coupleY - (who === 'guy' ? 76 : 70) - (who === 'guy' ? c.hop : 0), 0);
       return [Math.round(sx), Math.round(sy)];
     };
+  }
+
+  // Tween the whole look of the scene from wherever it is now: colour grade,
+  // saturation, sunlight, the tank's own light, vignette and extra glow.
+  grade(dur, g, ez = ease.inOutSine) {
+    const p = this.post.p, st = this.stage;
+    const from = { tint: p.tint.slice(), sat: p.sat, vig: p.vig, dim: p.dim, sun: this.sun, light: st.light ?? 1, glow: this.bloomAdd || 0 };
+    const tok = (this.gradeTok = {});
+    return this.tween(dur, (k) => {
+      if (this.gradeTok !== tok) return; // a newer grade took over
+      if (g.tint) p.tint = from.tint.map((v, i) => lerp(v, g.tint[i], k));
+      if (g.sat != null) p.sat = lerp(from.sat, g.sat, k);
+      if (g.vig != null) p.vig = lerp(from.vig, g.vig, k);
+      if (g.dim != null) p.dim = lerp(from.dim, g.dim, k);
+      if (g.sun != null) this.sun = lerp(from.sun, g.sun, k);
+      if (g.light != null) st.light = lerp(from.light, g.light, k);
+      if (g.glow != null) this.bloomAdd = lerp(from.glow, g.glow, k);
+    }, ez);
   }
 
   // A small idle gesture in the back view (c.point / c.glance): ease in,
@@ -226,10 +255,9 @@ export class Story {
     await this.wait(0.6);
     this.hint = { text: CONFIG.tapToBegin, y: () => Math.round(this.H * 0.66), a: 0 };
     { const h = this.hint; this.tween(0.8, (k) => { h.a = k; }); }
-    this.sound.armed = true; // the next tap starts the song inside the tap itself
-    await this.waitTap();
+    await this.waitTap();    // the tap wakes the audio; the song waits for the tour
     this.hint = null;
-    this.sound.start();      // no-op if the tap already started it
+    this.sound.ambience(true);
     this.showSpeaker = CONFIG.sound;
   }
 
@@ -237,14 +265,14 @@ export class Story {
   // reveals the jellyfish hall while the water wobbles.
   async dive() {
     const p = this.post.p;
-    await this.atSong(4.5);
+    await this.wait(0.3);
     this.diving = true;
     this.sound.sfx('dive');
     for (let i = 0; i < 90; i++) {
       this.fxBack.add({ kind: 'bubble', x: R() * this.W, y: this.H + 4 + R() * 60, vx: (R() - 0.5) * 8, vy: -50 - R() * 90, age: 0, life: 4, r: R() < 0.55 ? 1 : R() < 0.9 ? 2 : 3, wob: 9, wobF: 4, ph: R() * TAU, alpha: 0.8, fade: false });
     }
     this.tween(1.4, (k) => { p.warp = k * 0.7; });
-    await this.atSong(5.8);
+    await this.wait(1.3);
     const tr = new BubbleCurtain(this.W, this.H, 3.2);
     this.trans = tr;
     this.tween(3.2, (k) => {
@@ -258,13 +286,67 @@ export class Story {
     this.fxBack.clear();
     this.enterRoom(this.rooms.jelly || this.aq, CX - 260, CX - 320);
     this.aq.couple.apart = true; this.aq.couple.girlOn = false; // he comes on his own
+    this.grade(3, { tint: [0.92, 0.88, 1.16], sat: 1.2, vig: 0.74 });   // the jelly hall: dim and violet
     this.hud = true;
     this.stage.sendWave(CX - 700, 1, { speed: 900, amp: 7, width: 220, life: 3 });
     await this.until(() => tr.done);
     this.trans = null;
     this.tween(1.4, (k) => { p.warp = 0.7 * (1 - k); });
-    this.credit = { a: 0 };
-    { const C = this.credit; this.tween(1, (k) => { C.a = k; }); this.atSong(15).then(() => this.tween(1.2, (k) => { C.a = 1 - k; })); }
+  }
+
+  // Before the song: the jelly hall, him on his own with a camera, and a very
+  // small bean who does the tours here. Nothing is timed; it goes at the pace
+  // of whoever's playing, and the song starts when they head for the reef.
+  async photoTutorial() {
+    const st = this.stage, c = this.aq.couple, D = this.dialog, P = this.photo;
+    const bean = st.bean;
+    this.tutorial = true;
+    this.tween(4.5, (k) => { this.camX = lerp(CX - 260, CX - 170, k); }, ease.inOutSine);
+    await this.walkTo(CX - 190, this.t + 4, () => this.t);
+    await this.turnToGlass();
+    // the bean paddles over to say hi
+    if (bean) bean.go = () => [st.coupleX + 40, st.coupleY - 150 - st.extra * 0.2];
+    await this.wait(1.6);
+    this.anime.emote(this.headAt('guy'), '?', 1.2, '#3a6aff');
+    await D.say('bean', 'oh! a visitor! hi hi');
+    await D.say('me', '...did that bean just talk');
+    await D.say('bean', "I'm Mameshiba. I do the tours around here");
+    await D.say('bean', "ooh, you brought a camera? let's take some pictures!");
+    this.photoReady = true;
+    const camAt = () => { const [x, y, w] = P.camRect(); return [x + w / 2, y - 2]; };
+    D.point = camAt;
+    await D.say('bean', 'tap your camera down there to hold it up', { until: () => P.on });
+    D.point = null;
+    let shot = null;
+    P.onSnap = (info) => { shot = info; };
+    const jelly = (info) => info.keys.some((k) => k === 'jelly' || k === 'nettle' || k === 'bigjelly');
+    D.point = () => (P.on ? null : camAt()); // in case the camera goes back down
+    await D.say('bean', 'now tap on a jelly to take its picture', { until: () => shot });
+    while (!jelly(shot)) {
+      shot = null;
+      await D.say('bean', 'hmm, no jellies in that one. try again!', { until: () => shot });
+    }
+    P.onSnap = null;
+    D.point = null;
+    await this.until(() => !P.prints.length);
+    this.sound.sfx('sparkle');
+    this.anime.emote(() => { const [x, y] = st.toScreen(bean ? bean.x : st.coupleX, (bean ? bean.y : st.coupleY - 150) - 16, bean ? bean.z : 0); return [Math.round(x), Math.round(y)]; }, '!!', 1, '#ffb030');
+    await D.say('bean', 'nice shot!!');
+    await D.say('bean', 'every new animal goes in your album, and rare ones get you more points ✦');
+    const [bx, by, bw] = P.bookRect();
+    D.point = () => [bx + bw / 2, by - 2];
+    await D.say('bean', 'the album is next to the camera. you can spend points on camera stuff in there');
+    D.point = null;
+    await D.say('bean', "did you know? jellyfish don't have brains");
+    await D.say('me', 'same honestly');
+    const last = D.say('bean', 'keep snapping as you go. the reef is this way!');
+    await this.until(() => D.typed());
+    this.sound.armed = true; // the tap that closes this line starts the song
+    await last;
+    this.sound.start();      // no-op if the tap already did
+    P.on = false;            // lower the camera so the walk can be seen
+    if (bean) bean.go = null;
+    this.tutorial = false;
   }
 
   // Tap a creature and it reacts with a little sparkle.
@@ -314,17 +396,25 @@ export class Story {
     c.hold = 0; c.lean = 0; c.hug = 0; c.point = 0; c.glance = 0; c.mode = 'walk'; c.flip = 1;
   }
 
-  // Chapter 1: the jellyfish hall. He's here on his own, pointing out the
-  // jellies to nobody.
+  // Chapter 1: the jellyfish hall, now with the song. He wanders along the
+  // glass on his own, pointing out the jellies to nobody.
   async jellyScene() {
-    const c = this.aq.couple;
+    const c = this.aq.couple, D = this.dialog;
     if (!c.apart) { c.apart = true; c.girlOn = false; }
-    this.tween(14, (k) => { this.camX = lerp(CX - 260, CX, k); }, ease.inOutSine);
+    this.photoReady = true;
+    this.credit = { a: 0 };
+    { const C = this.credit; this.tween(1, (k) => { C.a = k; }); this.atSong(12).then(() => this.tween(1.2, (k) => { C.a = 1 - k; })); }
+    const cam0 = this.camX;
+    this.tween(14, (k) => { this.camX = lerp(cam0, CX, k); }, ease.inOutSine);
+    this.atSong(4).then(() => D.say('bean', 'psst. the big glowy ones are rarer', { life: 3 }));
     await this.atSong(8.5);
+    c.mode = 'walk';
     await this.walkTo(CX, 16);
     await this.turnToGlass();
+    this.atSong(16.5).then(() => D.say('bean', 'did you know? some jellies glow in the dark', { life: 3 }));
     this.gesture('point', 17.2, 1.6);
     this.gesture('point', 20.4, 1.4);
+    this.atSong(21).then(() => D.say('me', 'okay. clownfish next', { life: 2 }));
   }
 
   // Chapter 2: the clownfish reef, where he runs into her. He can't hide how
@@ -342,10 +432,27 @@ export class Story {
       this.sound.sfx('chime');
       await this.go(reef, new LightBloom(this.W, this.H, 2.6, [190, 240, 255]), () => { this.enterRoom(reef, CX - 160, CX - 150); meet(); });
     } else meet();
-    const st = this.stage, A = this.anime;
+    this.grade(2.5, { tint: [0.96, 1.07, 1.08], sat: 1.28, vig: 0.48, sun: 0.35, light: 1.1 });   // the reef: bright daylight
+    const st = this.stage, A = this.anime, D = this.dialog;
     const him = this.headAt('guy'), her = this.headAt('girl');
+    // what they say, pinned to the song
+    for (const [t, who, line, life] of [
+      [27.6, 'me', 'wait... {to}?', 1.2],
+      [29.0, 'her', "oh hey! you're here too?", 1.2],
+      [30.4, 'me', 'no way!! hi!!', 1.1],
+      [31.9, 'her', 'haha why are you so hyped', 1.2],
+      [33.5, 'me', "I didn't think I'd run into anyone!", 1.1],
+      [35.3, 'her', "what's the camera for?", 1.2],
+      [37.0, 'me', 'a bean told me to take pictures', 1.0],
+      [38.6, 'her', '...a what', 1.0],
+      [39.8, 'me', "come see the big tank, there's a whale shark", 1.6],
+    ]) this.atSong(t).then(() => D.say(who, line, { life }));
     const hop = (h, d) => this.tween(d, (k) => { c.hop = Math.sin(k * Math.PI) * h; });
-    this.tween(10, (k) => { this.camX = lerp(CX - 160, CX, k); }, ease.inOutSine);
+    // a slow pan along the reef; a narrow screen stays on the two of them
+    this.tween(10, (k) => {
+      const mid = st.coupleX + (c.apart && this.meetX != null ? (this.meetX - st.coupleX) / 2 : 0), m = this.W * 0.18;
+      this.camX = clamp(lerp(CX - 160, CX, k), mid - m, mid + m);
+    }, ease.inOutSine);
     await this.walkTo(Xg - 2 * gh - 40, 27.4);
     // he sees her
     c.mode = 'side';
@@ -359,8 +466,7 @@ export class Story {
     A.emote(her, '?', 0.8, '#3a6aff');
     await this.wait(0.5);
     this.tween(0.4, (k) => { c.girlWave = k; }, ease.outBack);
-    A.emote(her, 'hi!', 1.2, '#ff5aa0');
-    await this.atSong(29.0);
+    await this.atSong(29.8);
     // he can't keep still
     c.mode = 'front'; c.pose = 'cheer';
     this.sound.sfx('boing');
@@ -370,14 +476,14 @@ export class Story {
       this.fx.add({ kind: 'spark', x: hx + 6, y: hy - 38, vx: 20, vy: -30, drag: 1, age: 0, life: 0.6, size: 2, col: '#9ad8ff' });
       A.burst(him, 0.35);
       await hop(10 - i * 2, 0.36);
-      if (i === 1) { this.sound.sfx('boing'); A.shout(him, 'yay!', 0.9, '#ff6ab4'); }
+      if (i === 1) this.sound.sfx('boing');
     }
     c.pose = 'wave';
     this.tween(0.4, (k) => { c.girlWave = 1 - k; });
-    await this.atSong(30.8);
+    await this.atSong(31.2);
     // he walks over and holds out his hand
     c.mode = 'side';
-    await this.walkTo(Xg - 2 * gh - 4, 32.0);
+    await this.walkTo(Xg - 2 * gh - 4, 32.4);
     c.mode = 'side';
     this.tween(0.3, (k) => { c.shake = k; }, ease.outCubic);
     this.sound.sfx('pop'); this.sound.sfx('sparkle');
@@ -385,23 +491,19 @@ export class Story {
       const hands = () => { const [x, y] = st.toScreen(st.coupleX + 2, st.coupleY - 40, 0); return [Math.round(x), Math.round(y)]; };
       A.burst(hands, 0.6, '#fff4a0');
       A.focus = 0.7; A.focusAt = hands;
-      const above = () => { const [x, y] = st.toScreen(st.coupleX + 2, st.coupleY - 70, 0); return [Math.round(x), Math.round(y)]; };
-      A.shout(above, '✦ hi! ✦', 1.4, '#6ad8ff');
       const [hx, hy] = hands();
       burstStars(this.fx, hx, hy, 10, { speed: 50, size: 5 });
     }
-    await this.wait(1.2);
-    A.emote(her, 'haha', 1.2, '#ff5aa0');
-    await this.atSong(33.8);
+    await this.atSong(34.2);
     await this.tween(0.3, (k) => { c.shake = 1 - k; });
     // then stands with her, and they watch the reef together
-    await this.walkTo(Xg - gh, 35.0);
+    await this.walkTo(Xg - gh, 35.4);
     await this.turnToGlass();
     c.girlPose = 'back';
     c.apart = false; c.girlDX = 0; c.shake = 0; this.meetX = null;
     this.gesture('glance', 36.8, 2.2);
-    await this.atSong(37.6);
-    this.heartPop(this.stage, this.stage.coupleX - 8, this.stage.coupleY - 80);
+    await this.atSong(38.7);
+    A.emote(her, '?', 0.9, '#3a6aff');
   }
 
   // Chapter 3: along the great Buddha tank, arriving at the middle of the
@@ -419,6 +521,14 @@ export class Story {
       c.apart = false; c.girlOn = true; c.girlDX = 0; c.hop = 0; this.meetX = null;
     });
     this.tween(13.5, (k) => { this.camX = lerp(CX - 520, CX, k); }, ease.inOutSine);
+    this.grade(3, { tint: [0.84, 0.94, 1.14], sat: 1.0, vig: 0.66, sun: 0, dim: 0.08 });   // deep, cool blue before the hook
+    const D = this.dialog;
+    for (const [t, who, line, life] of [
+      [44.6, 'her', "whoa. it's so big", 1.4],
+      [47.4, 'me', 'right?? I come here way too much', 1.4],
+      [50.4, 'her', "it's really pretty in here", 1.4],
+      [53.2, 'me', 'yeah...', 1.2],
+    ]) this.atSong(t).then(() => D.say(who, line, { life }));
     await this.walkTo(CX, 56.6);
   }
 
@@ -445,12 +555,11 @@ export class Story {
     this.heartSparkle = { cx, cy, cz, s };
     // the heart's pink glow falls on them
     const blue = aq.coupleLight.slice(), pink = [255, 160, 210];
-    this.tween(3, (k) => {
-      // the light turns bright and warm, like summer sun through the water
-      p.tint = [1 + 0.07 * k, 1 + 0.035 * k, 1 - 0.02 * k]; p.bloom = 0.75 + 0.1 * k;
-      aq.light = 1 + 0.1 * k; this.sun = 0.45 * k;
-      aq.coupleLight = blue.map((v, i) => lerp(v, pink[i], k * 0.7));
-    });
+    // the whole tank flips to golden summer light in a heartbeat
+    p.flash = [1, 0.9, 0.7, 0.45];
+    this.tween(0.9, (k) => { p.flash[3] = 0.45 * (1 - k); });
+    this.grade(1.4, { tint: [1.2, 1.07, 0.86], sat: 1.36, vig: 0.44, sun: 1.1, light: 1.25, dim: 0, glow: 0.12 }, ease.outCubic);
+    this.tween(3, (k) => { aq.coupleLight = blue.map((v, i) => lerp(v, pink[i], k * 0.7)); });
     // "this could be us", pointing at them as they face each other
     this.atSong(59.6).then(() => {
       const C = this.cbu = { a: 0 };
@@ -479,10 +588,10 @@ export class Story {
     for (const k of crabs) { k.form = null; k.react(cx, aq.floorY(0.1), 0.8); }
     const lit = aq.coupleLight.slice();
     this.tween(2, (k) => {
-      glow.a = 0.5 * (1 - k); p.tint = [1.07 - 0.04 * k, 1.035 - 0.035 * k, 0.98 + 0.03 * k];
-      aq.light = 1.1 - 0.1 * k; this.sun = 0.45 * (1 - k) + 0.1 * k;
+      glow.a = 0.5 * (1 - k);
       aq.coupleLight = lit.map((v, i) => lerp(v, blue[i], k));
     }).then(() => { aq.glows.splice(aq.glows.indexOf(glow), 1); });
+    this.grade(3.5, { tint: [0.98, 0.97, 1.08], sat: 1.06, vig: 0.55, sun: 0.15, light: 1, glow: 0 });   // the gold fades to evening
     // back to the glass, hand in hand now
     await this.tween(0.16, (k) => { c.flip = 1 - 0.45 * k; });
     c.mode = 'back'; c.hold = 1; c.lean = 0; c.hug = 0;
@@ -526,7 +635,7 @@ export class Story {
     for (let i = 0; i < 7; i++) {
       const x0 = W * (0.1 + i * 0.14) + Math.sin(t * 0.3 + i * 1.7) * 14;
       const w = 10 + (i % 3) * 7;
-      const al = a * (0.03 + 0.025 * Math.sin(t * 0.8 + i * 2.3));
+      const al = a * (0.05 + 0.035 * Math.sin(t * 0.8 + i * 2.3));
       if (al <= 0) continue;
       const bg = ctx.createLinearGradient(0, 0, 0, H * 0.85);
       bg.addColorStop(0, `rgba(255,240,190,${al})`);
@@ -583,6 +692,7 @@ export class Story {
   async bottleScene() {
     const aq = this.aq;
     await this.atSong(91.0);
+    this.grade(5, { tint: [0.8, 0.87, 1.2], sat: 0.9, sun: 0 });   // night falls for the letter
     const b = (this.bottle = { x: CX - 58, y: aq.yTop - 40, z: 0.05, ang: 0.6, a: 1, base: 196, glow: 0, bob: 0, landed: false });
     const self = this;
     b.draw = (ctx) => self.drawBottle(ctx);
@@ -666,8 +776,10 @@ export class Story {
     await this.until(() => sw.covered());
     this.letter = null;
     p.blur = 0; p.dim = 0; p.uiGlow = 0.55; p.rip[3] = 0;
+    this.grade(2, { tint: [1.05, 1.0, 1.04], sat: 1.18, vig: 0.55, dim: 0 });
     c.mode = 'face'; c.hands = 1; c.hold = 0; c.lean = 0; c.hug = 0;
     this.camX = CX; aq.cam.x = CX;
+    this.warmLoveFish();
     const words = this.formWords(CONFIG.fishWords);
     this.trevPath = aq.trevSchool.path;
     aq.trevSchool.path = (t) => [CX + Math.sin(t * 0.1) * 260, 222 + Math.sin(t * 0.3) * 10, 0.62];
@@ -681,7 +793,7 @@ export class Story {
     burstStars(aq.fx, words.center[0], words.center[1], 18, { speed: 80, size: 6 });
     await this.atSong(144.0);
     // the room goes quiet around them: a soft spotlight, hearts drifting up
-    this.tween(2.5, (k) => { p.vig = 0.55 + 0.4 * k; p.dim = 0.14 * k; p.tint = [1 + 0.05 * k, 0.99, 1 + 0.03 * k]; }, ease.inOutSine);
+    this.grade(2.5, { tint: [1.1, 0.95, 1.08], vig: 0.95, dim: 0.16, sat: 1.12 });
     this.heartRain = 0.5;
     this.question = { a: 0 };
     { const Q = this.question; this.tween(1, (k) => { Q.a = k; }, ease.outCubic); }
@@ -745,14 +857,128 @@ export class Story {
     return { fish: chosen, glow, center: [CX, top + totalH / 2] };
   }
 
+  // How big the finale's fish lettering is on this screen.
+  letterCell(words) {
+    const tw = Math.max(...words.map((w) => textPixelsBold(w).w));
+    return { tw, cell: clamp(Math.floor((this.W - 40) / tw), 3, 6) };
+  }
+
+  // Draw the lettering fish at their smaller size ahead of time (while the
+  // question waits) so the finale never shows them at the wrong size.
+  warmLoveFish() {
+    const len = Math.max(9, this.letterCell(LOVE_WORDS).cell * 2 + 1);
+    for (const k of ['trevally', ...CROWD_KINDS]) for (const z of [0.05, 0.14]) queueVariants(k, sizeAt(len, z), [1, 3]);
+  }
+
+  // Fish spelling words one after another in the middle of the tank. The ones
+  // a word doesn't need swim a ring around it; between words everybody breaks
+  // off into the ring, then regroups into the next word.
+  wordLoop(pool, words, o = {}) {
+    const aq = this.aq, cz = o.cz ?? 0.1;
+    const pix = words.map((w) => textPixelsBold(w));
+    const { tw, cell } = this.letterCell(words);
+    // the fish grow with the lettering so the strokes read solid
+    for (const f of pool) f.len = Math.max(9, cell * 2 + 1);
+    // the middle of the window on screen, pinned there in the world
+    const par = 1 - 0.5 * cz, c = aq.curves;
+    const mid = c ? (Math.max(c.top(this.W / 2), 0) + c.sill(this.W / 2)) / 2 - 6 : this.H * 0.4;
+    const cx = CX + (aq.cam.x - CX) * par, cy = CY + (aq.cam.y - CY) * par + mid - this.H / 2;
+    const L = { words, pix, cell, cx, cy, cz, fish: pool.slice(), slot: new Map(), swirl: 1, i: -1 };
+    L.rx = Math.min((tw * cell) / 2 + 26, this.W / 2 - 22);
+    L.ry = Math.max((7 * cell) / 2 + 22, L.rx * 0.36);
+    const jx = Math.min(26, this.W * 0.08);
+    // a soft shadow in the water behind the letters, so glowing fish read
+    // against the bright tank
+    const plate = (L.plate = { z: cz + 0.03, w: 60, h: 7 * cell + 24, a: 0 });
+    plate.draw = (ctx) => {
+      if (plate.a < 0.01) return;
+      const [sx, sy] = aq.toScreen(cx, cy, plate.z);
+      ctx.save();
+      ctx.translate(sx, sy);
+      const r = plate.h * 0.9, g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+      ctx.scale((plate.w * 0.55) / r, 1);
+      g.addColorStop(0, 'rgba(4,20,58,1)');
+      g.addColorStop(0.55, 'rgba(4,20,58,0.6)');
+      g.addColorStop(1, 'rgba(4,20,58,0)');
+      ctx.globalAlpha = plate.a;
+      ctx.fillStyle = g;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+      ctx.restore();
+    };
+    aq.extras.push(plate);
+    for (const f of L.fish) {
+      const u = R(), jr = R(), bob = R() * TAU, zo = (R() - 0.5) * 0.05;
+      f.form = (t) => {
+        const s = !L.swirl && L.slot.get(f);
+        if (s) return [s[0] + Math.sin(t * 1.3 + bob) * 0.5, s[1] + Math.sin(t * 2.1 + bob) * 0.6, cz + s[2]];
+        const a = (u + t * 0.06) * TAU;
+        return [cx + Math.cos(a) * (L.rx + jr * jx), cy + Math.sin(a) * (L.ry + jr * 16), cz + 0.02 + zo + Math.sin(a) * 0.03];
+      };
+      f.formFace = 0;
+      f.formK = 0;
+      f.glowCol = o.glow;
+    }
+    return L;
+  }
+
+  // Word i: each letter pixel takes the nearest free fish.
+  wordGather(L, i) {
+    const P = L.pix[i], cell = L.cell;
+    let tg = P.px.map(([x, y]) => [L.cx - (P.w * cell) / 2 + x * cell + cell / 2, L.cy - (7 * cell) / 2 + y * cell + cell / 2, (x % 2) * 0.004]);
+    if (tg.length > L.fish.length) tg = L.fish.map((_, k) => tg[Math.floor((k * tg.length) / L.fish.length)]);
+    // the outermost pixels choose first so the middle doesn't steal them
+    tg.sort((a, b) => Math.abs(b[0] - L.cx) - Math.abs(a[0] - L.cx));
+    // only the silver trevally write, so the letters read as one colour; the
+    // bright reef fish keep circling
+    const free = new Set(L.fish.filter((f) => f.kind === 'trevally'));
+    if (free.size < tg.length) for (const f of L.fish) free.add(f);
+    L.slot.clear();
+    for (const s of tg) {
+      let best = null, bd = Infinity;
+      for (const f of free) { const d = (f.x - s[0]) ** 2 + (f.y - s[1]) ** 2; if (d < bd) { bd = d; best = f; } }
+      if (!best) break;
+      free.delete(best);
+      L.slot.set(best, s);
+      best.formFace = 1;
+    }
+    for (const f of L.fish) if (!L.slot.has(f)) f.formFace = 0;
+    L.i = i;
+    L.swirl = 0;
+    const pl = L.plate, w0 = pl.w, w1 = P.w * cell + 70;
+    this.tween(1.4, (k) => { pl.w = lerp(w0, w1, k); }, ease.inOutSine);
+  }
+
+  async runWordLoop(L) {
+    const aq = this.aq, pl = L.plate;
+    this.tween(2, (k) => { pl.a = 0.5 * k; });
+    for (let i = 0, first = true; this.loveLoop === L; i = (i + 1) % L.words.length, first = false) {
+      this.wordGather(L, i);
+      // the first time they come from all over the tank, so give them longer
+      await this.wait(first ? 2.6 : 1.3);
+      if (this.loveLoop !== L) return;
+      // the letters light up as they settle
+      const lit = [...L.slot.keys()];
+      this.tween(0.6, (k) => { for (const f of lit) f.glowA = Math.max(f.glowA, k); });
+      await this.wait(0.6);
+      if (this.loveLoop !== L) return;
+      burstStars(aq.fx, L.cx, L.cy, 10, { speed: 60, size: 5 });
+      await this.wait(L.words[i].length > 3 ? 2.6 : 2.1);
+      if (this.loveLoop !== L) return;
+      // break off and swim round
+      L.swirl = 1;
+      for (const f of L.fish) f.formFace = 0;
+      this.tween(0.8, (k) => { for (const f of lit) f.glowA = Math.min(f.glowA, 1 - k); });
+      await this.wait(1.7);
+    }
+  }
+
   async finaleScene() {
     const aq = this.aq, c = aq.couple, p = this.post.p;
     const yes = this.buttons.find((b) => b.id === 'yes');
     const bx = yes ? yes.x : this.W / 2, by = yes ? yes.y : this.H / 2;
     this.sound.sfx('yes');
-    this.tween(1.5, (k) => { p.vig = 0.95 - 0.4 * k; p.dim = 0.14 * (1 - k); });
-    p.flash = [1, 0.75, 0.88, 0.55];
-    this.tween(1.1, (k) => { p.flash[3] = 0.55 * (1 - k); });
+    p.flash = [1, 0.95, 0.8, 0.7];
+    this.tween(1.3, (k) => { p.flash[3] = 0.7 * (1 - k); });
     p.rip = [bx / this.W, by / this.H, 0, 1];
     this.tween(2.4, (k) => { p.rip[2] = k * 1.8; p.rip[3] = 1 - k; }, ease.outQuad).then(() => { p.rip[3] = 0; });
     burstHearts(this.fx, bx, by, 26, { speed: 110, spread: TAU, ay: -30, life: 2.6 });
@@ -770,7 +996,7 @@ export class Story {
     // hug
     this.tween(1.8, (k) => { c.hug = k; }, ease.inOutCubic);
     // summer: bright, warm, sunbeams pouring in
-    this.tween(2.5, (k) => { p.tint = [1 + 0.09 * k, 1 + 0.05 * k, 1 - 0.03 * k]; p.bloom = 0.75 + 0.12 * k; this.sun = Math.max(this.sun, k); }, ease.inOutSine);
+    this.grade(2.2, { tint: [1.24, 1.1, 0.84], sat: 1.42, vig: 0.36, dim: 0, sun: 1.3, light: 1.3, glow: 0.18 }, ease.outCubic);
     this.celebrate();
     await this.wait(1.6);
     this.sound.sfx('heart');
@@ -787,15 +1013,16 @@ export class Story {
     for (let i = 0; i < 7; i++) this.spawnJelly(true);
     const crabs = aq.crabs || [];
     crabs.forEach((k, i) => { const u = crabs.length > 1 ? i / (crabs.length - 1) - 0.5 : 0; k.form = [CX + u * 260, 0.05 + Math.abs(u) * 0.16]; });
-    this.tween(4, (k) => { aq.light = 1 + 0.18 * k; });
     // dolphins and seahorses arrive and swim a heart around the couple
     this.friends = heartFriends(CX, aq.coupleY - 105, 0.15, Math.min(95, this.W * 0.32), CX + this.W / 2);
     aq.creatures.push(...this.friends);
-    // and every fish in the tank gathers behind them to spell it out
-    const crowd = aq.trevSchool.m.concat(aq.creatures.filter((f) => ['tang', 'butterfly', 'snapper', 'batfish', 'giant'].includes(f.kind)));
-    for (const f of crowd) { f.len0 = f.len; f.len = 11; }
-    this.loveWords = this.formWords('I LOVE U', { pool: crowd, cz: 0.08, top: 58, glow: '#ffe0a0' });
-    this.tween(4, (k) => { for (const f of this.loveWords.fish) { f.formK = k; f.shadeA = k; } }, ease.inOutSine);
+    // and every fish in the tank comes to the middle of the glass to spell it
+    // out, one word at a time, circling round between the words
+    const crowd = aq.trevSchool.m.concat(aq.creatures.filter((f) => CROWD_KINDS.includes(f.kind)));
+    this.warmLoveFish();
+    const loop = (this.loveLoop = this.wordLoop(crowd, LOVE_WORDS, { cz: 0.08, glow: '#ffc08a' }));
+    this.tween(2.5, (k) => { for (const f of loop.fish) { f.formK = k; f.shadeA = k; } }, ease.inOutSine);
+    this.runWordLoop(loop);
     await this.wait(1.2);
     const whale = aq.spawnWhaleShark();
     whale.x = CX + this.W / 2 + 60;
@@ -832,7 +1059,7 @@ export class Story {
     this.tween(5, (k) => { for (const f of aq.bait) f.formK = k; }, ease.inOutSine);
     await this.atSong(203);
     this.chorus = false;
-    this.tween(8, (k) => { aq.light = 1.18 - 0.1 * k; p.bloom = 0.87 - 0.05 * k; this.sun = 1 - 0.3 * k; });
+    this.grade(8, { tint: [1.18, 0.98, 0.9], sat: 1.22, sun: 0.85, light: 1.12, glow: 0.06 });   // a warm sunset to close
     await this.wait(3);
     this.replay = { a: 0 };
     { const Rp = this.replay; this.tween(1, (k) => { Rp.a = k; }); }
@@ -989,6 +1216,8 @@ export class Story {
     st.cam.x += jx; st.cam.y += jy;
     this.anime.update(dt);
     this.photo.update(dt);
+    this.dialog.update(dt);
+    if (this.tutorial && R() < dt * 0.5) this.sound.sfx('blub');
     if (aq.couple.apart && this.meetX != null) aq.couple.girlDX = this.meetX - st.coupleX - aq.couple.gap / 2;
     // the music reaches into the tank
     st.pulse = snd.pulse;
@@ -1002,7 +1231,7 @@ export class Story {
       this.post.p.uiGlow = lerp(this.post.p.uiGlow, 0.55, Math.min(1, dt * 6));
       if (this.post.p.uiGlow > 0.54) { this.post.p.uiGlow = 0.55; this.albumGlow = false; }
     }
-    if (this.photo.album) { /* bloom handled above */ } else if (!this.letter) this.post.p.bloom = lerp(this.post.p.bloom, 0.75 + snd.level * 0.35 + snd.pulse * 0.15, Math.min(1, dt * 4));
+    if (this.photo.album) { /* bloom handled above */ } else if (!this.letter) this.post.p.bloom = lerp(this.post.p.bloom, 0.75 + snd.level * 0.35 + snd.pulse * 0.15 + (this.bloomAdd || 0), Math.min(1, dt * 4));
     if (this.chorus && snd.pulse === 1) {
       this.waveAcc++;
       if (this.waveAcc % 4 === 0) st.sendWave(this.waveAcc % 8 === 0 ? st.cam.x - 700 : st.cam.x + 700, this.waveAcc % 8 === 0 ? 1 : -1, { speed: 720, amp: 4, width: 170, life: 3 });
@@ -1061,7 +1290,7 @@ export class Story {
       b.hover = Math.abs(this.mouse[0] - b.x) < b.w / 2 + 2 && Math.abs(this.mouse[1] - b.y) < b.h / 2 + 2;
       if (b.hover && b.id === 'yes') this.hoverClickable = true;
     }
-    if (this.tapWait && !this.tapWait.check) this.hoverClickable = true;
+    if ((this.tapWait && !this.tapWait.check) || this.dialog.waiting()) this.hoverClickable = true;
     if (this.bottleHot) {
       const b = this.bottle;
       const [bx, by] = aq.toScreen(b.x, b.y, b.z);
@@ -1081,6 +1310,7 @@ export class Story {
     this.mouse = [x, y];
     if (this.photo.album && this.photo.pointer(type, x, y)) return; // the album sits over everything
     if (type === 'down' && this.speakerHover()) { this.speakerOn = !this.speakerOn; this.sound.setEnabled(this.speakerOn); return; }
+    if ((type === 'down' || type === 'key') && this.dialog.tap()) return;
     if (this.photo.pointer(type, x, y)) return;
     if (type === 'move') {
       const no = this.buttons.find((b) => b.id === 'no');
@@ -1333,5 +1563,6 @@ export class Story {
     }
     if (this.showSpeaker) { const [x, y] = this.speakerRect(); drawSpeaker(ctx, x + 2, y + 2, this.speakerOn, this.speakerHover()); }
     this.photo.draw(ctx);
+    if (!this.photo.album) this.dialog.draw(ctx); // over the viewfinder, under the album
   }
 }

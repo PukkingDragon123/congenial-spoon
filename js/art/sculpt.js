@@ -70,7 +70,7 @@ export function sculpt(w, h, field, mats, o = {}) {
       const mm = mt(x + dx, y + dy);
       if (mm && mm !== m && at(x + dx, y + dy) > hc + 1.6) { lvl -= 1.6; break; }
     }
-    buf.set(x, y, pal[clamp(Math.round(lvl + (bayer(x, y) - 0.5) * 0.85), 0, n - 1)]);
+    buf.set(x, y, pal[clamp(Math.round(lvl + (bayer(x, y) - 0.5) * (mat.dither ?? 0.85)), 0, n - 1)]);
   }
   // coloured outline around the whole shape
   const out = new Buf(w, h);

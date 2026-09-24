@@ -12,18 +12,21 @@ is the song in `audio/`.
 
 ## The story (the length of the song, about 3:45)
 
-Every beat is pinned to a moment in the track, and the whole tank moves with
-the music: fish bounce and squash on the beat, waves ripple through the
-schools, crabs wave their claws, and the light breathes with the song.
+It starts as a little photo game and only turns into a confession at the
+hook. Once the song is on, every beat is pinned to a moment in the track, and
+the whole tank moves with the music: fish bounce and squash on the beat, waves
+ripple through the schools, crabs wave their claws, and the light breathes
+with the song.
 
-1. **Title** (before the music): "Very Cool Aquarium Game". Tap to dive in and start the song.
-2. **Jellyfish hall** (0:05): he wanders in on his own, pointing out jellies to nobody. Tap any creature to make it react.
-3. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a stone Cupid on a fluted pedestal as its centrepiece (bow drawn, heart-tipped arrow, lit rose-pink from behind), anemones, clownfish families and schools of fish. He runs into her here: a "!" with anime focus lines, she turns and waves, he jumps around cheering, then walks over and they shake hands ("hi!"), she laughs, and they watch the reef together. A little heart pops when he glances over at her.
-4. **The walk** (0:42): along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
-5. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
-6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
-7. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
-8. **Finale**: a whale shark glides in carrying a heart of minnows, and in the middle of the screen bubbles float up and gather into *I ♥ you*, where the heart is a little heart-shaped fish swimming between the words. When she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates; dolphins and seahorses swim a heart around the couple, and all the fish gather in the background to spell *I LOVE U*. The crabs line up to dance, and the minnows come home to frame the Buddha.
+1. **Title**: "Very Cool Aquarium Game". Tap to dive in.
+2. **The tour** (before the music): he walks into the jellyfish hall on his own, and a Mameshiba paddles up to the glass. It does the tours here. In a dialogue box at the top of the screen it shows you the camera: hold it up, snap a jelly, watch the print develop, then the album and the points. It goes at your pace, with just the sound of the water. When you head for the reef, the song starts.
+3. **Jellyfish hall** (0:00): he wanders along the glass pointing out jellies to nobody, while the bean drops a tip or two. Tap any creature to make it react.
+4. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a fat seal dressed as Cupid sitting on a rock in the middle (wings, sash, bow and a heart-tipped arrow), anemones, clownfish families and schools of fish. He runs into her here, and they talk: "wait... {to}?", "oh hey! you're here too?". He jumps around, they shake hands, she asks about the camera, and he takes her to see the big tank.
+5. **The walk** (0:42): along the great Buddha tank as the camera follows, chatting on the way, arriving at the middle of the window on the hook.
+6. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
+7. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
+8. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
+9. **Finale**: when she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates. Dolphins and seahorses swim a heart around the couple, and all the fish come to the middle of the window to spell *I*, then *LOVE*, then *YOU*, over and over: the letters light up as they settle, and between words the whole crowd breaks off and circles round before it regroups. A whale shark glides past carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
 ### Photo mode
 
@@ -41,7 +44,9 @@ warm, then vivid colour) and roll. Your camera shows in the corner as you play. 
 legendaries are the whale shark, the Mameshiba, the tree friend, and the
 two of them together.
 
-Subtitles type in over a soft backing, one line at a time, and fade away in a few bubbles.
+Before the hook the characters talk in the dialogue box (the lines are in
+`js/story/story.js`). From the hook on, subtitles type in over a soft
+backing, one line at a time, and fade away in a few bubbles.
 Every line starts where a sung phrase starts in the track (found by
 measuring the song's vocal band). They are original lines, in
 `js/config.js` under `lyrics`: swap in your own words there.
@@ -115,7 +120,8 @@ is no build step.
 - **Sound** (`js/audio.js`): plays the song and runs a live analyser on it,
   giving the scene a loudness level and a beat pulse. The story reads its
   clock from the track, so it stays in sync. Small effects (bubbles, chimes)
-  are still synthesised. It starts on the first tap, and the speaker icon (top
+  are still synthesised. The first tap wakes the audio with a soft wash of
+  water; the song itself starts when the tour ends. The speaker icon (top
   right) mutes it.
 - **Galleries** (`js/world/rooms.js`): the jellyfish hall and the coral reef
   share the main tank's camera, couple and effects, so the story drives any

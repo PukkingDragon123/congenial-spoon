@@ -185,13 +185,13 @@ export class Creature {
     const X = Math.round(sx), Y = Math.round(sy + lift);
     if (this.shadeA > 0.01) {
       // a soft dark halo so fish spelling words stand out against bright water
-      const g = glowSprite(8, '#04143a');
-      ctx.globalAlpha = this.shadeA * 0.8;
-      ctx.drawImage(g, X - 8, Y - 8);
+      const g = glowSprite(9, '#04143a');
+      ctx.globalAlpha = this.shadeA * 0.9;
+      ctx.drawImage(g, X - 9, Y - 9);
       ctx.globalAlpha = 1;
     }
     if (this.glowA > 0.01) {
-      const g = glowSprite(7, '#9fe8ff');
+      const g = glowSprite(7, this.glowCol || '#9fe8ff');
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = this.glowA * 0.55;
       ctx.drawImage(g, X - 7, Y - 7);
@@ -386,7 +386,15 @@ export class Diver {
     this.rollT = Math.max(0, (this.rollT || 0) - dt * 1.4);
     this.rollIn = (this.rollIn ?? 3 + Math.random() * 4) - dt;
     if (this.rollIn <= 0) { this.rollT = 1; this.rollIn = 5 + Math.random() * 6; }
-    if (this.lead) {
+    if (this.go) {
+      // called over to a spot (the story's guide): swim there, then hover
+      const [tx, ty] = this.go();
+      const dx = tx - this.x;
+      if (Math.abs(dx) > 6) this.dir = Math.sign(dx);
+      else this.dir = -1; // face him
+      this.x += dx * Math.min(1, dt * 1.1);
+      this.y += (ty + Math.sin(this.t * 1.3) * 3 - this.y) * Math.min(1, dt * 1.1);
+    } else if (this.lead) {
       const L = this.lead;
       this.dir = L.dir;
       const tx = L.x + this.off[0] * L.dir, ty = L.y + this.off[1] + Math.sin(this.t * 0.9) * 3;
@@ -442,8 +450,8 @@ export class TreeFriend {
   constructor(o = {}) {
     this.kind = 'treefriend';
     this.x = o.x ?? 0; this.z = o.z ?? 0.04; this.y = 0;
-    this.len = 50;
-    this.hitDY = 28;
+    this.len = 64;
+    this.hitDY = 38;
     this.t = Math.random() * 3;
     this.hopT = 0;
     this.excite = 0;

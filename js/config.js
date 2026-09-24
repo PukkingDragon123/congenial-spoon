@@ -57,14 +57,9 @@ export const CONFIG = {
   //   [ time, text, band ]   band: 'high' (default, open water up top) | 'low'
   // Each line starts where a sung phrase starts in the track (found by
   // measuring the vocal band of the song), so the words breathe with it.
+  // (Before the hook the characters talk instead: see the dialogue in
+  // js/story/story.js.)
   lyrics: [
-    // the walk through the galleries
-    [20.0, "okay, don't laugh 👀"],
-    [25.0, 'I made this for you'],
-    [30.0, 'it took me way too long'],
-    [38.0, 'I wanted it to feel like a day out with you'],
-    [47.0, 'just the two of us'],
-    [51.0, "that's my favourite kind of day"],
     // the hook
     [58.0, 'I really like you'],
     [64.0, 'I have for a while now 👀'],
