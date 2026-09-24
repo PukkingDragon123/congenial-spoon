@@ -1321,7 +1321,6 @@ export class Story {
     if (this.letter) this.drawLetter(ctx);
     if (this.question) this.drawQuestion(ctx);
     for (const b of this.buttons) drawBubbleButton(ctx, b, this.t);
-    if (this.finale) this.drawFinale(ctx);
     if (this.hint) this.drawHint(ctx);
     this.fx.draw(ctx);
     this.anime.draw(ctx, this.W, this.H);
