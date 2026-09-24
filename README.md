@@ -17,8 +17,8 @@ the music: fish bounce and squash on the beat, waves ripple through the
 schools, crabs wave their claws, and the light breathes with the song.
 
 1. **Title** (before the music): "Very Cool Aquarium Game". Tap to dive in and start the song.
-2. **Jellyfish hall** (0:05): he wanders in on his own, both wired earbuds in, pointing out jellies to nobody. Tap any creature to make it react.
-3. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with anemones, clownfish families and schools of fish. He runs into her here: a "!" with anime focus lines, she turns and waves, he jumps around cheering and hits a dab (impact flash and all), she laughs, and they watch the reef together, sharing his earbuds, one each. A little heart pops when he glances over at her.
+2. **Jellyfish hall** (0:05): he wanders in on his own, pointing out jellies to nobody. Tap any creature to make it react.
+3. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with anemones, clownfish families and schools of fish. He runs into her here: a "!" with anime focus lines, she turns and waves, he jumps around cheering, then walks over and they shake hands ("hi!"), she laughs, and they watch the reef together. A little heart pops when he glances over at her.
 4. **The walk** (0:42): along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
 5. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
 6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
@@ -32,9 +32,12 @@ snap. The shot prints out of the camera, develops, and is scored: rarer
 creatures are worth more (common ★ up to legendary ★★★★), a first catch
 scores triple, and a centred subject gets a bonus. Every species goes into
 the postcard album (the pink book); tap a card to see it as a postcard.
-Points buy camera upgrades in the album's *camera* tab: a wider lens, better
-film (sepia, faded, warm, then vivid colour, each worth more), and a bigger
-roll that reloads faster. Albums and points are kept in the browser. The
+Points are spent in the album's *camera* workshop, which shows your camera
+up close: switch model (instant, disposable, toy cam, rangefinder, SLR, each
+with its own perk and points multiplier), paint the body and trim, cover it
+in stickers (including tiny prints of your own photos), hang a charm on the
+strap, doodle on it with markers, and upgrade the lens, film (sepia, faded,
+warm, then vivid colour) and roll. Your camera shows in the corner as you play. Albums and points are kept in the browser. The
 legendaries are the whale shark, the bean pup, the tree friend, and the
 two of them together.
 

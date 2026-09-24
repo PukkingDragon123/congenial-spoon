@@ -1,11 +1,19 @@
 // Photo mode: a little vintage camera. Aim at the tank and tap to snap; the
 // shot prints out of the camera, develops, and is scored by what's in it.
 // Every species you catch goes into a postcard album, rare ones are worth
-// more, and points buy camera upgrades (a wider lens, colour film, a bigger
-// roll). Progress is kept in this browser.
+// more, and points buy things in the camera workshop: other camera models,
+// paint, stickers (even ones made from your photos), a charm for the strap,
+// markers to doodle on it, and lens, film and roll upgrades. Progress is
+// kept in this browser.
 import { TAU, clamp, lerp, ease, R } from '../util.js';
 import { makeCanvas } from '../util.js';
 import { drawText, textWidth } from '../font.js';
+import {
+  CAM_W, CAM_H, MODELS, PAINTS, PAINT_PRICE, STICKERS, CHARMS, PENS, MARKER_PRICE,
+  defaultCam, renderCamera, drawCharm, drawStickerIcon, drawCharmIcon,
+} from './camera.js';
+
+const SUBTABS = ['model', 'paint', 'sticker', 'charm', 'draw', 'upgrade'];
 
 // key -> [name, rarity 1..4]
 export const SPECIES = {
@@ -49,7 +57,10 @@ export class PhotoMode {
     this.levels = { lens: 0, film: 0, roll: 0 };
     this.book = {};          // key -> { n, score, img (canvas) }
     this.shots = 0;
+    this.cam = defaultCam();
     this.load();
+    this.camDirty = true;
+    this.charmA = 0.3; this.charmV = 0;
     this.film = ROLL_CAP[this.levels.roll];
     this.reload = 0;
     this.prints = [];        // queued prints; the first one animates
@@ -66,10 +77,11 @@ export class PhotoMode {
       if (!d) return;
       this.points = d.points | 0; this.shown = this.points; this.shots = d.shots | 0;
       Object.assign(this.levels, d.levels || {});
+      if (d.cam) this.cam = Object.assign(defaultCam(), d.cam);
       for (const [k, v] of Object.entries(d.book || {})) {
         if (!SPECIES[k]) continue;
         const e = { n: v.n | 0, score: v.score | 0, img: null };
-        if (v.img) { const im = new Image(); im.onload = () => { e.img = toCanvas(im); }; im.src = v.img; }
+        if (v.img) { const im = new Image(); im.onload = () => { e.img = toCanvas(im); this.camDirty = true; }; im.src = v.img; }
         this.book[k] = e;
       }
     } catch (e) { /* storage unavailable: start fresh */ }
@@ -78,17 +90,31 @@ export class PhotoMode {
     try {
       const book = {};
       for (const [k, v] of Object.entries(this.book)) book[k] = { n: v.n, score: v.score, img: v.img ? v.img.toDataURL() : v.url || null };
-      localStorage.setItem(SAVE_KEY, JSON.stringify({ points: this.points, shots: this.shots, levels: this.levels, book }));
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ points: this.points, shots: this.shots, levels: this.levels, cam: this.cam, book }));
     } catch (e) { /* ignore */ }
   }
 
   // ------------------------------------------------------------- layout --
   get W() { return this.story.W; }
   get H() { return this.story.H; }
-  camRect() { return [this.W - 26, this.H - 17, 22, 14]; }
-  bookRect() { return [this.W - 44, this.H - 17, 15, 14]; }
+  // the HUD shows your own camera, full size on big screens
+  iconScale() { return this.W >= 560 ? 1 : 0.5; }
+  camRect() { const k = this.iconScale(), w = CAM_W * k, h = CAM_H * k; return [this.W - w - 12, this.H - h - 4, w, h]; }
+  bookRect() { const [cx] = this.camRect(); return [cx - 19, this.H - 17, 15, 14]; }
+  model() { return MODELS[this.cam.model] || MODELS.instant; }
+  camImage() {
+    if (this.camDirty || !this.camImg) {
+      this.camImg = renderCamera(this.cam, this.book);
+      const half = makeCanvas(CAM_W / 2, CAM_H / 2);
+      half.ctx.imageSmoothingEnabled = true;
+      half.ctx.drawImage(this.camImg, 0, 0, CAM_W / 2, CAM_H / 2);
+      this.camHalf = half;
+      this.camDirty = false;
+    }
+    return this.camImg;
+  }
   frameSize() {
-    const w = Math.round(Math.min(Math.max(56, this.W * FRAME_W[this.levels.lens]), this.W - 8));
+    const w = Math.round(Math.min(Math.max(56, this.W * (FRAME_W[this.levels.lens] + this.model().frame)), this.W - 8));
     return [w, Math.round(Math.min(w * 0.72, this.H * 0.5))];
   }
   frameRect() {
@@ -113,17 +139,23 @@ export class PhotoMode {
   // -------------------------------------------------------------- input --
   pointer(type, x, y) {
     if (!this.available()) return false;
-    if (type === 'move') { if (this.on) this.aim = [x, y]; return !!this.album; }
+    if (type === 'move') {
+      if (this.album && this.album.drawing) this.doodle(x, y);
+      else if (this.on) this.aim = [x, y];
+      return !!this.album;
+    }
+    if (type === 'up') { if (this.album && this.album.drawing) { this.album.drawing = false; this.album.last = null; this.saveArt(); } return !!this.album; }
     if (type !== 'down') return false;
     if (this.album) { this.albumTap(x, y); return true; }
     if (this.hit(this.camRect(), x, y)) {
       this.on = !this.on;
+      this.charmV += 3;
       this.aim = [this.W / 2, this.H * 0.45];
       this.story.sound.sfx(this.on ? 'ding' : 'pop');
       return true;
     }
     if (this.hit(this.bookRect(), x, y)) {
-      this.album = { tab: 'album', page: 0, card: null };
+      this.album = { tab: 'album', page: 0, card: null, sub: 'model', sel: null, pen: 3, drawing: false };
       this.on = false;
       this.story.sound.sfx('pop');
       return true;
@@ -141,6 +173,7 @@ export class PhotoMode {
     const [fx, fy, fw, fh] = this.frameRect();
     s.sound.sfx('shutter');
     this.flash = 1;
+    this.charmV += 5;
     // what's in the frame?
     const st = s.stage;
     const found = new Map();
@@ -164,7 +197,7 @@ export class PhotoMode {
     see(together ? 'us' : 'me', ux, uy);
     // score it
     const list = [...found.values()].sort((a, b) => SPECIES[b.key][1] - SPECIES[a.key][1] || a.d - b.d);
-    const mult = FILM_MULT[this.levels.film];
+    const mult = FILM_MULT[this.levels.film] * this.model().mult;
     let pts = 0, fresh = [];
     for (const f of list) {
       const r = SPECIES[f.key][1];
@@ -183,6 +216,7 @@ export class PhotoMode {
       if (f === main && pts >= e.score) { e.score = pts; e.img = img; }
       else if (!e.img) e.img = img;
     }
+    this.camDirty = true; // photo stickers may show the new shot
     this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0 });
     if (this.prints.length === 1) s.sound.sfx('print');
     this.save();
@@ -195,8 +229,9 @@ export class PhotoMode {
     const x = c.ctx;
     if (src) x.drawImage(src, fx, fy, fw, fh, 0, 0, fw, fh);
     const id = x.getImageData(0, 0, fw, fh), d = id.data;
-    const film = FILMS[this.levels.film];
-    const leak = R() < 0.5 ? [R() < 0.5 ? 0 : fw, R() < 0.5 ? 0 : fh] : null;
+    const film = FILMS[this.levels.film], M = this.model();
+    const leak = M.leak || R() < 0.5 ? [R() < 0.5 ? 0 : fw, R() < 0.5 ? 0 : fh] : null;
+    const vig = M.dream ? 2.6 : 1.5, grain = M.clean ? 8 : 22;
     for (let y = 0; y < fh; y++) for (let xx = 0; xx < fw; xx++) {
       const i = (y * fw + xx) * 4;
       let r = d[i], g = d[i + 1], b = d[i + 2];
@@ -209,10 +244,10 @@ export class PhotoMode {
       else { const m = (r + g + b) / 3; r = (m + (r - m) * 1.25 - 128) * 1.1 + 134; g = (m + (g - m) * 1.25 - 128) * 1.1 + 128; b = (m + (b - m) * 1.25 - 128) * 1.1 + 122; }
       // vignette, a light leak, and grain
       const vx = xx / fw - 0.5, vy = y / fh - 0.5;
-      const v = 1 - (vx * vx + vy * vy) * 1.5;
+      const v = Math.max(0, 1 - (vx * vx + vy * vy) * vig);
       r *= v; g *= v; b *= v;
       if (leak) { const k = Math.max(0, 1 - Math.hypot(xx - leak[0], y - leak[1]) / (fw * 0.55)); r += 120 * k * k; g += 50 * k * k; }
-      const n = (R() - 0.5) * 22;
+      const n = (R() - 0.5) * grain;
       d[i] = clamp(r + n, 0, 255); d[i + 1] = clamp(g + n, 0, 255); d[i + 2] = clamp(b + n, 0, 255);
     }
     x.putImageData(id, 0, 0);
@@ -232,6 +267,9 @@ export class PhotoMode {
     this.flash = Math.max(0, this.flash - dt * 4);
     this.shake = Math.max(0, this.shake - dt);
     this.albumBounce = Math.max(0, this.albumBounce - dt * 2.5);
+    // the charm swings on its chain and settles
+    this.charmV += (-this.charmA * 22 - this.charmV * 2.2 + Math.sin(this.t * 1.7) * 0.8) * dt;
+    this.charmA += this.charmV * dt;
     this.shown += (this.points - this.shown) * Math.min(1, dt * 6);
     if (Math.abs(this.points - this.shown) < 0.5) this.shown = this.points;
     const p = this.prints[0];
@@ -268,9 +306,12 @@ export class PhotoMode {
   }
 
   drawHud(ctx) {
-    const [cx, cy] = this.camRect(), [bx, by] = this.bookRect();
-    const pulse = this.on ? 1 : 0;
-    drawCamera(ctx, cx, cy, pulse, this.t);
+    const [cx, cy, cw, ch] = this.camRect(), [bx, by] = this.bookRect();
+    const img = this.camImage(), k = this.iconScale();
+    const lift = this.on ? -2 : 0;
+    if (this.on) { ctx.fillStyle = '#ffe38a'; ctx.globalAlpha = 0.5 + Math.sin(this.t * 6) * 0.2; ctx.fillRect(cx - 2, cy - 2 + lift, cw + 4, ch + 4); ctx.globalAlpha = 1; }
+    ctx.drawImage(k === 1 ? img : this.camHalf, cx, cy + lift);
+    drawCharm(ctx, this.cam.charm, cx + img.lug[0] * k, cy + lift + img.lug[1] * k, this.charmA, 1);
     drawBook(ctx, bx, by - Math.round(Math.sin(this.albumBounce * Math.PI) * 3));
     const pts = '✦' + Math.round(this.shown);
     drawText(ctx, pts, bx - 3, by + 4, { align: 'right', color: '#ffe38a', outline: '#3a2200' });
@@ -279,7 +320,7 @@ export class PhotoMode {
       const cap = ROLL_CAP[this.levels.roll];
       const txt = `${this.film}/${cap}`;
       const sx = Math.round((R() - 0.5) * 3 * this.shake * 3);
-      drawText(ctx, txt, cx + 11 + sx, cy - 10, { align: 'center', color: this.film ? '#ffffff' : '#ff6a6a', outline: '#1a1020' });
+      drawText(ctx, txt, cx + cw / 2 + sx, cy - 10, { align: 'center', color: this.film ? '#ffffff' : '#ff6a6a', outline: '#1a1020' });
     }
   }
 
@@ -303,7 +344,7 @@ export class PhotoMode {
     ctx.fillRect(cx - 3, cy, 2, 1); ctx.fillRect(cx + 2, cy, 2, 1); ctx.fillRect(cx, cy - 3, 1, 2); ctx.fillRect(cx, cy + 2, 1, 2);
     // a blinking red dot and the film type
     if (Math.sin(this.t * 5) > 0) { ctx.fillStyle = '#ff4a4a'; ctx.fillRect(fx + fw - 6, fy + 3, 3, 3); }
-    drawText(ctx, FILMS[this.levels.film], fx + 3, fy + 3, { color: '#fff4dc', outline: '#2a1a08' });
+    drawText(ctx, fit(`${this.model().name} · ${FILMS[this.levels.film]}`, fw - 12), fx + 3, fy + 3, { color: '#fff4dc', outline: '#2a1a08' });
     if (!this.film) drawText(ctx, 'reloading...', cx, fy + fh - 11, { align: 'center', color: '#ffb0a0', outline: '#2a0a08' });
   }
 
@@ -313,10 +354,10 @@ export class PhotoMode {
     const W = this.W, H = this.H;
     const img = p.img, pw = img.width + 6, ph = img.height + 16;
     const s = Math.max(1, Math.min(2, Math.floor(Math.min((W - 20) / pw, (H * 0.62) / ph))));
-    const [cx, cy] = this.camRect(), [bx, by] = this.bookRect();
+    const [cx, cy, cw] = this.camRect(), [bx, by] = this.bookRect();
     const t = p.t;
     let x, y, sc = 1, a = 1;
-    const outX = cx + 11 - pw / 2, outY0 = cy + 6, outY1 = cy - ph + 2;
+    const outX = cx + cw / 2 - pw / 2, outY0 = cy + 6, outY1 = cy - ph + 2;
     const midX = W / 2 - (pw * s) / 2, midY = H * 0.42 - (ph * s) / 2;
     if (t < 1) { x = outX; y = lerp(outY0, outY1, ease.outCubic(t)); }
     else if (t < 1.6) { const k = ease.inOutCubic((t - 1) / 0.6); x = lerp(outX, midX, k); y = lerp(outY1, midY, k); sc = lerp(1, s, k); }
@@ -370,11 +411,6 @@ export class PhotoMode {
   tabRects() { const [px, py] = this.panel(); return { album: [px + 4, py + 4, 36, 11], camera: [px + 44, py + 4, 42, 11] }; }
   closeRect() { const [px, py, pw] = this.panel(); return [px + pw - 13, py + 3, 10, 10]; }
   navRects() { const [px, py, pw, ph] = this.panel(); return { prev: [px + 6, py + ph - 14, 12, 11], next: [px + pw - 18, py + ph - 14, 12, 11] }; }
-  shopRows() {
-    const [px, py, pw] = this.panel();
-    return Object.keys(UPGRADES).map((k, i) => ({ k, r: [px + 6, py + 24 + i * 30, pw - 12, 26], buy: [px + pw - 52, py + 31 + i * 30, 42, 12] }));
-  }
-
   albumTap(x, y) {
     const A = this.album, snd = this.story.sound;
     if (A.card) { A.card = null; snd.sfx('pop'); return; }
@@ -391,20 +427,7 @@ export class PhotoMode {
         const cx = G.gx + (i % G.cols) * (G.cw + 4), cy = G.gy + Math.floor(i / G.cols) * (G.ch + 4);
         if (this.hit([cx, cy, G.cw, G.ch], x, y) && this.book[key]) { A.card = key; snd.sfx('chime'); return; }
       }
-    } else {
-      for (const row of this.shopRows()) {
-        if (!this.hit(row.buy, x, y)) continue;
-        const lv = this.levels[row.k], cost = UPGRADES[row.k].costs[lv];
-        if (cost == null) return;
-        if (this.points < cost) { snd.sfx('escape'); this.shake = 0.3; return; }
-        this.points -= cost; this.shown = this.points;
-        this.levels[row.k]++;
-        if (row.k === 'roll') this.film = ROLL_CAP[this.levels.roll];
-        snd.sfx('yes');
-        this.save();
-        return;
-      }
-    }
+    } else this.workshopTap(x, y);
   }
 
   drawAlbum(ctx) {
@@ -426,7 +449,7 @@ export class PhotoMode {
     const found = ORDER.filter((k) => this.book[k]).length;
     if (pw > 150) drawText(ctx, `✦${this.points}`, cx - 6, py + 6, { align: 'right', color: '#c27a10' });
     if (A.tab === 'album') this.drawGrid(ctx, found);
-    else this.drawShop(ctx);
+    else this.drawWorkshop(ctx);
     if (A.card) this.drawPostcard(ctx, A.card);
   }
 
@@ -467,24 +490,225 @@ export class PhotoMode {
     }
   }
 
-  drawShop(ctx) {
+  // ----------------------------------------------------------- workshop --
+  // Layout: the camera on a little desk (left on wide screens, on top on tall
+  // ones), then the sub-tabs and whatever the current one offers.
+  ws() {
     const [px, py, pw, ph] = this.panel();
-    for (const row of this.shopRows()) {
-      const [x, y, w, h] = row.r, U = UPGRADES[row.k], lv = this.levels[row.k];
-      ctx.fillStyle = '#fffaf0'; ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = '#e4d2ac'; ctx.fillRect(x, y + h - 1, w, 1);
-      drawText(ctx, U.name, x + 4, y + 3, { color: '#3a2a4a' });
-      for (let k = 0; k < 3; k++) { ctx.fillStyle = k < lv ? '#ff8ab4' : '#d8c8a8'; ctx.fillRect(x + 4 + textWidth(U.name) + 4 + k * 5, y + 5, 4, 4); }
-      const say = (l) => (row.k === 'lens' ? LENSES[l] : row.k === 'film' ? `${FILMS[l]} x${FILM_MULT[l]}` : `${ROLL_CAP[l]} shots`);
-      const now = lv < 3 ? `${say(lv)} > ${say(lv + 1)}` : say(lv);
-      drawText(ctx, fit(now, w - 58), x + 4, y + 14, { color: '#8a6a4a' });
-      const cost = U.costs[lv];
-      const [bx, by, bw, bh] = row.buy;
-      const can = cost != null && this.points >= cost;
-      ctx.fillStyle = cost == null ? '#c8b898' : can ? '#ff6a9a' : '#c8a8b0'; ctx.fillRect(bx, by, bw, bh);
-      drawText(ctx, cost == null ? 'max' : `✦${cost}`, bx + bw / 2, by + 3, { align: 'center', color: '#ffffff' });
+    const top = py + 18, land = pw > ph * 1.15;
+    let box, opt;
+    if (land) { const bw = Math.round(pw * 0.46); box = [px + 6, top, bw, ph - 24]; opt = [px + bw + 12, top, pw - bw - 18, ph - 24]; }
+    else { const bh = Math.round(Math.min(ph * 0.34, (pw - 12) * 0.62)); box = [px + 6, top, pw - 12, bh]; opt = [px + 6, top + bh + 5, pw - 12, ph - bh - 29]; }
+    const s = clamp(Math.floor(Math.min((box[2] - 8) / (CAM_W + 8), (box[3] - 16) / (CAM_H + 12))), 1, 6);
+    const cx = Math.round(box[0] + (box[2] - CAM_W * s) / 2), cy = Math.round(box[1] + (box[3] - 12 - CAM_H * s) / 2);
+    const chips = [];
+    let x = opt[0], y = opt[1];
+    for (const k of SUBTABS) {
+      const w = textWidth(k) + 8;
+      if (x + w > opt[0] + opt[2]) { x = opt[0]; y += 13; }
+      chips.push({ k, r: [x, y, w, 11] });
+      x += w + 3;
     }
-    drawText(ctx, 'snap rare fish for more ✦', px + pw / 2, py + ph - 12, { align: 'center', color: '#8a6a4a' });
+    const body = [opt[0], y + 16, opt[2], opt[1] + opt[3] - (y + 16)];
+    return { box, opt, s, cx, cy, chips, body };
+  }
+
+  // Everything tappable in the current sub-tab, with where it goes.
+  wsItems(L) {
+    const A = this.album, C = this.cam, [bx, by, bw] = L.body, items = [];
+    const flow = (list, size, gap, y0) => {
+      let x = bx, y = y0;
+      for (const it of list) {
+        if (x + size > bx + bw) { x = bx; y += size + gap; }
+        it.r = [x, y, size, size];
+        items.push(it);
+        x += size + gap;
+      }
+      return y + size + gap;
+    };
+    const button = (label, x, y, act) => { const w = textWidth(label) + 8; items.push({ kind: 'btn', label, act, r: [x, y, w, 11] }); return w; };
+    if (A.sub === 'model') {
+      Object.keys(MODELS).forEach((k, i) => items.push({ kind: 'model', id: k, r: [bx, by + i * 18, bw, 16] }));
+    } else if (A.sub === 'paint') {
+      const list = (slot) => Object.keys(PAINTS).map((id) => ({ kind: 'paint', slot, id }));
+      items.push({ kind: 'label', label: 'body', r: [bx, by, 0, 0] });
+      const y2 = flow(list('body'), 11, 3, by + 9);
+      items.push({ kind: 'label', label: 'trim', r: [bx, y2 + 2, 0, 0] });
+      flow(list('trim'), 11, 3, y2 + 11);
+    } else if (A.sub === 'sticker') {
+      const list = Object.keys(STICKERS).filter((k) => k !== 'photo').map((id) => ({ kind: 'sticker', id }));
+      const photos = Object.keys(this.book).filter((k) => this.book[k].img).map((key) => ({ kind: 'sticker', id: 'photo', key }));
+      const y2 = flow(list.concat(photos.length ? photos : [{ kind: 'sticker', id: 'photo', key: null }]), 14, 3, by);
+      const w = button('undo', bx, y2, () => { C.stickers.pop(); this.camChanged(); });
+      button('clear', bx + w + 4, y2, () => { C.stickers = []; this.camChanged(); });
+    } else if (A.sub === 'charm') {
+      flow([{ kind: 'charm', id: null }].concat(Object.keys(CHARMS).map((id) => ({ kind: 'charm', id }))), 16, 3, by);
+    } else if (A.sub === 'draw') {
+      if (!C.markers) button(`buy markers ✦${MARKER_PRICE}`, bx, by, () => { if (this.spend(MARKER_PRICE)) { C.markers = true; this.save(); } });
+      else {
+        const y2 = flow(PENS.map((col, i) => ({ kind: 'pen', id: i + 1 })).concat([{ kind: 'pen', id: 0 }]), 11, 3, by);
+        button('clear', bx, y2, () => { C.art = ''; this.artArr = null; this.camChanged(); });
+      }
+    } else if (A.sub === 'upgrade') {
+      Object.keys(UPGRADES).forEach((k, i) => items.push({ kind: 'upgrade', id: k, r: [bx, by + i * 28, bw, 25] }));
+    }
+    return items;
+  }
+
+  spend(cost) {
+    if (this.points < cost) { this.shake = 0.4; this.story.sound.sfx('escape'); return false; }
+    this.points -= cost; this.shown = this.points;
+    this.story.sound.sfx('coin');
+    return true;
+  }
+  camChanged() { this.camDirty = true; this.save(); }
+
+  workshopTap(x, y) {
+    const A = this.album, C = this.cam, snd = this.story.sound, L = this.ws();
+    for (const c of L.chips) if (this.hit(c.r, x, y)) { A.sub = c.k; A.sel = null; snd.sfx('type'); return; }
+    // on the camera itself: stick a sticker, or start doodling
+    const gx = Math.floor((x - L.cx) / L.s), gy = Math.floor((y - L.cy) / L.s);
+    if (gx >= 0 && gy >= 0 && gx < CAM_W && gy < CAM_H) {
+      if (A.sub === 'sticker' && A.sel) {
+        if (C.stickers.length >= 16) C.stickers.shift();
+        C.stickers.push({ k: A.sel.id, key: A.sel.key || undefined, x: gx, y: gy });
+        snd.sfx('pop'); this.camChanged();
+        return;
+      }
+      if (A.sub === 'draw' && C.markers) { A.drawing = true; this.doodle(x, y); return; }
+      this.charmV += 4; snd.sfx('type');
+      return;
+    }
+    for (const it of this.wsItems(L)) {
+      if (!it.r || !this.hit(it.r, x, y)) continue;
+      if (it.kind === 'btn') { it.act(); snd.sfx('type'); return; }
+      if (it.kind === 'model') {
+        const M = MODELS[it.id];
+        if (!C.models.includes(it.id)) { if (!this.spend(M.price)) return; C.models.push(it.id); snd.sfx('yes'); }
+        C.model = it.id; this.charmV += 4; this.camChanged(); return;
+      }
+      if (it.kind === 'paint') {
+        if (!C.paints.includes(it.id)) { if (!this.spend(PAINT_PRICE)) return; C.paints.push(it.id); }
+        C[it.slot] = it.id; snd.sfx('pop'); this.camChanged(); return;
+      }
+      if (it.kind === 'sticker') {
+        if (!C.stickerSet.includes(it.id)) { if (!this.spend(STICKERS[it.id])) return; C.stickerSet.push(it.id); this.save(); }
+        if (it.id === 'photo' && !it.key) { this.shake = 0.3; return; }
+        A.sel = { id: it.id, key: it.key }; snd.sfx('pop'); return;
+      }
+      if (it.kind === 'charm') {
+        if (it.id && !C.charms.includes(it.id)) { if (!this.spend(CHARMS[it.id])) return; C.charms.push(it.id); }
+        C.charm = it.id; this.charmV += 6; snd.sfx('ding'); this.save(); return;
+      }
+      if (it.kind === 'pen') { A.pen = it.id; snd.sfx('type'); return; }
+      if (it.kind === 'upgrade') {
+        const lv = this.levels[it.id], cost = UPGRADES[it.id].costs[lv];
+        if (cost == null || !this.spend(cost)) return;
+        this.levels[it.id]++;
+        if (it.id === 'roll') this.film = ROLL_CAP[this.levels.roll];
+        snd.sfx('yes'); this.save(); return;
+      }
+    }
+  }
+
+  doodle(x, y) {
+    const L = this.ws(), A = this.album;
+    const gx = Math.floor((x - L.cx) / L.s), gy = Math.floor((y - L.cy) / L.s);
+    if (!this.artArr) this.artArr = (this.cam.art || '').padEnd(CAM_W * CAM_H, '0').split('');
+    // join up the stroke from the last point so fast drags draw lines
+    const from = A.last || [gx, gy], n = Math.max(Math.abs(gx - from[0]), Math.abs(gy - from[1]), 1);
+    for (let k = 0; k <= n; k++) {
+      const px = Math.round(lerp(from[0], gx, k / n)), py = Math.round(lerp(from[1], gy, k / n));
+      if (px >= 0 && py >= 0 && px < CAM_W && py < CAM_H) this.artArr[py * CAM_W + px] = A.pen.toString(16);
+    }
+    A.last = [gx, gy];
+    this.cam.art = this.artArr.join('');
+    this.camDirty = true;
+  }
+  saveArt() { this.save(); }
+
+  drawWorkshop(ctx) {
+    const A = this.album, C = this.cam, L = this.ws(), [bx, by, bw, bh] = L.box;
+    // the desk
+    ctx.fillStyle = '#d9c49a'; ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = '#c8b084'; for (let j = by + 3; j < by + bh; j += 5) ctx.fillRect(bx, j, bw, 1);
+    ctx.fillStyle = 'rgba(60,40,20,0.25)'; ctx.fillRect(L.cx + 2 * L.s, L.cy + (CAM_H - 2) * L.s, (CAM_W - 4) * L.s, 3 * L.s);
+    const img = this.camImage();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, L.cx, L.cy, CAM_W * L.s, CAM_H * L.s);
+    if (A.sub === 'draw' && C.markers) {
+      ctx.fillStyle = 'rgba(40,20,10,0.18)';
+      for (let j = 0; j <= CAM_H; j += 2) for (let i = 0; i <= CAM_W; i += 2) ctx.fillRect(L.cx + i * L.s, L.cy + j * L.s, 1, 1);
+    }
+    drawCharm(ctx, C.charm, L.cx + img.lug[0] * L.s, L.cy + img.lug[1] * L.s, this.charmA, Math.max(1, Math.round(L.s * 0.75)));
+    const M = this.model();
+    drawText(ctx, fit(`${M.name} · ${M.perk}`, bw - 6), bx + bw / 2, by + bh - 10, { align: 'center', color: '#5a3a1e' });
+    // sub-tabs
+    for (const c of L.chips) {
+      const [x, y, w, h] = c.r, on = A.sub === c.k;
+      ctx.fillStyle = on ? '#ff8ab4' : '#e4d2ac'; ctx.fillRect(x, y, w, h);
+      drawText(ctx, c.k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#6a4a2a' });
+    }
+    const hint = { sticker: A.sel ? 'tap the camera to stick it on' : 'pick a sticker', draw: C.markers ? 'draw on the camera' : '', paint: `new colours ✦${PAINT_PRICE}`, charm: 'hangs from the strap' }[A.sub];
+    for (const it of this.wsItems(L)) {
+      const [x, y, w, h] = it.r;
+      if (it.kind === 'label') { drawText(ctx, it.label, x, y, { color: '#8a6a4a' }); continue; }
+      if (it.kind === 'btn') { ctx.fillStyle = '#ff6a9a'; ctx.fillRect(x, y, w, h); drawText(ctx, it.label, x + w / 2, y + 2, { align: 'center', color: '#ffffff' }); continue; }
+      if (it.kind === 'model') {
+        const Md = MODELS[it.id], owned = C.models.includes(it.id), on = C.model === it.id;
+        ctx.fillStyle = on ? '#ffe4ee' : '#fffaf0'; ctx.fillRect(x, y, w, h);
+        drawText(ctx, Md.name, x + 3, y + 2, { color: '#3a2a4a' });
+        if (w > 120) drawText(ctx, fit(Md.perk, w - textWidth(Md.name) - 50), x + textWidth(Md.name) + 8, y + 2, { color: '#8a6a4a' });
+        const tag = on ? 'using' : owned ? 'use' : `✦${Md.price}`;
+        const tw = textWidth(tag) + 6;
+        ctx.fillStyle = on ? '#8ad0a0' : owned ? '#c8b898' : this.points >= Md.price ? '#ff6a9a' : '#c8a8b0';
+        ctx.fillRect(x + w - tw - 2, y + 2, tw, 11);
+        drawText(ctx, tag, x + w - tw / 2 - 2, y + 4, { align: 'center', color: '#ffffff' });
+        continue;
+      }
+      if (it.kind === 'paint') {
+        const on = C[it.slot] === it.id, owned = C.paints.includes(it.id);
+        ctx.fillStyle = on ? '#ff3a7a' : '#5a3a1e'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+        ctx.fillStyle = PAINTS[it.id]; ctx.fillRect(x, y, w, h);
+        if (!owned) { ctx.fillStyle = 'rgba(40,20,10,0.55)'; ctx.fillRect(x + 3, y + 5, 5, 4); ctx.fillRect(x + 4, y + 3, 3, 2); }
+        continue;
+      }
+      if (it.kind === 'sticker' || it.kind === 'charm') {
+        const id = it.id, sel = it.kind === 'sticker' ? A.sel && A.sel.id === id && A.sel.key === it.key : C.charm === id;
+        const owned = it.kind === 'sticker' ? C.stickerSet.includes(id) : !id || C.charms.includes(id);
+        ctx.fillStyle = sel ? '#ff8ab4' : '#fffaf0'; ctx.fillRect(x, y, w, h);
+        if (it.kind === 'sticker' && id === 'photo') {
+          const im = it.key && this.book[it.key].img;
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 2, y + 3, w - 4, h - 5);
+          if (im) { ctx.imageSmoothingEnabled = true; ctx.drawImage(im, x + 3, y + 4, w - 6, h - 8); ctx.imageSmoothingEnabled = false; }
+          else drawText(ctx, '?', x + w / 2, y + 4, { align: 'center', color: '#a08060' });
+        } else if (it.kind === 'sticker') drawStickerIcon(ctx, id, x + w / 2, y + h / 2);
+        else if (id) drawCharmIcon(ctx, id, x + w / 2, y + h / 2);
+        else drawText(ctx, '×', x + w / 2, y + 5, { align: 'center', color: '#a08060' });
+        if (!owned) { ctx.fillStyle = 'rgba(243,230,200,0.6)'; ctx.fillRect(x, y, w, h); const pr = it.kind === 'sticker' ? STICKERS[id] : CHARMS[id]; drawText(ctx, `${pr}`, x + w / 2, y + h - 7, { align: 'center', color: '#c2466e' }); }
+        continue;
+      }
+      if (it.kind === 'pen') {
+        const on = A.pen === it.id;
+        ctx.fillStyle = on ? '#ff3a7a' : '#5a3a1e'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+        if (it.id) { ctx.fillStyle = PENS[it.id - 1]; ctx.fillRect(x, y, w, h); }
+        else { ctx.fillStyle = '#fffaf0'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#ff6a8a'; ctx.fillRect(x + 2, y + 4, w - 4, 3); }
+        continue;
+      }
+      if (it.kind === 'upgrade') {
+        const U = UPGRADES[it.id], lv = this.levels[it.id];
+        ctx.fillStyle = '#fffaf0'; ctx.fillRect(x, y, w, h);
+        drawText(ctx, U.name, x + 4, y + 3, { color: '#3a2a4a' });
+        for (let k = 0; k < 3; k++) { ctx.fillStyle = k < lv ? '#ff8ab4' : '#d8c8a8'; ctx.fillRect(x + 8 + textWidth(U.name) + k * 5, y + 5, 4, 4); }
+        const say = (l) => (it.id === 'lens' ? LENSES[l] : it.id === 'film' ? `${FILMS[l]} x${FILM_MULT[l]}` : `${ROLL_CAP[l]} shots`);
+        drawText(ctx, fit(lv < 3 ? `${say(lv)} > ${say(lv + 1)}` : say(lv), w - 50), x + 4, y + 14, { color: '#8a6a4a' });
+        const cost = U.costs[lv], tag = cost == null ? 'max' : `✦${cost}`, tw = textWidth(tag) + 6;
+        ctx.fillStyle = cost == null ? '#c8b898' : this.points >= cost ? '#ff6a9a' : '#c8a8b0';
+        ctx.fillRect(x + w - tw - 3, y + 7, tw, 11);
+        drawText(ctx, tag, x + w - tw / 2 - 3, y + 9, { align: 'center', color: '#ffffff' });
+      }
+    }
+    if (hint) { const [ox, oy, ow, oh] = L.opt; drawText(ctx, fit(hint, ow), ox + ow / 2, oy + oh - 9, { align: 'center', color: '#8a6a4a' }); }
   }
 
   // a big postcard: the photo, a stamp and a postmark
@@ -543,22 +767,6 @@ function paper(ctx, x, y, w, h) {
   for (let i = 4; i < h - 4; i += 4) { ctx.fillRect(x + 2, y + i, 1, 2); ctx.fillRect(x + w - 3, y + i, 1, 2); }
 }
 
-// A chunky vintage instant camera: leather body, silver top, big lens.
-function drawCamera(ctx, x, y, on, t) {
-  const lift = on ? -1 : 0;
-  y += lift;
-  if (on) { ctx.fillStyle = '#ffe38a'; ctx.fillRect(x - 1, y - 1, 24, 16); }
-  ctx.fillStyle = '#1a1020'; ctx.fillRect(x, y + 2, 22, 12); ctx.fillRect(x + 1, y + 1, 20, 14);
-  ctx.fillStyle = '#d8d4cc'; ctx.fillRect(x + 1, y + 2, 20, 4);   // silver top
-  ctx.fillStyle = '#f4f0ea'; ctx.fillRect(x + 2, y + 2, 18, 1);
-  ctx.fillStyle = '#8a5a34'; ctx.fillRect(x + 1, y + 6, 20, 8);   // leather
-  ctx.fillStyle = '#6e4424'; for (let i = 0; i < 20; i += 2) ctx.fillRect(x + 1 + i, y + 7 + (i % 4 ? 2 : 4), 1, 1);
-  ctx.fillStyle = '#1a1020'; ctx.fillRect(x + 7, y + 3, 8, 9); ctx.fillRect(x + 6, y + 4, 10, 7); // lens barrel
-  ctx.fillStyle = '#4a5a7a'; ctx.fillRect(x + 8, y + 5, 6, 5);
-  ctx.fillStyle = '#9ac8ff'; ctx.fillRect(x + 9, y + 5, 2, 2);
-  ctx.fillStyle = '#e8403a'; ctx.fillRect(x + 17, y + 1, 3, 1);   // shutter button
-  ctx.fillStyle = on && Math.sin(t * 6) > 0 ? '#fff6a0' : '#b8b0a0'; ctx.fillRect(x + 2, y + 3, 3, 2); // flash window
-}
 function drawBook(ctx, x, y) {
   ctx.fillStyle = '#1a1020'; ctx.fillRect(x, y, 15, 14);
   ctx.fillStyle = '#ff7aa8'; ctx.fillRect(x + 1, y + 1, 13, 12);

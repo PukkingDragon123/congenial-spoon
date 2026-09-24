@@ -325,13 +325,13 @@ export class Story {
   }
 
   // Chapter 2: the clownfish reef, where he runs into her. He can't hide how
-  // happy he is: a jump, three more, and a dab. She laughs and waves.
+  // happy he is and jumps around; then he goes over and they shake hands.
   async reefScene() {
     const reef = this.rooms.reef;
     const c = this.aq.couple, gh = c.gap / 2;
     const Xg = CX + 40;
     const meet = () => {
-      c.apart = true; c.girlOn = true; c.girlPose = 'back'; c.girlWave = 0; c.girlHappy = false; c.hop = 0;
+      c.apart = true; c.girlOn = true; c.girlPose = 'back'; c.girlWave = 0; c.shake = 0; c.hop = 0;
       this.meetX = Xg;
     };
     if (reef && this.stage !== reef) {
@@ -355,7 +355,6 @@ export class Story {
     c.girlPose = 'side';
     A.emote(her, '?', 0.8, '#3a6aff');
     await this.wait(0.5);
-    c.girlHappy = true;
     this.tween(0.4, (k) => { c.girlWave = k; }, ease.outBack);
     A.emote(her, '♥', 1.2);
     await this.atSong(29.0);
@@ -371,24 +370,32 @@ export class Story {
       if (i === 1) { this.sound.sfx('boing'); A.shout(him, 'yay!', 0.9, '#ff6ab4'); }
     }
     c.pose = 'wave';
-    await this.atSong(31.2);
-    // the dab
-    c.pose = 'dab';
-    this.sound.sfx('pop'); this.sound.sfx('sparkle');
-    A.impact(him, 1);
-    A.shout(him, '✦ DAB ✦', 1.4);
-    { const [hx, hy] = him(); burstStars(this.fx, hx, hy + 20, 14, { speed: 70, size: 6 }); popRing(this.fx, hx, hy + 20, { r1: 40, col: '#fff4a0' }); }
-    await this.wait(1.5);
-    // she laughs
-    A.emote(her, 'haha', 1.4, '#ff5aa0');
     this.tween(0.4, (k) => { c.girlWave = 1 - k; });
-    await this.atSong(33.4);
+    await this.atSong(30.8);
+    // he walks over and holds out his hand
     c.mode = 'side';
-    // he goes over to stand with her, and they watch the reef together
-    await this.walkTo(Xg - gh, 35.4);
+    await this.walkTo(Xg - 2 * gh - 4, 32.0);
+    c.mode = 'side';
+    this.tween(0.3, (k) => { c.shake = k; }, ease.outCubic);
+    this.sound.sfx('pop'); this.sound.sfx('sparkle');
+    {
+      const hands = () => { const [x, y] = st.toScreen(st.coupleX + 2, st.coupleY - 40, 0); return [Math.round(x), Math.round(y)]; };
+      A.burst(hands, 0.6, '#fff4a0');
+      A.focus = 0.7; A.focusAt = hands;
+      const above = () => { const [x, y] = st.toScreen(st.coupleX + 2, st.coupleY - 70, 0); return [Math.round(x), Math.round(y)]; };
+      A.shout(above, '✦ hi! ✦', 1.4, '#6ad8ff');
+      const [hx, hy] = hands();
+      burstStars(this.fx, hx, hy, 10, { speed: 50, size: 5 });
+    }
+    await this.wait(1.2);
+    A.emote(her, 'haha', 1.2, '#ff5aa0');
+    await this.atSong(33.8);
+    await this.tween(0.3, (k) => { c.shake = 1 - k; });
+    // then stands with her, and they watch the reef together
+    await this.walkTo(Xg - gh, 35.0);
     await this.turnToGlass();
-    c.girlPose = 'back'; c.girlHappy = false;
-    c.apart = false; c.girlDX = 0; this.meetX = null;
+    c.girlPose = 'back';
+    c.apart = false; c.girlDX = 0; c.shake = 0; this.meetX = null;
     this.gesture('glance', 36.8, 2.2);
     await this.atSong(37.6);
     this.heartPop(this.stage, this.stage.coupleX - 8, this.stage.coupleY - 80);
