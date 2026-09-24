@@ -6,18 +6,6 @@ import { ENERGY, ENERGY_HZ } from './energy.js';
 
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
-// The game's first tune: a little music box in F, looping for the photo quest
-// before the song starts.
-const CHORDS = [
-  [53, 57, 60], [52, 55, 60], [50, 53, 57], [46, 50, 53],
-  [53, 57, 60], [48, 52, 55], [46, 50, 53], [48, 52, 55],
-];
-// one entry per quarter note, 0 = rest
-const MELODY = [
-  [72, 0, 69, 0], [67, 0, 0, 64], [65, 0, 69, 0], [74, 0, 0, 72],
-  [72, 0, 69, 72], [67, 0, 0, 0], [65, 0, 62, 65], [64, 0, 0, 0],
-];
-const ARP = [0, 2, 1, 3, 4, 3, 1, 2];
 
 export class SoundEngine {
   constructor(enabled = true, src = 'audio/always.mp3') {
@@ -29,6 +17,7 @@ export class SoundEngine {
     this.playing = false;
     this.ready = false;
     this.sim = false;       // tests: follow the simulated clock instead of the track
+    this.loop = null;       // [from, to]: play round this stretch until released
     // live analysis, all 0..1
     this.level = 0;
     this.bass = 0;
@@ -91,76 +80,6 @@ export class SoundEngine {
     this.sfxBus.connect(this.master);
   }
 
-  // Before the song: the music box over a soft wash of water, looping until
-  // the photo quest is done.
-  musicBox(on) {
-    const ctx = this.ctx;
-    if (!ctx || !this.sfxBus) return;
-    const t = ctx.currentTime;
-    if (on && !this.box) {
-      const out = ctx.createGain();
-      out.gain.setValueAtTime(0.0001, t);
-      out.gain.linearRampToValueAtTime(1, t + 1.5);
-      out.connect(this.sfxBus);
-      // a little room: reverb and a soft echo
-      const len = ctx.sampleRate * 2.6, imp = ctx.createBuffer(2, len, ctx.sampleRate);
-      for (let c = 0; c < 2; c++) { const d = imp.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
-      const verb = ctx.createConvolver(); verb.buffer = imp;
-      const vg = ctx.createGain(); vg.gain.value = 0.5;
-      verb.connect(vg).connect(out);
-      const delay = ctx.createDelay(1); delay.delayTime.value = 0.39;
-      const fb = ctx.createGain(); fb.gain.value = 0.3;
-      const dl = ctx.createBiquadFilter(); dl.type = 'lowpass'; dl.frequency.value = 2400;
-      delay.connect(dl).connect(fb).connect(delay);
-      const dg = ctx.createGain(); dg.gain.value = 0.3;
-      delay.connect(dg).connect(out);
-      const bus = ctx.createGain(); bus.gain.value = 0.5;
-      const tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 5200;
-      bus.connect(tone); tone.connect(out); tone.connect(verb); tone.connect(delay);
-      // the water underneath
-      const wl = ctx.sampleRate * 4, wb = ctx.createBuffer(1, wl, ctx.sampleRate), wd = wb.getChannelData(0);
-      let last = 0;
-      for (let i = 0; i < wl; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; wd[i] = last * 3.2; }
-      const water = ctx.createBufferSource(); water.buffer = wb; water.loop = true;
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 340;
-      const lfo = ctx.createOscillator(), lg = ctx.createGain();
-      lfo.frequency.value = 0.08; lg.gain.value = 120;
-      lfo.connect(lg).connect(lp.frequency);
-      const wg = ctx.createGain(); wg.gain.value = 0.5;
-      water.connect(lp).connect(wg).connect(out);
-      water.start(t); lfo.start(t);
-      const box = (this.box = { out, bus, water, lfo, step: 0, next: t + 0.4 });
-      box.timer = setInterval(() => this.boxSchedule(), 60);
-    } else if (!on && this.box) {
-      const b = this.box;
-      this.box = null;
-      clearInterval(b.timer);
-      b.out.gain.cancelScheduledValues(t);
-      b.out.gain.setValueAtTime(b.out.gain.value, t);
-      b.out.gain.linearRampToValueAtTime(0.0001, t + 1.6);
-      b.water.stop(t + 1.7); b.lfo.stop(t + 1.7);
-    }
-  }
-
-  boxSchedule() {
-    const b = this.box, ctx = this.ctx;
-    if (!b || ctx.state !== 'running') return;
-    const spb = 60 / 74 / 2; // eighth notes at 74 bpm
-    while (b.next < ctx.currentTime + 0.25) {
-      const t = b.next;
-      const bar = Math.floor(b.step / 8) % 8, e = b.step % 8;
-      const ch = CHORDS[bar];
-      const tones = [ch[0] + 12, ch[1] + 12, ch[2] + 12, ch[0] + 24, ch[1] + 24];
-      this.note(tones[ARP[e]], t, e === 0 ? 0.9 : 0.55, 1.6, b.bus);
-      if (e === 0) this.note(ch[0], t, 0.45, 2.6, b.bus);
-      if (e % 2 === 0) { const m = MELODY[bar][e / 2]; if (m) this.note(m + 12, t, 0.75, 2.2, b.bus); }
-      if (e % 2 === 0) b.beatAt = t;
-      if (Math.random() < 0.1) this.bubble(t + Math.random() * spb, 0.25);
-      b.step++;
-      b.next += spb;
-    }
-  }
-
   start() {
     if (this.playing) return;
     this.playing = true;
@@ -169,7 +88,6 @@ export class SoundEngine {
       if (ctx.state === 'suspended') ctx.resume();
       this.bus();
     }
-    this.musicBox(false);
     if (this.el) {
       const el = this.el;
       try { el.currentTime = 0; } catch (e) { /* not seekable yet */ }
@@ -211,6 +129,16 @@ export class SoundEngine {
     const el = this.source;
     if (!el || this.sim || this.blocked || (el.paused && el.currentTime === 0)) this.free += dt;
     else this.free = el.currentTime;
+    // looping the opening: past the end, jump back by exactly one loop so
+    // the beat carries straight on
+    if (this.loop) {
+      const [a, b] = this.loop, t0 = this.time;
+      if (t0 >= b) {
+        const to = a + ((t0 - b) % (b - a));
+        this.free = to;
+        if (el && !this.sim && !this.blocked) { try { el.currentTime = to; } catch (e) { /* not seekable yet */ } }
+      }
+    }
     this.pulse = Math.max(0, this.pulse - dt * 3.2);
     this.beat = Math.max(0, this.beat - dt * 2.4);
     const t = this.time;

@@ -63,8 +63,14 @@ export function defaultCam() {
   return {
     model: 'instant', models: ['instant'], body: 'cream', trim: 'black', paints: FREE_PAINTS.slice(),
     stickers: [], stickerSet: [], charm: null, charms: [], markers: false, art: '',
+    banner: null, banners: [],
   };
 }
+
+// Prize cosmetics from the encyclopedia: animal keychains ('k:<species>')
+// and camera banners. Their art is supplied from there.
+let prizeArt = { keychain: null, banner: null };
+export function setPrizeArt(a) { prizeArt = a; }
 
 // ------------------------------------------------------------- drawing --
 const shade = (h, k) => { const [r, g, b] = hex(h); const f = (v) => Math.max(0, Math.min(255, Math.round(k > 0 ? v + (255 - v) * k : v * (1 + k)))); return `rgb(${f(r)},${f(g)},${f(b)})`; };
@@ -186,6 +192,7 @@ export function renderCamera(cam, book) {
     const v = parseInt(cam.art[i], 16);
     if (v) { d.fillStyle = PENS[v - 1]; d.fillRect(i % CAM_W, Math.floor(i / CAM_W), 1, 1); }
   }
+  if (cam.banner && prizeArt.banner) prizeArt.banner(d, cam.banner, CAM_W, CAM_H);
   for (const s of cam.stickers) {
     if (s.k === 'photo') {
       const im = book && book[s.key] && book[s.key].img;
@@ -213,10 +220,20 @@ export function renderCamera(cam, book) {
 
 // a charm dangling from (x, y) on a little chain, swung to angle a
 export function drawCharm(ctx, charm, x, y, a, scale = 1) {
-  if (!charm || !CHARM_SPR[charm]) return;
+  const key = charm && charm.startsWith('k:') ? charm.slice(2) : null;
+  if (!charm || (!key && !CHARM_SPR[charm]) || (key && !prizeArt.keychain)) return;
   const len = 5 * scale;
   ctx.fillStyle = '#d8d8e0';
   for (let k = 1; k <= len; k += 1.2 * scale) ctx.fillRect(Math.round(x + Math.sin(a) * k), Math.round(y + Math.cos(a) * k), Math.max(1, Math.round(scale)), Math.max(1, Math.round(scale)));
+  if (key) {
+    // an animal keychain hangs by its ring and swings with the chain
+    const img = prizeArt.keychain(key), ex = x + Math.sin(a) * len, ey = y + Math.cos(a) * len;
+    ctx.save();
+    ctx.translate(Math.round(ex), Math.round(ey)); ctx.rotate(-a * 0.8); ctx.scale(scale, scale);
+    ctx.drawImage(img, -img.ring[0], 0);
+    ctx.restore();
+    return;
+  }
   const cx = x + Math.sin(a) * (len + 4 * scale), cy = y + Math.cos(a) * (len + 4 * scale);
   if (scale === 1) sprite(ctx, CHARM_SPR[charm], cx, cy, CHARM_COL);
   else {
@@ -227,4 +244,7 @@ export function drawCharm(ctx, charm, x, y, a, scale = 1) {
 }
 
 export function drawStickerIcon(ctx, k, cx, cy) { if (SPR[k]) sprite(ctx, SPR[k], cx, cy); }
-export function drawCharmIcon(ctx, k, cx, cy) { if (CHARM_SPR[k]) sprite(ctx, CHARM_SPR[k], cx, cy, CHARM_COL); }
+export function drawCharmIcon(ctx, k, cx, cy) {
+  if (k && k.startsWith('k:') && prizeArt.keychain) { const img = prizeArt.keychain(k.slice(2)); ctx.drawImage(img, Math.round(cx - img.width / 2), Math.round(cy - img.height / 2)); return; }
+  if (CHARM_SPR[k]) sprite(ctx, CHARM_SPR[k], cx, cy, CHARM_COL);
+}

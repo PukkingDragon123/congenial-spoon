@@ -7,14 +7,18 @@
 // kept in this browser.
 import { TAU, clamp, lerp, ease, R } from '../util.js';
 import { makeCanvas } from '../util.js';
-import { drawText, textWidth } from '../font.js';
+import { drawText, textWidth, wrap, LINE_H } from '../font.js';
 import { burstStars } from '../world/fx.js';
+import { FACTS, PIECES, SETS, setOf, jigsaw, keychainIcon, drawBanner, done as puzzleDone, setDone, clampPieces } from './encyclopedia.js';
 import {
   CAM_W, CAM_H, MODELS, PAINTS, PAINT_PRICE, STICKERS, CHARMS, PENS, MARKER_PRICE,
-  defaultCam, renderCamera, drawCharm, drawStickerIcon, drawCharmIcon,
+  defaultCam, renderCamera, drawCharm, drawStickerIcon, drawCharmIcon, setPrizeArt,
 } from './camera.js';
 
-const SUBTABS = ['model', 'paint', 'sticker', 'charm', 'draw', 'upgrade'];
+setPrizeArt({ keychain: keychainIcon, banner: drawBanner });
+
+const SUBTABS = ['model', 'paint', 'sticker', 'charm', 'banner', 'draw', 'upgrade'];
+const TABS = ['album', 'camera', 'encyclopedia'];
 
 // key -> [name, rarity 1..4]
 export const SPECIES = {
@@ -90,7 +94,7 @@ export class PhotoMode {
       if (Array.isArray(d.claimed)) this.claimed = d.claimed;
       for (const [k, v] of Object.entries(d.book || {})) {
         if (!SPECIES[k]) continue;
-        const e = { n: v.n | 0, score: v.score | 0, img: null };
+        const e = { n: v.n | 0, score: v.score | 0, img: null, pieces: clampPieces(v.pieces) };
         if (v.img) { const im = new Image(); im.onload = () => { e.img = toCanvas(im); this.camDirty = true; }; im.src = v.img; }
         this.book[k] = e;
       }
@@ -99,7 +103,7 @@ export class PhotoMode {
   save() {
     try {
       const book = {};
-      for (const [k, v] of Object.entries(this.book)) book[k] = { n: v.n, score: v.score, img: v.img ? v.img.toDataURL() : v.url || null };
+      for (const [k, v] of Object.entries(this.book)) book[k] = { n: v.n, score: v.score, pieces: v.pieces | 0, img: v.img ? v.img.toDataURL() : v.url || null };
       localStorage.setItem(SAVE_KEY, JSON.stringify({ points: this.points, shots: this.shots, levels: this.levels, cam: this.cam, claimed: this.claimed, book }));
     } catch (e) { /* ignore */ }
   }
@@ -223,23 +227,45 @@ export class PhotoMode {
       if (!this.book[f.key]) { p *= 2; fresh.push(f.key); }
       pts += p;
     }
-    const main = list[0] || null;
+    // the main subject is whatever the finder is locked onto
+    const lk = this.findSubject();
+    const main = (lk && found.get(lk.key)) || list[0] || null;
     if (main && main.d < 0.22) pts *= 1.25; // nicely centred
     pts = Math.max(1, Math.round(pts * mult));
     // develop the picture
     const img = this.develop(fx, fy, fw, fh);
     for (const f of list) {
-      const e = this.book[f.key] || (this.book[f.key] = { n: 0, score: 0, img: null });
+      const e = this.book[f.key] || (this.book[f.key] = { n: 0, score: 0, img: null, pieces: 0 });
       e.n += f.n > 0 ? 1 : 0;
       if (f === main && pts >= e.score) { e.score = pts; e.img = img; }
       else if (!e.img) e.img = img;
     }
     this.checkMilestones();
+    // the encyclopedia: one jigsaw piece and one fun fact for the subject
+    let fact = null;
+    if (main) {
+      const e = this.book[main.key];
+      if (e.pieces < PIECES) {
+        e.pieces++;
+        fact = { key: main.key, text: FACTS[main.key][e.pieces - 1], n: e.pieces, prize: null };
+        if (e.pieces === PIECES) fact.prize = this.award(main.key);
+      }
+    }
     this.camDirty = true; // photo stickers may show the new shot
-    this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0 });
+    this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0, fact, hold: fact ? 6.4 : 3.6 });
     if (this.onSnap) this.onSnap({ keys: list.map((f) => f.key), main: main ? main.key : null, pts });
     if (this.prints.length === 1) s.sound.sfx('print');
     this.save();
+  }
+
+  // A finished jigsaw: the animal's keychain, and the tank's banner if that
+  // was the last one of its set.
+  award(key) {
+    const C = this.cam, out = { keychain: 'k:' + key, banner: null };
+    if (!C.charms.includes(out.keychain)) C.charms.push(out.keychain);
+    const S = setOf(key);
+    if (S && setDone(this.book, S) && !C.banners.includes(S.id)) { C.banners.push(S.id); out.banner = S; }
+    return out;
   }
 
   found() { return ORDER.filter((k) => this.book[k]).length; }
@@ -312,7 +338,8 @@ export class PhotoMode {
     const p = this.prints[0];
     if (p) {
       p.t += dt;
-      if (p.t >= 4.2) {
+      if (p.fact && !p.factSfx && p.t > 2.1) { p.factSfx = true; this.story.sound.sfx(p.fact.prize ? 'yes' : 'sparkle'); if (p.fact.prize) this.camDirty = true; }
+      if (p.t >= p.hold + 0.6) {
         this.prints.shift();
         this.points += p.pts;
         this.albumBounce = 1;
@@ -483,15 +510,15 @@ export class PhotoMode {
     const midX = W / 2 - (pw * s) / 2, midY = H * 0.42 - (ph * s) / 2;
     if (t < 1) { x = outX; y = lerp(outY0, outY1, ease.outCubic(t)); }
     else if (t < 1.6) { const k = ease.inOutCubic((t - 1) / 0.6); x = lerp(outX, midX, k); y = lerp(outY1, midY, k); sc = lerp(1, s, k); }
-    else if (t < 3.6) { x = midX; y = midY + Math.sin((t - 1.6) * 2) * 1.5; sc = s; }
-    else { const k = ease.inCubic((t - 3.6) / 0.6); x = lerp(midX, bx + 7, k); y = lerp(midY, by + 7, k); sc = lerp(s, 0.15, k); a = 1 - k * 0.3; }
+    else if (t < p.hold) { x = midX; y = midY + Math.sin((t - 1.6) * 2) * 1.5; sc = s; }
+    else { const k = ease.inCubic((t - p.hold) / 0.6); x = lerp(midX, bx + 7, k); y = lerp(midY, by + 7, k); sc = lerp(s, 0.15, k); a = 1 - k * 0.3; }
     const dev = clamp(1 - t / 2.8); // still developing
     // it swings as it lands, settles with a wobble, and spins into the album
     let rot = 0;
     if (t < 1) rot = Math.sin(t * 9) * 0.05 * (1 - t);
     else if (t < 1.6) rot = lerp(0.3, 0, ease.outCubic((t - 1) / 0.6));
-    else if (t < 3.6) rot = Math.sin((t - 1.6) * 7) * 0.08 * Math.exp(-(t - 1.6) * 2.2) - 0.02;
-    else rot = ease.inCubic((t - 3.6) / 0.6) * -1.2;
+    else if (t < p.hold) rot = Math.sin((t - 1.6) * 7) * 0.08 * Math.exp(-(t - 1.6) * 2.2) - 0.02;
+    else rot = ease.inCubic((t - p.hold) / 0.6) * -1.2;
     ctx.save();
     ctx.globalAlpha = a;
     ctx.translate(Math.round(x + (pw * sc) / 2), Math.round(y + (ph * sc) / 2));
@@ -517,7 +544,7 @@ export class PhotoMode {
     ctx.restore();
     ctx.globalAlpha = 1;
     // results while it's up front
-    if (t > 1.8 && t < 3.8) {
+    if (t > 1.8 && t < p.hold + 0.2) {
       const k = clamp((t - 1.8) / 0.25);
       const top = midY - 12;
       if (p.main) {
@@ -525,6 +552,7 @@ export class PhotoMode {
         drawText(ctx, '★'.repeat(r) + ' ' + RARITY_NAME[r], W / 2, top, { align: 'center', color: RARITY_COL[r], outline: '#10142a', alpha: k });
       }
       drawText(ctx, `+${p.pts} ✦`, W / 2, midY + ph * s + 4 - Math.round(k * 3), { align: 'center', scale: W > 200 ? 2 : 1, color: '#ffe38a', outline: '#3a2200', shadow: '#ff9a3a', alpha: k });
+      if (p.fact && t > 2.1) this.drawFact(ctx, p, Math.round(midY + ph * s + 22), clamp((t - 2.1) / 0.3) * clamp((p.hold + 0.2 - t) / 0.3));
       if (p.fresh.length) {
         // NEW! slams on like a stamp
         const sk = clamp((t - 1.8) / 0.18), ss = 1 + (1 - ease.outBack(sk)) * 1.6;
@@ -541,6 +569,35 @@ export class PhotoMode {
     }
   }
 
+  // The fun fact that comes with a new jigsaw piece, on a little card under
+  // the print, with the puzzle so far.
+  drawFact(ctx, p, y0, k) {
+    const W = this.W, H = this.H, F = p.fact;
+    const cw = Math.min(W - 12, 260), jw = 32, jh = 23;
+    const lines = wrap(F.text, cw - jw - 16);
+    const prize = F.prize ? (F.prize.banner ? 2 : 1) : 0;
+    const ch = Math.max(jh + 8, 16 + lines.length * LINE_H) + prize * 10 + 2;
+    const x = Math.round((W - cw) / 2), y = Math.round(Math.min(y0, H - ch - 22) + (1 - ease.outBack(k)) * 12);
+    ctx.globalAlpha = clamp(k * 1.5);
+    ctx.fillStyle = '#2a1a10'; ctx.fillRect(x - 1, y, cw + 2, ch); ctx.fillRect(x, y - 1, cw, ch + 2);
+    ctx.fillStyle = '#fffaf0'; ctx.fillRect(x, y, cw, ch);
+    ctx.fillStyle = '#ff6a9a'; ctx.fillRect(x, y, cw, 2);
+    // the jigsaw, with the new piece popping in
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(jigsaw(F.key, F.n, F.key === 'me' || F.key === 'us' ? this.book[F.key].img : null), x + 4, y + 5, jw, jh);
+    const tx = x + jw + 10;
+    drawText(ctx, 'FUN FACT', tx, y + 5, { color: '#e8457a' });
+    drawText(ctx, `piece ${F.n}/${PIECES}`, x + cw - 5, y + 5, { align: 'right', color: '#a0784a' });
+    lines.forEach((ln, i) => drawText(ctx, ln, tx, y + 16 + i * LINE_H, { color: '#3a2a4a' }));
+    let py = y + Math.max(jh + 8, 16 + lines.length * LINE_H);
+    if (F.prize) {
+      const b = Math.round(Math.sin(this.t * 8));
+      drawText(ctx, `puzzle done! ${SPECIES[F.key][0]} keychain ✦`, x + cw / 2, py + b, { align: 'center', color: '#e8457a' });
+      if (F.prize.banner) drawText(ctx, `${F.prize.banner.name} banner unlocked!`, x + cw / 2, py + 10 + b, { align: 'center', color: '#c27a10' });
+    }
+    ctx.globalAlpha = 1;
+  }
+
   // -------------------------------------------------------------- album --
   panel() { return [4, 4, this.W - 8, this.H - 8]; }
   grid() {
@@ -552,7 +609,12 @@ export class PhotoMode {
     const gx = px + Math.round((pw - cols * (cw + 4) + 4) / 2), gy = py + 26;
     return { cw, ch, cols, rows, gx, gy, per: cols * rows, pages: Math.ceil(ORDER.length / (cols * rows)) };
   }
-  tabRects() { const [px, py] = this.panel(); return { album: [px + 4, py + 4, 36, 11], camera: [px + 44, py + 4, 42, 11] }; }
+  tabRects() {
+    const [px, py] = this.panel(), out = {};
+    let x = px + 4;
+    for (const k of TABS) { const w = textWidth(k) + 10; out[k] = [x, py + 4, w, 11]; x += w + 4; }
+    return out;
+  }
   closeRect() { const [px, py, pw] = this.panel(); return [px + pw - 13, py + 3, 10, 10]; }
   navRects() { const [px, py, pw, ph] = this.panel(); return { prev: [px + 6, py + ph - 14, 12, 11], next: [px + pw - 18, py + ph - 14, 12, 11] }; }
   albumTap(x, y) {
@@ -561,18 +623,26 @@ export class PhotoMode {
       if (this.cardBtn && this.hit(this.cardBtn, x, y)) { this.exportSouvenir(A.card); snd.sfx('shutter'); return; }
       A.card = null; snd.sfx('pop'); return;
     }
+    if (A.entry) {
+      if (this.entryBtn && this.hit(this.entryBtn, x, y)) {
+        const id = 'k:' + A.entry;
+        this.cam.charm = this.cam.charm === id ? null : id;
+        this.charmV += 6; snd.sfx('ding'); this.camChanged(); return;
+      }
+      A.entry = null; snd.sfx('pop'); return;
+    }
     if (this.hit(this.closeRect(), x, y)) { this.album = null; snd.sfx('pop'); return; }
     const tabs = this.tabRects();
-    for (const k of ['album', 'camera']) if (this.hit(tabs[k], x, y)) { A.tab = k; snd.sfx('type'); return; }
-    if (A.tab === 'album') {
-      const G = this.grid(), nav = this.navRects();
+    for (const k of TABS) if (this.hit(tabs[k], x, y)) { A.tab = k; snd.sfx('type'); return; }
+    if (A.tab === 'album' || A.tab === 'encyclopedia') {
+      const G = this.grid(), nav = this.navRects(), guide = A.tab === 'encyclopedia';
       if (this.hit(nav.prev, x, y)) { A.page = (A.page + G.pages - 1) % G.pages; snd.sfx('type'); return; }
       if (this.hit(nav.next, x, y)) { A.page = (A.page + 1) % G.pages; snd.sfx('type'); return; }
       for (let i = 0; i < G.per; i++) {
         const key = ORDER[A.page * G.per + i];
         if (!key) break;
         const cx = G.gx + (i % G.cols) * (G.cw + 4), cy = G.gy + Math.floor(i / G.cols) * (G.ch + 4);
-        if (this.hit([cx, cy, G.cw, G.ch], x, y) && this.book[key]) { A.card = key; snd.sfx('chime'); return; }
+        if (this.hit([cx, cy, G.cw, G.ch], x, y) && this.book[key]) { if (guide) A.entry = key; else A.card = key; snd.sfx('chime'); return; }
       }
     } else this.workshopTap(x, y);
   }
@@ -585,7 +655,7 @@ export class PhotoMode {
     paper(ctx, px, py, pw, ph);
     // tabs, points and close
     const tabs = this.tabRects();
-    for (const k of ['album', 'camera']) {
+    for (const k of TABS) {
       const [x, y, w, h] = tabs[k], on = A.tab === k;
       ctx.fillStyle = on ? '#ff8ab4' : '#e4d2ac'; ctx.fillRect(x, y, w, h);
       ctx.fillStyle = on ? '#c2466e' : '#b89a6a'; ctx.fillRect(x, y + h - 1, w, 1);
@@ -596,8 +666,10 @@ export class PhotoMode {
     const found = ORDER.filter((k) => this.book[k]).length;
     if (pw > 150) drawText(ctx, `✦${this.points}`, cx - 6, py + 6, { align: 'right', color: '#c27a10' });
     if (A.tab === 'album') this.drawGrid(ctx, found);
+    else if (A.tab === 'encyclopedia') this.drawGuide(ctx);
     else this.drawWorkshop(ctx);
     if (A.card) this.drawPostcard(ctx, A.card);
+    if (A.entry) this.drawEntry(ctx, A.entry);
   }
 
   drawGrid(ctx, found) {
@@ -636,6 +708,84 @@ export class PhotoMode {
       drawText(ctx, '>', nav.next[0] + 4, nav.next[1] + 1, { color: '#c2466e' });
       if (pw > 140) drawText(ctx, `${A.page + 1}/${G.pages}`, nav.prev[0] + 16, nav.prev[1] + 2, { color: '#a08060' });
     }
+  }
+
+  // ------------------------------------------------------- encyclopedia --
+  jigFor(key) { const e = this.book[key]; return jigsaw(key, e ? e.pieces | 0 : 0, key === 'me' || key === 'us' ? e && e.img : null); }
+
+  drawGuide(ctx) {
+    const G = this.grid(), A = this.album, C = this.cam;
+    const [px, py, pw, ph] = this.panel();
+    for (let i = 0; i < G.per; i++) {
+      const key = ORDER[A.page * G.per + i];
+      if (!key) break;
+      const x = G.gx + (i % G.cols) * (G.cw + 4), y = G.gy + Math.floor(i / G.cols) * (G.ch + 4);
+      const e = this.book[key], n = e ? e.pieces | 0 : 0, full = n >= PIECES;
+      ctx.fillStyle = 'rgba(80,50,20,0.25)'; ctx.fillRect(x + 1, y + 2, G.cw, G.ch);
+      ctx.fillStyle = full ? '#fff2f6' : e ? '#fffdf6' : '#d8c8a8'; ctx.fillRect(x, y, G.cw, G.ch);
+      const tw = G.cw - 6, th = G.ch - 19;
+      const jg = this.jigFor(key), s = Math.min(tw / jg.width, th / jg.height);
+      const dw = Math.round(jg.width * s), dh = Math.round(jg.height * s);
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = e ? 1 : 0.45;
+      ctx.drawImage(jg, x + 3 + Math.round((tw - dw) / 2), y + 3 + Math.round((th - dh) / 2), dw, dh);
+      ctx.globalAlpha = 1;
+      drawText(ctx, e ? fit(SPECIES[key][0], G.cw - 2) : '???', x + G.cw / 2, y + th + 5, { align: 'center', color: e ? '#3a2a4a' : '#8a7658' });
+      // one pip per piece
+      for (let k = 0; k < PIECES; k++) { ctx.fillStyle = k < n ? '#ff6a9a' : '#c8b898'; ctx.fillRect(x + G.cw / 2 - PIECES * 2.5 + k * 5, y + G.ch - 5, 4, 3); }
+      if (full) { const ic = keychainIcon(key); ctx.drawImage(ic, x + G.cw - ic.width + 2, y - 3); }
+    }
+    const nav = this.navRects();
+    const puzzles = ORDER.filter((k) => puzzleDone(this.book, k)).length;
+    drawText(ctx, `puzzles ${puzzles}/${ORDER.length} · banners ${C.banners.length}/${SETS.length}`, px + pw / 2, py + ph - 12, { align: 'center', color: '#6a4a2a' });
+    if (G.pages > 1) {
+      drawText(ctx, '<', nav.prev[0] + 4, nav.prev[1] + 1, { color: '#c2466e' });
+      drawText(ctx, '>', nav.next[0] + 4, nav.next[1] + 1, { color: '#c2466e' });
+    }
+  }
+
+  // One animal's page: the jigsaw, the facts found so far, and its prizes.
+  drawEntry(ctx, key) {
+    const W = this.W, H = this.H, e = this.book[key], n = e.pieces | 0, [name, r] = SPECIES[key];
+    const cw = Math.min(W - 10, 320), wide = cw > 250;
+    const jg = this.jigFor(key);
+    const js = clamp(Math.floor(wide ? (cw * 0.4) / jg.width : (cw - 16) / jg.width), 1, 3);
+    const jw = jg.width * js, jh = jg.height * js;
+    const tx0 = wide ? jw + 14 : 8, tw = cw - tx0 - 8;
+    const facts = FACTS[key].map((f, i) => (i < n ? wrap(f, tw - 8) : ['??? snap it again to find out']));
+    const S = setOf(key), sd = S ? S.keys.filter((k) => puzzleDone(this.book, k)).length : 0;
+    const textH = 30 + facts.reduce((a, l) => a + l.length * 10 + 3, 0);
+    const chh = Math.min(H - 10, Math.max(wide ? jh + 16 : 0, 0) + (wide ? 0 : jh + 12) + (wide ? Math.max(0, textH - jh - 16) : textH) + 40);
+    const x = Math.round((W - cw) / 2), y = Math.round((H - chh) / 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
+    paper(ctx, x, y, cw, chh);
+    ctx.fillStyle = '#5a3a1e'; ctx.fillRect(x + 7, y + 7, jw + 2, jh + 2);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(jg, x + 8, y + 8, jw, jh);
+    let ty = wide ? y + 8 : y + jh + 14;
+    const tx = x + tx0;
+    drawText(ctx, name, tx, ty, { color: '#3a2a4a', scale: wide && textWidth(name) * 2 < tw ? 2 : 1 });
+    ty += wide && textWidth(name) * 2 < tw ? 16 : 10;
+    drawText(ctx, '★'.repeat(r) + ` · piece ${n}/${PIECES}`, tx, ty, { color: RARITY_COL[r], outline: '#3a2a4a' });
+    ty += 13;
+    facts.forEach((ls, i) => {
+      ctx.fillStyle = i < n ? '#ff6a9a' : '#c8b898'; ctx.fillRect(tx, ty + 2, 3, 3);
+      ls.forEach((ln, j) => drawText(ctx, ln, tx + 7, ty + j * 10, { color: i < n ? '#3a2a4a' : '#a89070' }));
+      ty += ls.length * 10 + 3;
+    });
+    // prizes
+    const by = y + chh - 30, ic = keychainIcon(key), full = n >= PIECES;
+    ctx.globalAlpha = full ? 1 : 0.35;
+    ctx.drawImage(ic, x + 8, by - 2);
+    ctx.globalAlpha = 1;
+    drawText(ctx, fit(`${name} keychain`, cw - 90), x + 26, by + 3, { color: full ? '#3a2a4a' : '#a89070' });
+    const on = this.cam.charm === 'k:' + key;
+    const tag = full ? (on ? 'equipped' : 'equip') : `${PIECES - n} more photo${PIECES - n > 1 ? 's' : ''}`;
+    const bw = textWidth(tag) + 8, bx = x + cw - bw - 8;
+    ctx.fillStyle = full ? (on ? '#8ad0a0' : '#ff6a9a') : '#d8c8a8'; ctx.fillRect(bx, by + 1, bw, 11);
+    drawText(ctx, tag, bx + bw / 2, by + 3, { align: 'center', color: '#ffffff' });
+    this.entryBtn = full ? [bx, by + 1, bw, 11] : null;
+    if (S) drawText(ctx, fit(`${S.name} banner: ${sd}/${S.keys.length} puzzles${this.cam.banners.includes(S.id) ? ' ✦ unlocked' : ''}`, cw - 16), x + 8, by + 15, { color: '#8a6a4a' });
   }
 
   // ----------------------------------------------------------- workshop --
@@ -690,7 +840,10 @@ export class PhotoMode {
       const w = button('undo', bx, y2, () => { C.stickers.pop(); this.camChanged(); });
       button('clear', bx + w + 4, y2, () => { C.stickers = []; this.camChanged(); });
     } else if (A.sub === 'charm') {
-      flow([{ kind: 'charm', id: null }].concat(Object.keys(CHARMS).map((id) => ({ kind: 'charm', id }))), 16, 3, by);
+      const prizes = C.charms.filter((id) => id.startsWith('k:'));
+      flow([{ kind: 'charm', id: null }].concat(Object.keys(CHARMS).concat(prizes).map((id) => ({ kind: 'charm', id }))), 18, 3, by);
+    } else if (A.sub === 'banner') {
+      [null, ...SETS.map((S) => S.id)].forEach((id, i) => items.push({ kind: 'banner', id, r: [bx, by + i * 15, bw, 13] }));
     } else if (A.sub === 'draw') {
       if (!C.markers) button(`buy markers ✦${MARKER_PRICE}`, bx, by, () => { if (this.spend(MARKER_PRICE)) { C.markers = true; this.save(); } });
       else {
@@ -743,6 +896,10 @@ export class PhotoMode {
         if (!C.stickerSet.includes(it.id)) { if (!this.spend(STICKERS[it.id])) return; C.stickerSet.push(it.id); this.save(); }
         if (it.id === 'photo' && !it.key) { this.shake = 0.3; return; }
         A.sel = { id: it.id, key: it.key }; snd.sfx('pop'); return;
+      }
+      if (it.kind === 'banner') {
+        if (it.id && !C.banners.includes(it.id)) { this.shake = 0.3; snd.sfx('escape'); return; }
+        C.banner = it.id; snd.sfx('ding'); this.camChanged(); return;
       }
       if (it.kind === 'charm') {
         if (it.id && !C.charms.includes(it.id)) { if (!this.spend(CHARMS[it.id])) return; C.charms.push(it.id); }
@@ -797,7 +954,7 @@ export class PhotoMode {
       ctx.fillStyle = on ? '#ff8ab4' : '#e4d2ac'; ctx.fillRect(x, y, w, h);
       drawText(ctx, c.k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#6a4a2a' });
     }
-    const hint = { sticker: A.sel ? 'tap the camera to stick it on' : 'pick a sticker', draw: C.markers ? 'draw on the camera' : '', paint: `new colours ✦${PAINT_PRICE}`, charm: 'hangs from the strap' }[A.sub];
+    const hint = { sticker: A.sel ? 'tap the camera to stick it on' : 'pick a sticker', draw: C.markers ? 'draw on the camera' : '', paint: `new colours ✦${PAINT_PRICE}`, charm: 'finish a jigsaw for its keychain', banner: 'finish a whole tank in the encyclopedia' }[A.sub];
     for (const it of this.wsItems(L)) {
       const [x, y, w, h] = it.r;
       if (it.kind === 'label') { drawText(ctx, it.label, x, y, { color: '#8a6a4a' }); continue; }
@@ -834,6 +991,17 @@ export class PhotoMode {
         else if (id) drawCharmIcon(ctx, id, x + w / 2, y + h / 2);
         else drawText(ctx, '×', x + w / 2, y + 5, { align: 'center', color: '#a08060' });
         if (!owned) { ctx.fillStyle = 'rgba(243,230,200,0.6)'; ctx.fillRect(x, y, w, h); const pr = it.kind === 'sticker' ? STICKERS[id] : CHARMS[id]; drawText(ctx, `${pr}`, x + w / 2, y + h - 7, { align: 'center', color: '#c2466e' }); }
+        continue;
+      }
+      if (it.kind === 'banner') {
+        const S = SETS.find((q) => q.id === it.id), owned = !it.id || C.banners.includes(it.id), on = C.banner === it.id;
+        ctx.fillStyle = on ? '#ffe4ee' : '#fffaf0'; ctx.fillRect(x, y, w, h);
+        if (S) { for (let k = 0; k < 10; k++) { ctx.fillStyle = S.cols[k % 2]; ctx.fillRect(x + 3 + k * 2, y + 3, 2, 7); } }
+        drawText(ctx, S ? S.name : 'no banner', x + (S ? 27 : 4), y + 3, { color: owned ? '#3a2a4a' : '#a89070' });
+        const tag = on ? 'using' : owned ? 'use' : `${S.keys.filter((k) => puzzleDone(this.book, k)).length}/${S.keys.length}`;
+        const tw = textWidth(tag) + 6;
+        ctx.fillStyle = on ? '#8ad0a0' : owned ? '#c8b898' : '#d8c8a8'; ctx.fillRect(x + w - tw - 2, y + 1, tw, 11);
+        drawText(ctx, tag, x + w - tw / 2 - 2, y + 3, { align: 'center', color: '#ffffff' });
         continue;
       }
       if (it.kind === 'pen') {

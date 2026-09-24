@@ -12,9 +12,13 @@ import { AnimeFX } from './anime.js';
 import { heartFriends } from '../world/friends.js';
 import { PhotoMode } from './photo.js';
 import { Quest } from './quest.js';
+import { Dialog } from './dialog.js';
 
 // the finale: the whole tank spells these out, one after another
 const LOVE_WORDS = ['I', 'LOVE', 'YOU'];
+// the stretch of the song's opening that repeats during the photo quest:
+// one phrase, measured so the jump back lands on the same beat
+const SONG_LOOP = [1.2, 6.25];
 const CROWD_KINDS = ['tang', 'butterfly', 'snapper', 'batfish', 'giant'];
 
 const WHALE_Z = 0.62;
@@ -68,6 +72,7 @@ export class Story {
     this.debug = opts.debug;
     this.photo = new PhotoMode(this);
     this.quest = null;
+    this.dialog = new Dialog(this);
     this.guyAt = null;       // apart: where he stands in the world
     this.photoReady = false; // the camera comes out for the photo quest
   }
@@ -115,6 +120,7 @@ export class Story {
       const jump = { jelly: 8, reef: 23, walk: 41, hook: 54.5, bottle: 90, letter: 110, question: 136, finale: 151 };
       this.songOffset = jump[debug] ?? 0;
       this.photoReady = true;
+      this.sound.loop = null;
       this.sound.start();
       this.showSpeaker = CONFIG.sound;
       const order = ['jelly', 'reef', 'walk', 'hook', 'bottle', 'letter', 'question', 'finale'];
@@ -290,9 +296,13 @@ export class Story {
     await this.wait(0.6);
     this.hint = { text: CONFIG.tapToBegin, y: () => Math.round(this.H * 0.66), a: 0 };
     { const h = this.hint; this.tween(0.8, (k) => { h.a = k; }); }
-    await this.waitTap();    // the tap wakes the audio; the song waits for the quest
+    // the song starts inside the tap, going round its first few seconds
+    // until the photo quest is done
+    this.sound.loop = SONG_LOOP;
+    this.sound.armed = true;
+    await this.waitTap();
     this.hint = null;
-    this.sound.musicBox(true);
+    this.sound.start();      // no-op if the tap already started it
     this.showSpeaker = CONFIG.sound;
   }
 
@@ -329,14 +339,41 @@ export class Story {
     this.tween(1.4, (k) => { p.warp = 0.7 * (1 - k); });
   }
 
-  // Before the song: the jellyfish hall, her on her own with a camera and
-  // the music box looping. A quest card asks for three jellies; the photo
-  // that completes it starts the song (inside that tap, as browsers need).
+  // Before the story moves on: the jellyfish hall, her on her own with a
+  // camera and the song's opening going round. A Mameshiba in a scuba suit
+  // paddles over, chats (you pick her replies), and hands her a photo quest
+  // for its encyclopedia. When it's done she heads for the reef and the song
+  // carries on.
   async photoQuest() {
-    const c = this.aq.couple, P = this.photo;
+    const st = this.stage, c = this.aq.couple, P = this.photo, D = this.dialog;
+    const bean = st.bean;
     this.tween(4.5, (k) => { this.camX = lerp(CX - 260, CX - 170, k); }, ease.inOutSine);
     await this.walkTo(CX - 190, this.t + 4, () => this.t, true);
     await this.turnToGlass();
+    if (bean) bean.go = () => [st.coupleX + 44, st.coupleY - 150 - (st.extra || 0) * 0.2];
+    await this.wait(1.4);
+    this.anime.emote(this.headAt('girl'), '?', 1.1, '#3a6aff');
+    // her reply, then the bean's answer to it
+    const chat = async (line, replies, answers) => {
+      const i = await D.ask('bean', line, replies);
+      await D.say('her', replies[i], { life: 0.55, cps: 80 });
+      await D.say('bean', answers[i]);
+      return i;
+    };
+    await D.say('bean', 'oh! a visitor! hi hi!');
+    await chat("I'm Mameshiba. Part bean, part dog, all facts.", ['a talking bean??', 'cute scuba suit!'], [
+      'A talking bean with a degree in jellyfish, thank you very much.',
+      'Thank you!! Beans sink, so safety first.',
+    ]);
+    await chat('Did you know jellyfish are older than dinosaurs? Older than TREES?', ['older than trees??', 'they look good for their age'], [
+      'Yep! Jellies: over 500 million years. Trees: about 385 million. Babies.',
+      "No brain, no heart, no bones. No stress. That's the secret.",
+    ]);
+    await chat("I'm making an encyclopedia of everyone who lives here. Will you take the photos?", ["let's do it!", "what's in it for me?"], [
+      'Yay!! A real photographer!',
+      'Points! Puzzle pieces! A fun fact with every photo! And my eternal respect.',
+    ]);
+    await D.say('bean', 'Every photo of an animal unlocks a jigsaw piece and a fun fact. Finish a jigsaw and you win its keychain!');
     this.photoReady = true;
     const Q = (this.quest = new Quest(this, 'PHOTO QUEST', 'jellyfish hall', [
       ['jelly', 'a moon jelly'], ['nettle', 'a sea nettle'], ['bigjelly', 'a giant jelly'],
@@ -344,18 +381,30 @@ export class Story {
     this.sound.sfx('chime');
     let snaps = 0;
     Q.point = () => { if (P.on || snaps || P.album) return null; const [x, y, w] = P.camRect(); return [x + w / 2, y - 3]; };
+    const cheers = ['Yes!! One down!', 'Ooh, great shot!', 'A natural!'];
+    let ci = 0;
     P.onSnap = (info) => {
       snaps++;
-      if (!Q.snapped(info.keys)) return;
-      this.sound.start();
-      P.points += Q.bonus;
-      P.save();
+      const had = Q.items.filter((it) => it.done).length;
+      if (Q.snapped(info.keys)) { P.points += Q.bonus; P.save(); return; }
+      if (Q.items.filter((it) => it.done).length > had) D.say('bean', cheers[ci++ % cheers.length], { life: 1.4 });
     };
+    await D.say('bean', 'First, three jellies for page one. Tap your camera to hold it up!', { until: () => P.on || snaps > 0 });
+    D.say('bean', 'Now tap a jelly to snap it. The card says which ones!', { life: 2.6 });
     await this.until(() => Q.done);
     P.onSnap = null;
-    // once the stamp has had its moment, lower the camera so the walk shows
-    this.wait(3.3).then(() => { if (this.quest === Q) this.quest = null; if (!P.album) P.on = false; });
+    // let the stamp and the print have their moment
+    await this.wait(3.3);
+    await this.until(() => !P.prints.length);
+    if (this.quest === Q) this.quest = null;
+    if (!P.album) P.on = false;
     c.point = 0;
+    await chat("QUEST CLEAR! You're officially my favourite human.", ['what now?', 'can I keep snapping?'], [
+      'The clownfish reef is next door. Go say hi!',
+      'Always! Your album is by the camera. Now go, go, the reef is next door!',
+    ]);
+    this.sound.loop = null;  // the song carries on from here
+    if (bean) bean.go = null;
   }
 
   // Tap a creature and it reacts with a little sparkle.
@@ -1197,6 +1246,7 @@ export class Story {
     this.anime.update(dt);
     this.photo.update(dt);
     if (this.quest) this.quest.update(dt);
+    this.dialog.update(dt);
     // she raises the camera to her eye when you do
     { const c = aq.couple, up = this.photo.on && !this.photo.album ? 1 : 0; c.girlCam += (up - c.girlCam) * Math.min(1, dt * 9); }
     if (aq.couple.apart && this.meetX != null) aq.couple.girlDX = this.meetX - st.coupleX - aq.couple.gap / 2;
@@ -1267,7 +1317,7 @@ export class Story {
       b.hover = Math.abs(this.mouse[0] - b.x) < b.w / 2 + 2 && Math.abs(this.mouse[1] - b.y) < b.h / 2 + 2;
       if (b.hover && b.id === 'yes') this.hoverClickable = true;
     }
-    if (this.tapWait && !this.tapWait.check) this.hoverClickable = true;
+    if ((this.tapWait && !this.tapWait.check) || this.dialog.waiting()) this.hoverClickable = true;
     if (this.bottleHot) {
       const b = this.bottle;
       const [bx, by] = aq.toScreen(b.x, b.y, b.z);
@@ -1287,6 +1337,7 @@ export class Story {
     this.mouse = [x, y];
     if (this.photo.album && this.photo.pointer(type, x, y)) return; // the album sits over everything
     if (type === 'down' && this.speakerHover()) { this.speakerOn = !this.speakerOn; this.sound.setEnabled(this.speakerOn); return; }
+    if ((type === 'down' || type === 'key') && this.dialog.tap(type === 'key' ? null : x, y)) return;
     if (this.photo.pointer(type, x, y)) return;
     if (type === 'move') {
       const no = this.buttons.find((b) => b.id === 'no');
@@ -1539,6 +1590,11 @@ export class Story {
     }
     if (this.showSpeaker) { const [x, y] = this.speakerRect(); drawSpeaker(ctx, x + 2, y + 2, this.speakerOn, this.speakerHover()); }
     this.photo.draw(ctx);
-    if (this.quest && !this.photo.album) this.quest.draw(ctx); // over the viewfinder, under the album
+    if (!this.photo.album) {
+      // over the viewfinder, under the album; on a narrow screen the quest
+      // card tucks in under the dialogue box
+      if (this.quest) { this.quest.top = this.W < 340 ? Math.max(5, this.dialog.bottom() + 3) : 5; this.quest.draw(ctx); }
+      this.dialog.draw(ctx);
+    }
   }
 }

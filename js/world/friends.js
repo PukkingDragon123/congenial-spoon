@@ -87,10 +87,11 @@ export function dolphinSprite(frame) {
 
 // A seahorse facing right: curled tail, ridged belly rings, a crown of
 // little spikes, a long snout, and a see-through back fin that flutters.
-function seahorseSprite(frame) {
-  const k = 's' + frame;
+// SK scales it (small in the tank, bigger for the encyclopedia picture).
+export function seahorseSprite(frame, SK = 0.6) {
+  const k = 's' + frame + '|' + SK;
   if (cache.has(k)) return cache.get(k);
-  const SK = 0.6, W = Math.round(32 * SK), H = Math.round(48 * SK);   // small, but carrying the same detail
+  const W = Math.round(32 * SK), H = Math.round(48 * SK);   // small, but carrying the same detail
   const P = [[16, 11, 5.4], [14.5, 16.5, 3.8], [16.8, 22, 5.8], [17.4, 28, 5.9], [15, 33.5, 4.3], [12.4, 38, 3.2], [11, 42, 2.5], [8.4, 45, 2.1], [5, 44.4, 1.8], [3.4, 41.2, 1.5], [4.8, 38.4, 1.2], [7.4, 38.6, 1]];
   let acc = 0;
   const seg = P.slice(1).map((q, i) => { const p0 = P[i]; const l = Math.hypot(q[0] - p0[0], q[1] - p0[1]); const o = { a: p0, b: q, t0: acc, l }; acc += l; return o; });

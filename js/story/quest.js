@@ -44,7 +44,7 @@ export class Quest {
 
   box() {
     const w = Math.max(textWidth(this.title) + 22, ...this.items.map((i) => textWidth(i.name) + 22), 84);
-    return [5, 5, w, 24 + this.items.length * 11];
+    return [5, this.top ?? 5, w, 24 + this.items.length * 11];
   }
   rowAt(i) { const [x, y] = this.box(); return [x + 5, y + 21 + i * 11]; }
 
@@ -78,7 +78,7 @@ export class Quest {
           for (const [cx, cy] of [[-3, 0], [-2, 1], [-1, 2], [0, 1], [1, 0], [2, -1], [3, -2], [4, -3]]) ctx.fillRect(cx - 0.5, cy - 0.5, 2, 2);
           ctx.restore();
         }
-        drawText(ctx, it.name, rx + 11, ry, { color: it.done ? '#b8a890' : '#3a2a4a' });
+        drawText(ctx, it.name, rx + 11, ry, { color: it.done ? '#8a7658' : '#3a2a4a' });
         if (it.done) {
           const sw = Math.round(textWidth(it.name) * clamp(it.t / 0.3));
           ctx.fillStyle = '#ff6a9a'; ctx.fillRect(rx + 11, ry + 3, sw, 1);

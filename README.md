@@ -13,14 +13,15 @@ is the song in `audio/`.
 ## The story (the length of the song, about 3:45)
 
 It starts as a little photo game (you play her) and only turns into a
-confession at the hook. There's no dialogue and no subtitles: it's told in
-pictures. Once the song is on, every beat is pinned to a moment in the track, and
+confession at the hook. Apart from a chat with a Mameshiba at the start
+there's no dialogue and no subtitles: it's told in pictures. Once the song
+is on, every beat is pinned to a moment in the track, and
 the whole tank moves with the music: fish bounce and squash on the beat, waves
 ripple through the schools, crabs wave their claws, and the light breathes
 with the song.
 
-1. **Title**: "Very Cool Aquarium Game". Tap to dive in; the game's original music box starts.
-2. **Photo quest** (before the song): she walks into the jellyfish hall on her own with a camera while the music box loops. A quest card asks for three photos: a moon jelly, a sea nettle and a giant jelly. An arrow points at the camera; raise it and she lifts hers to her eye. The photo that completes the list stamps QUEST CLEAR! and starts "Always".
+1. **Title**: "Very Cool Aquarium Game". Tap to dive in; "Always" starts, and its opening phrase (about five seconds) loops seamlessly until the photo quest is done.
+2. **Mameshiba and the photo quest**: she walks into the jellyfish hall on her own with a camera. A Mameshiba in a scuba suit paddles up and chats in a dialogue box, and you pick her replies (it's a talking bean with a degree in jellyfish; jellies are older than trees). It's making an encyclopedia and asks for help: a quest card wants a moon jelly, a sea nettle and a giant jelly. An arrow points at the camera; raise it and she lifts hers to her eye. The last photo stamps QUEST CLEAR!, one more exchange, and the song carries on as she heads for the reef.
 3. **Jellyfish hall** (0:00): she wanders along the glass pointing out jellies. Tap any creature to make it react. A Mameshiba in a little scuba suit (hood with its floppy ear, air tank, mask, flipper) paddles around here and in the other tanks.
 4. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a fat seal dressed as Cupid sitting on a rock in the middle, anemones, clownfish families and schools of fish. He's already there at the glass. She walks in past him, he spots her ("!" with anime focus lines) and can't keep still, jumping around, then comes over and they shake hands, and they watch the reef together.
 5. **The walk** (0:42): along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
@@ -29,7 +30,7 @@ with the song.
 8. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
 9. **Finale**: when she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates. Dolphins and seahorses swim a heart around the couple, and all the fish come to the middle of the window to spell *I*, then *LOVE*, then *YOU*, over and over: the letters light up as they settle, and between words the whole crowd breaks off and circles round before it regroups. A whale shark glides past, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
-### Photo mode
+### Photo mode and the encyclopedia
 
 Tap the little camera (bottom right) to raise the viewfinder, then tap to
 snap. The shot prints out of the camera, develops, and is scored: rarer
@@ -44,6 +45,16 @@ strap, doodle on it with markers, and upgrade the lens, film (sepia, faded,
 warm, then vivid colour) and roll. Your camera shows in the corner as you play. Points come slowly (common fish are worth a few, legendaries more), and filling the album pays out bonuses at 3, 6, 10, 15 and all 22 species. Tap any postcard and *save as jpeg* to keep it as a souvenir: a big polaroid of the shot with its name, stars, date and a stamp. Albums and points are kept in the browser. The
 legendaries are the whale shark, the Mameshiba, the tree friend, and the
 two of them together.
+
+The viewfinder locks onto the best subject in the frame (its name and
+stars show), and that subject's page in the **encyclopedia** (the album's
+third tab) gets a jigsaw piece and a fun fact with each photo: four pieces
+and four real facts per animal (the made-up friends get made-up facts). The
+fact appears on a little card under the print. Finishing a jigsaw wins that
+animal's keychain for the camera strap, and finishing every animal from one
+tank (Jelly Hall, Coral Reef, Great Tank, Legends, Just Us) wins that tank's
+striped camera banner. Keychains and banners are chosen in the camera
+workshop.
 
 The story has no subtitles by default; `lyrics` in `js/config.js` can bring
 them back (they type in over a soft backing and fade away in a few bubbles).
@@ -120,9 +131,9 @@ is no build step.
 - **Sound** (`js/audio.js`): plays the song and runs a live analyser on it,
   giving the scene a loudness level and a beat pulse. The story reads its
   clock from the track, so it stays in sync. Small effects (bubbles, chimes)
-  are still synthesised. The first tap starts the game's music box
-  (synthesised, looping, over a soft wash of water); the song itself starts
-  on the photo that completes the quest. The speaker icon (top
+  are still synthesised. The first tap starts the song; until the
+  photo quest is done it goes round its opening phrase (1.2 s to 6.25 s,
+  measured so the jump back lands on the beat). The speaker icon (top
   right) mutes it.
 - **Galleries** (`js/world/rooms.js`): the jellyfish hall and the coral reef
   share the main tank's camera, couple and effects, so the story drives any
