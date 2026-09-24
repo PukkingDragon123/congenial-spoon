@@ -9,6 +9,9 @@ import { TAU, clamp, lerp, ease, R } from '../util.js';
 import { makeCanvas } from '../util.js';
 import { drawText, textWidth, wrap, LINE_H } from '../font.js';
 import { burstStars } from '../world/fx.js';
+import { diverSprite, DIVER_FRAMES } from '../art/divers.js';
+import { Gallery } from './gallery.js';
+import { Book } from './book.js';
 import { FACTS, PIECES, SETS, setOf, jigsaw, keychainIcon, drawBanner, done as puzzleDone, setDone, clampPieces } from './encyclopedia.js';
 import {
   CAM_W, CAM_H, MODELS, PAINTS, PAINT_PRICE, STICKERS, CHARMS, PENS, MARKER_PRICE,
@@ -18,7 +21,7 @@ import {
 setPrizeArt({ keychain: keychainIcon, banner: drawBanner });
 
 const SUBTABS = ['model', 'paint', 'sticker', 'charm', 'banner', 'draw', 'upgrade'];
-const TABS = ['album', 'camera', 'notebook'];
+const TABS = ['gallery', 'notebook', 'camera'];
 
 // key -> [name, rarity 1..4]
 export const SPECIES = {
@@ -37,7 +40,10 @@ export const UPGRADES = {
   lens: { name: 'Lens', costs: [40, 110, 240], info: ['a wider frame'] },
   film: { name: 'Film', costs: [50, 130, 280], info: ['richer colour, more points'] },
   roll: { name: 'Roll', costs: [30, 80, 180], info: ['more shots, faster reload'] },
+  dev: { name: 'Developer', costs: [45, 120, 260], info: ['prints develop faster'] },
 };
+// how long a print takes to develop, per Developer level
+const DEV_TIME = [8, 6, 4.5, 3];
 const FRAME_W = [0.26, 0.33, 0.41, 0.5]; // share of the screen width
 const LENSES = ['small', 'medium', 'wide', 'ultra'];
 const FILMS = ['sepia', 'faded', 'warm', 'vivid'];
@@ -46,7 +52,7 @@ const ROLL_CAP = [6, 9, 12, 16];
 const RELOAD = [4, 3, 2.2, 1.5];
 const SAVE_KEY = 'vcag-photo-1';
 // album milestones: [species found, bonus]
-const MILESTONES = [[3, 15], [6, 30], [10, 60], [15, 100], [22, 250]];
+const MILESTONES = [[3, 15], [6, 30], [10, 60], [15, 100], [ORDER.length, 250]];
 
 const keyOf = (c) => {
   if (c.kind === 'jelly') return c.hue === 'nettle' ? 'nettle' : c.len >= 40 ? 'bigjelly' : 'jelly';
@@ -61,7 +67,7 @@ export class PhotoMode {
     this.aim = null;
     this.points = 0;
     this.shown = 0;          // points as displayed, counting up
-    this.levels = { lens: 0, film: 0, roll: 0 };
+    this.levels = { lens: 0, film: 0, roll: 0, dev: 0 };
     this.book = {};          // key -> { n, score, img (canvas) }
     this.shots = 0;
     this.claimed = [];       // milestones already paid out
@@ -81,6 +87,32 @@ export class PhotoMode {
     this.shake = 0;
     this.albumBounce = 0;
     this.t = 0;
+    this.gallery = new Gallery(this);   // every photo, a box and a board
+    this.notebook = new Book(this);     // the encyclopedia, as a book
+  }
+
+  speciesName(key) { return SPECIES[key] ? SPECIES[key][0] : key; }
+  rarity(key) { return SPECIES[key] ? SPECIES[key][1] : 1; }
+  speciesCount() { return ORDER.length; }
+
+  // Save or share a picture: the share sheet where there is one, the
+  // viewer's downloads, or an ordinary download.
+  async saveBlob(blob, filename, label = 'saved') {
+    try {
+      const file = typeof File !== 'undefined' ? new File([blob], filename, { type: blob.type }) : null;
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: filename }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    const dl = await this.downloads();
+    if (dl) {
+      try { await dl.save({ filename, data: blob }); this.say(label); } catch (err) { if (!err || err.code !== 'declined') this.say('saving isn\'t available here'); }
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    this.say(label);
   }
 
   // ------------------------------------------------------------ storage --
@@ -94,7 +126,7 @@ export class PhotoMode {
       if (Array.isArray(d.claimed)) this.claimed = d.claimed;
       for (const [k, v] of Object.entries(d.book || {})) {
         if (!SPECIES[k]) continue;
-        const e = { n: v.n | 0, score: v.score | 0, img: null, pieces: clampPieces(v.pieces) };
+        const e = { n: v.n | 0, score: v.score | 0, img: null, pieces: clampPieces(v.pieces), placed: v.placed | 0 };
         if (v.img) { const im = new Image(); im.onload = () => { e.img = toCanvas(im); this.camDirty = true; }; im.src = v.img; }
         this.book[k] = e;
       }
@@ -103,7 +135,7 @@ export class PhotoMode {
   save() {
     try {
       const book = {};
-      for (const [k, v] of Object.entries(this.book)) book[k] = { n: v.n, score: v.score, pieces: v.pieces | 0, img: v.img ? v.img.toDataURL() : v.url || null };
+      for (const [k, v] of Object.entries(this.book)) book[k] = { n: v.n, score: v.score, pieces: v.pieces | 0, placed: v.placed | 0, img: v.img ? v.img.toDataURL() : v.url || null };
       localStorage.setItem(SAVE_KEY, JSON.stringify({ points: this.points, shots: this.shots, levels: this.levels, cam: this.cam, claimed: this.claimed, book }));
     } catch (e) { /* ignore */ }
   }
@@ -152,13 +184,27 @@ export class PhotoMode {
 
   // -------------------------------------------------------------- input --
   pointer(type, x, y) {
+    // tap the print: help it develop (a shake), or send it off once done
+    const pr = this.prints[0];
+    if (type === 'down' && pr && !this.album && this.printRect && this.hit(this.printRect, x, y) && pr.t > 1.6) {
+      if (pr.t < pr.rt) { pr.t = Math.min(pr.rt, pr.t + 0.6); pr.jolt = 1; this.story.sound.sfx('pop'); }
+      else if (pr.t < pr.hold) pr.t = pr.hold;
+      return true;
+    }
     if (!this.available()) return false;
     if (type === 'move') {
       if (this.album && this.album.drawing) this.doodle(x, y);
+      else if (this.album && !this.album.card && this.album.tab === 'gallery') this.gallery.move(x, y);
+      else if (this.album && !this.album.card && this.album.tab === 'notebook') this.notebook.move(x, y);
       else if (this.on) this.aim = [x, y];
       return !!this.album;
     }
-    if (type === 'up') { if (this.album && this.album.drawing) { this.album.drawing = false; this.album.last = null; this.saveArt(); } return !!this.album; }
+    if (type === 'up') {
+      if (this.album && this.album.drawing) { this.album.drawing = false; this.album.last = null; this.saveArt(); }
+      else if (this.album && this.album.tab === 'gallery') this.gallery.up(x, y);
+      else if (this.album && this.album.tab === 'notebook') this.notebook.up(x, y);
+      return !!this.album;
+    }
     if (type !== 'down') return false;
     if (this.album) { this.albumTap(x, y); return true; }
     if (this.hit(this.camRect(), x, y)) {
@@ -170,7 +216,7 @@ export class PhotoMode {
       return true;
     }
     if (this.hit(this.bookRect(), x, y)) {
-      this.album = { tab: 'album', page: 0, card: null, sub: 'model', sel: null, pen: 3, drawing: false };
+      this.album = { tab: this.lastTab || 'gallery', page: 0, card: null, sub: 'model', sel: null, pen: 3, drawing: false };
       this.on = false;
       this.story.sound.sfx('pop');
       return true;
@@ -241,6 +287,7 @@ export class PhotoMode {
       else if (!e.img) e.img = img;
     }
     this.checkMilestones();
+    this.gallery.add(img, main ? main.key : null);
     // the encyclopedia: one jigsaw piece and one fun fact for the subject
     let fact = null;
     if (main) {
@@ -252,7 +299,10 @@ export class PhotoMode {
       }
     }
     this.camDirty = true; // photo stickers may show the new shot
-    this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0, fact, hold: fact ? 6.4 : 3.6 });
+    // the print develops (slowly, unless the Developer is upgraded) while the
+    // bean wipes it and shakes it, then shows what you got
+    const devT = DEV_TIME[this.levels.dev | 0] || 8, rt = 1.6 + devT;
+    this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0, fact, devT, rt, hold: rt + (fact ? 4.2 : 2.2) });
     if (this.onSnap) this.onSnap({ keys: list.map((f) => f.key), main: main ? main.key : null, pts });
     if (this.prints.length === 1) s.sound.sfx('print');
     this.save();
@@ -277,6 +327,7 @@ export class PhotoMode {
   }
 
   found() { return ORDER.filter((k) => this.book[k]).length; }
+  foundKeys() { return ORDER.filter((k) => this.book[k]); }
   nextMilestone() { return MILESTONES.find(([n]) => !this.claimed.includes(n)) || null; }
   checkMilestones() {
     const n = this.found();
@@ -346,7 +397,10 @@ export class PhotoMode {
     const p = this.prints[0];
     if (p) {
       p.t += dt;
-      if (p.fact && !p.factSfx && p.t > 2.1) { p.factSfx = true; this.story.sound.sfx(p.fact.prize ? 'yes' : 'sparkle'); if (p.fact.prize) this.camDirty = true; }
+      if (p.t > 1.6 && p.t < p.rt && Math.floor((p.t - 1.6) / 0.5) !== Math.floor((p.t - 1.6 - dt) / 0.5) && ((p.t - 1.6) % 3.4) > 2.2) this.story.sound.sfx('type'); // shake shake
+      if (!p.doneSfx && p.t >= p.rt) { p.doneSfx = true; this.story.sound.sfx('chime'); }
+      p.jolt = Math.max(0, (p.jolt || 0) - dt * 3);
+      if (p.fact && !p.factSfx && p.t > p.rt + 0.3) { p.factSfx = true; this.story.sound.sfx(p.fact.prize ? 'yes' : 'sparkle'); if (p.fact.prize) this.camDirty = true; }
       if (p.t >= p.hold + 0.6) {
         this.prints.shift();
         this.points += p.pts;
@@ -520,12 +574,13 @@ export class PhotoMode {
     else if (t < 1.6) { const k = ease.inOutCubic((t - 1) / 0.6); x = lerp(outX, midX, k); y = lerp(outY1, midY, k); sc = lerp(1, s, k); }
     else if (t < p.hold) { x = midX; y = midY + Math.sin((t - 1.6) * 2) * 1.5; sc = s; }
     else { const k = ease.inCubic((t - p.hold) / 0.6); x = lerp(midX, bx + 7, k); y = lerp(midY, by + 7, k); sc = lerp(s, 0.15, k); a = 1 - k * 0.3; }
-    const dev = clamp(1 - t / 2.8); // still developing
+    const developing = t >= 1.6 && t < p.rt, cyc = (t - 1.6) % 3.4, shaking = developing && cyc > 2.2;
+    const dev = t < 1.6 ? 1 : Math.pow(clamp(1 - (t - 1.6) / p.devT), 1.4); // still developing
     // it swings as it lands, settles with a wobble, and spins into the album
     let rot = 0;
     if (t < 1) rot = Math.sin(t * 9) * 0.05 * (1 - t);
     else if (t < 1.6) rot = lerp(0.3, 0, ease.outCubic((t - 1) / 0.6));
-    else if (t < p.hold) rot = Math.sin((t - 1.6) * 7) * 0.08 * Math.exp(-(t - 1.6) * 2.2) - 0.02;
+    else if (t < p.hold) rot = Math.sin((t - 1.6) * 7) * 0.08 * Math.exp(-(t - 1.6) * 2.2) - 0.02 + (shaking ? Math.sin(t * 38) * 0.07 : 0) + (p.jolt || 0) * Math.sin(t * 50) * 0.1;
     else rot = ease.inCubic((t - p.hold) / 0.6) * -1.2;
     ctx.save();
     ctx.globalAlpha = a;
@@ -539,8 +594,8 @@ export class PhotoMode {
     ctx.drawImage(img, 3, 3);
     if (dev > 0) { ctx.globalAlpha = a * dev; ctx.fillStyle = '#3a2a1e'; ctx.fillRect(3, 3, img.width, img.height); ctx.globalAlpha = a; }
     // a glint sweeps across once it's developed
-    if (t > 2.6 && t < 3.2) {
-      const gx = lerp(-12, img.width + 12, (t - 2.6) / 0.6);
+    if (t > p.rt && t < p.rt + 0.6) {
+      const gx = lerp(-12, img.width + 12, (t - p.rt) / 0.6);
       ctx.save();
       ctx.beginPath(); ctx.rect(3, 3, img.width, img.height); ctx.clip();
       ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#ffffff';
@@ -551,19 +606,21 @@ export class PhotoMode {
     if (t > 1.2) drawText(ctx, fit(name, pw - 6), pw / 2, img.height + 6, { align: 'center', color: '#3a2a4a' });
     ctx.restore();
     ctx.globalAlpha = 1;
-    // results while it's up front
-    if (t > 1.8 && t < p.hold + 0.2) {
-      const k = clamp((t - 1.8) / 0.25);
+    this.printRect = t > 1.6 && t < p.hold ? [midX, midY, pw * s, ph * s] : null;
+    if (t > 1.6 && t < p.rt + 0.6) this.drawDeveloping(ctx, p, midX, midY, pw * s, ph * s);
+    // results once it has developed
+    if (t > p.rt && t < p.hold + 0.2) {
+      const k = clamp((t - p.rt) / 0.25);
       const top = midY - 12;
       if (p.main) {
         const r = SPECIES[p.main][1];
         drawText(ctx, '★'.repeat(r) + ' ' + RARITY_NAME[r], W / 2, top, { align: 'center', color: RARITY_COL[r], outline: '#10142a', alpha: k });
       }
       drawText(ctx, `+${p.pts} ✦`, W / 2, midY + ph * s + 4 - Math.round(k * 3), { align: 'center', scale: W > 200 ? 2 : 1, color: '#ffe38a', outline: '#3a2200', shadow: '#ff9a3a', alpha: k });
-      if (p.fact && t > 2.1) this.drawFact(ctx, p, Math.round(midY + ph * s + 22), clamp((t - 2.1) / 0.3) * clamp((p.hold + 0.2 - t) / 0.3));
+      if (p.fact && t > p.rt + 0.3) this.drawFact(ctx, p, Math.round(midY + ph * s + 22), clamp((t - p.rt - 0.3) / 0.3) * clamp((p.hold + 0.2 - t) / 0.3));
       if (p.fresh.length) {
         // NEW! slams on like a stamp
-        const sk = clamp((t - 1.8) / 0.18), ss = 1 + (1 - ease.outBack(sk)) * 1.6;
+        const sk = clamp((t - p.rt) / 0.18), ss = 1 + (1 - ease.outBack(sk)) * 1.6;
         const nx = Math.round(midX + pw * s - 10), ny = Math.round(midY - 4 + Math.sin(t * 10));
         if (sk >= 1 && !p.stamped) { p.stamped = true; burstStars(this.story.fx, nx + 11, ny + 3, 8, { speed: 50, size: 4 }); this.story.sound.sfx('pop'); }
         ctx.save();
@@ -574,6 +631,62 @@ export class PhotoMode {
         drawText(ctx, 'NEW!', 0, -3, { align: 'center', color: '#ffffff' });
         ctx.restore();
       }
+    }
+  }
+
+  // While a print develops the bean looks after it: it wipes the photo with a
+  // little cloth, then grabs the corner and shakes it (like you do with an
+  // instant photo), round and round until it's done, then swims off. A bar
+  // underneath shows how far along it is; tapping the print helps.
+  drawDeveloping(ctx, p, x, y, w, h) {
+    const t = p.t, dt = t - 1.6, cyc = dt % 3.4, done = t >= p.rt;
+    const k = clamp(dt / p.devT);
+    const img = diverSprite('bean', Math.floor(t * 8) % DIVER_FRAMES);
+    let bx, by, face = -1, label = null;
+    if (done) {
+      // ta-da: a hop and away up and out
+      const q = clamp((t - p.rt) / 0.6);
+      bx = x + w + 6 + q * 30; by = y + 10 - q * 60 - Math.sin(q * Math.PI) * 10; face = 1;
+      label = q < 0.7 ? 'ta-da!' : null;
+      ctx.globalAlpha = 1 - q * q;
+    } else if (cyc < 2.2) {
+      // wipe wipe: the cloth goes round the photo, the bean right behind it
+      const cx = x + w / 2 + Math.sin(cyc * 5) * w * 0.3, cy = y + h * 0.42 + Math.cos(cyc * 2.6) * h * 0.18;
+      const cr = Math.sin(cyc * 10) * 0.3;
+      ctx.save();
+      ctx.translate(Math.round(cx), Math.round(cy)); ctx.rotate(cr);
+      ctx.fillStyle = '#1a2a48'; ctx.fillRect(-6, -5, 12, 10);
+      ctx.fillStyle = '#e8f4ff'; ctx.fillRect(-5, -4, 10, 8);
+      ctx.fillStyle = '#8ac8f0'; for (let i = -5; i < 5; i += 2) ctx.fillRect(i, -4, 1, 8);
+      ctx.restore();
+      if (Math.floor(t * 6) % 3 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(cx - 9), Math.round(cy - 7), 1, 3); ctx.fillRect(Math.round(cx - 10), Math.round(cy - 6), 3, 1); }
+      face = Math.cos(cyc * 5) > 0 ? -1 : 1;
+      bx = cx + (face < 0 ? 14 : -14); by = cy - 6;
+      label = '*wipe wipe*';
+    } else {
+      // shake shake: holding the corner, jiggling with the print
+      bx = x + w + 2 + Math.sin(t * 38) * 2; by = y - 2 + Math.cos(t * 38) * 2;
+      label = '*shake shake*';
+      ctx.strokeStyle = '#fff4dc'; ctx.globalAlpha = 0.7;
+      for (const sd of [-1, 1]) { const lx = sd < 0 ? x - 5 : x + w + 3; for (let j = 0; j < 3; j++) ctx.fillRect(lx + sd * (j % 2), y + h * 0.3 + j * 5, 1, 3); }
+      ctx.globalAlpha = 1;
+    }
+    ctx.save();
+    ctx.translate(Math.round(bx), Math.round(by));
+    ctx.scale(face, 1);
+    ctx.drawImage(img, -img.ox, -img.oy);
+    ctx.restore();
+    if (label) drawText(ctx, label, Math.round(bx), Math.round(by - 24), { align: 'center', color: '#fff4dc', outline: '#1a1020' });
+    ctx.globalAlpha = 1;
+    if (!done) {
+      // how far along, and a nudge to help
+      const bw = Math.min(w, 90), px = Math.round(x + (w - bw) / 2), py = Math.round(y + h + 6);
+      ctx.fillStyle = '#1a1020'; ctx.fillRect(px - 1, py - 1, bw + 2, 6);
+      ctx.fillStyle = '#4a3a2a'; ctx.fillRect(px, py, bw, 4);
+      ctx.fillStyle = '#ffd24a'; ctx.fillRect(px, py, Math.round(bw * k), 4);
+      ctx.fillStyle = '#fff4b0'; ctx.fillRect(px, py, Math.round(bw * k), 1);
+      drawText(ctx, 'developing' + '.'.repeat(1 + (Math.floor(t * 3) % 3)), x + w / 2, py + 8, { align: 'center', color: '#fff4dc', outline: '#1a1020' });
+      if (dt > 1.2) drawText(ctx, 'tap to help!', x + w / 2, py + 18, { align: 'center', color: '#ffb0d0', outline: '#1a1020', alpha: 0.6 + Math.sin(t * 5) * 0.3 });
     }
   }
 
@@ -608,15 +721,6 @@ export class PhotoMode {
 
   // -------------------------------------------------------------- album --
   panel() { return [4, 4, this.W - 8, this.H - 8]; }
-  grid() {
-    const [px, py, pw, ph] = this.panel();
-    const want = pw > 400 ? 8 : pw > 250 ? 5 : 3;
-    const cw = clamp(Math.floor((pw - 8) / want) - 4, 38, 90), ch = Math.round(cw * 0.7) + 16;
-    const cols = Math.max(1, Math.floor((pw - 8) / (cw + 4)));
-    const rows = Math.max(1, Math.floor((ph - 44) / (ch + 4)));
-    const gx = px + Math.round((pw - cols * (cw + 4) + 4) / 2), gy = py + 26;
-    return { cw, ch, cols, rows, gx, gy, per: cols * rows, pages: Math.ceil(ORDER.length / (cols * rows)) };
-  }
   tabRects() {
     const [px, py] = this.panel(), out = {};
     let x = px + 4;
@@ -624,35 +728,18 @@ export class PhotoMode {
     return out;
   }
   closeRect() { const [px, py, pw] = this.panel(); return [px + pw - 13, py + 3, 10, 10]; }
-  navRects() { const [px, py, pw, ph] = this.panel(); return { prev: [px + 6, py + ph - 14, 12, 11], next: [px + pw - 18, py + ph - 14, 12, 11] }; }
   albumTap(x, y) {
     const A = this.album, snd = this.story.sound;
     if (A.card) {
       if (this.cardBtn && this.hit(this.cardBtn, x, y)) { this.exportSouvenir(A.card); snd.sfx('shutter'); return; }
       A.card = null; snd.sfx('pop'); return;
     }
-    if (A.entry) {
-      if (this.entryBtn && this.hit(this.entryBtn, x, y)) {
-        const id = 'k:' + A.entry;
-        this.cam.charm = this.cam.charm === id ? null : id;
-        this.charmV += 6; snd.sfx('ding'); this.camChanged(); return;
-      }
-      A.entry = null; snd.sfx('pop'); return;
-    }
     if (this.hit(this.closeRect(), x, y)) { this.album = null; snd.sfx('pop'); return; }
     const tabs = this.tabRects();
-    for (const k of TABS) if (this.hit(tabs[k], x, y)) { A.tab = k; snd.sfx('type'); return; }
-    if (A.tab === 'album' || A.tab === 'notebook') {
-      const G = this.grid(), nav = this.navRects(), guide = A.tab === 'notebook';
-      if (this.hit(nav.prev, x, y)) { A.page = (A.page + G.pages - 1) % G.pages; snd.sfx('type'); return; }
-      if (this.hit(nav.next, x, y)) { A.page = (A.page + 1) % G.pages; snd.sfx('type'); return; }
-      for (let i = 0; i < G.per; i++) {
-        const key = ORDER[A.page * G.per + i];
-        if (!key) break;
-        const cx = G.gx + (i % G.cols) * (G.cw + 4), cy = G.gy + Math.floor(i / G.cols) * (G.ch + 4);
-        if (this.hit([cx, cy, G.cw, G.ch], x, y) && this.book[key]) { if (guide) A.entry = key; else A.card = key; snd.sfx('chime'); return; }
-      }
-    } else this.workshopTap(x, y);
+    for (const k of TABS) if (this.hit(tabs[k], x, y)) { A.tab = k; this.lastTab = k; snd.sfx('type'); return; }
+    if (A.tab === 'gallery') this.gallery.down(x, y);
+    else if (A.tab === 'notebook') this.notebook.down(x, y);
+    else this.workshopTap(x, y);
   }
 
   drawAlbum(ctx) {
@@ -671,129 +758,11 @@ export class PhotoMode {
     }
     const [cx, cy] = this.closeRect();
     drawText(ctx, '×', cx + 1, cy + 1, { color: '#6a4a2a' });
-    const found = ORDER.filter((k) => this.book[k]).length;
     if (pw > 150) drawText(ctx, `✦${this.points}`, cx - 6, py + 6, { align: 'right', color: '#c27a10' });
-    if (A.tab === 'album') this.drawGrid(ctx, found);
-    else if (A.tab === 'notebook') this.drawGuide(ctx);
+    if (A.tab === 'gallery') this.gallery.draw(ctx);
+    else if (A.tab === 'notebook') this.notebook.draw(ctx);
     else this.drawWorkshop(ctx);
     if (A.card) this.drawPostcard(ctx, A.card);
-    if (A.entry) this.drawEntry(ctx, A.entry);
-  }
-
-  drawGrid(ctx, found) {
-    const G = this.grid(), A = this.album;
-    const [px, py, pw, ph] = this.panel();
-    for (let i = 0; i < G.per; i++) {
-      const key = ORDER[A.page * G.per + i];
-      if (!key) break;
-      const x = G.gx + (i % G.cols) * (G.cw + 4), y = G.gy + Math.floor(i / G.cols) * (G.ch + 4);
-      const e = this.book[key], [name, r] = SPECIES[key];
-      const tilt = ((i * 7) % 3) - 1;
-      ctx.fillStyle = 'rgba(80,50,20,0.25)'; ctx.fillRect(x + 1, y + 2 + tilt, G.cw, G.ch);
-      ctx.fillStyle = e ? '#fffdf6' : '#d8c8a8'; ctx.fillRect(x, y + tilt, G.cw, G.ch);
-      const tw = G.cw - 6, th = G.ch - 19;
-      if (e && e.img) {
-        const im = e.img, s = Math.max(im.width / tw, im.height / th);
-        const dw = Math.round(im.width / s), dh = Math.round(im.height / s);
-        ctx.fillStyle = '#2a1a10'; ctx.fillRect(x + 3, y + 3 + tilt, tw, th);
-        ctx.drawImage(im, x + 3 + Math.round((tw - dw) / 2), y + 3 + tilt + Math.round((th - dh) / 2), dw, dh);
-      } else {
-        ctx.fillStyle = e ? '#6a8ab0' : '#b8a888'; ctx.fillRect(x + 3, y + 3 + tilt, tw, th);
-        if (!e) drawText(ctx, '?', x + G.cw / 2, y + 3 + tilt + th / 2 - 3, { align: 'center', color: '#8a7658' });
-      }
-      drawText(ctx, e ? fit(name, G.cw - 2) : '???', x + G.cw / 2, y + th + 5 + tilt, { align: 'center', color: e ? '#3a2a4a' : '#8a7658' });
-      // rarity stars
-      for (let k = 0; k < r; k++) { ctx.fillStyle = e ? RARITY_COL[r] : '#a89878'; ctx.fillRect(x + G.cw / 2 - r * 2 + k * 4, y + G.ch - 5 + tilt, 3, 3); }
-      // a tiny stamp on legendary cards
-      if (e && r === 4) { ctx.fillStyle = '#ff6ad0'; ctx.fillRect(x + G.cw - 7, y + 1 + tilt, 5, 5); ctx.fillStyle = '#fff'; ctx.fillRect(x + G.cw - 6, y + 2 + tilt, 3, 3); }
-    }
-    const nav = this.navRects();
-    const nx = this.nextMilestone();
-    const label = nx && pw > 170 ? `${found}/${ORDER.length} found · next +${nx[1]}✦ at ${nx[0]}` : `${found}/${ORDER.length} found`;
-    drawText(ctx, label, px + pw / 2, py + ph - 12, { align: 'center', color: '#6a4a2a' });
-    if (G.pages > 1) {
-      drawText(ctx, '<', nav.prev[0] + 4, nav.prev[1] + 1, { color: '#c2466e' });
-      drawText(ctx, '>', nav.next[0] + 4, nav.next[1] + 1, { color: '#c2466e' });
-      if (pw > 140) drawText(ctx, `${A.page + 1}/${G.pages}`, nav.prev[0] + 16, nav.prev[1] + 2, { color: '#a08060' });
-    }
-  }
-
-  // ------------------------------------------------------- encyclopedia --
-  jigFor(key) { const e = this.book[key]; return jigsaw(key, e ? e.pieces | 0 : 0, key === 'me' || key === 'us' ? e && e.img : null); }
-
-  drawGuide(ctx) {
-    const G = this.grid(), A = this.album, C = this.cam;
-    const [px, py, pw, ph] = this.panel();
-    for (let i = 0; i < G.per; i++) {
-      const key = ORDER[A.page * G.per + i];
-      if (!key) break;
-      const x = G.gx + (i % G.cols) * (G.cw + 4), y = G.gy + Math.floor(i / G.cols) * (G.ch + 4);
-      const e = this.book[key], n = e ? e.pieces | 0 : 0, full = n >= PIECES;
-      ctx.fillStyle = 'rgba(80,50,20,0.25)'; ctx.fillRect(x + 1, y + 2, G.cw, G.ch);
-      ctx.fillStyle = full ? '#fff2f6' : e ? '#fffdf6' : '#d8c8a8'; ctx.fillRect(x, y, G.cw, G.ch);
-      const tw = G.cw - 6, th = G.ch - 19;
-      const jg = this.jigFor(key), s = Math.min(tw / jg.width, th / jg.height);
-      const dw = Math.round(jg.width * s), dh = Math.round(jg.height * s);
-      ctx.imageSmoothingEnabled = false;
-      ctx.globalAlpha = e ? 1 : 0.45;
-      ctx.drawImage(jg, x + 3 + Math.round((tw - dw) / 2), y + 3 + Math.round((th - dh) / 2), dw, dh);
-      ctx.globalAlpha = 1;
-      drawText(ctx, e ? fit(SPECIES[key][0], G.cw - 2) : '???', x + G.cw / 2, y + th + 5, { align: 'center', color: e ? '#3a2a4a' : '#8a7658' });
-      // one pip per piece
-      for (let k = 0; k < PIECES; k++) { ctx.fillStyle = k < n ? '#ff6a9a' : '#c8b898'; ctx.fillRect(x + G.cw / 2 - PIECES * 2.5 + k * 5, y + G.ch - 5, 4, 3); }
-      if (full) { const ic = keychainIcon(key); ctx.drawImage(ic, x + G.cw - ic.width + 2, y - 3); }
-    }
-    const nav = this.navRects();
-    const puzzles = ORDER.filter((k) => puzzleDone(this.book, k)).length;
-    drawText(ctx, `puzzles ${puzzles}/${ORDER.length} · banners ${C.banners.length}/${SETS.length}`, px + pw / 2, py + ph - 12, { align: 'center', color: '#6a4a2a' });
-    if (G.pages > 1) {
-      drawText(ctx, '<', nav.prev[0] + 4, nav.prev[1] + 1, { color: '#c2466e' });
-      drawText(ctx, '>', nav.next[0] + 4, nav.next[1] + 1, { color: '#c2466e' });
-    }
-  }
-
-  // One animal's page: the jigsaw, the facts found so far, and its prizes.
-  drawEntry(ctx, key) {
-    const W = this.W, H = this.H, e = this.book[key], n = e.pieces | 0, [name, r] = SPECIES[key];
-    const cw = Math.min(W - 10, 320), wide = cw > 250;
-    const jg = this.jigFor(key);
-    const js = clamp(Math.floor(wide ? (cw * 0.4) / jg.width : (cw - 16) / jg.width), 1, 3);
-    const jw = jg.width * js, jh = jg.height * js;
-    const tx0 = wide ? jw + 14 : 8, tw = cw - tx0 - 8;
-    const facts = FACTS[key].map((f, i) => (i < n ? wrap(f, tw - 8) : ['??? snap it again to find out']));
-    const S = setOf(key), sd = S ? S.keys.filter((k) => puzzleDone(this.book, k)).length : 0;
-    const textH = 30 + facts.reduce((a, l) => a + l.length * 10 + 3, 0);
-    const chh = Math.min(H - 10, Math.max(wide ? jh + 16 : 0, 0) + (wide ? 0 : jh + 12) + (wide ? Math.max(0, textH - jh - 16) : textH) + 40);
-    const x = Math.round((W - cw) / 2), y = Math.round((H - chh) / 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
-    paper(ctx, x, y, cw, chh);
-    ctx.fillStyle = '#5a3a1e'; ctx.fillRect(x + 7, y + 7, jw + 2, jh + 2);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(jg, x + 8, y + 8, jw, jh);
-    let ty = wide ? y + 8 : y + jh + 14;
-    const tx = x + tx0;
-    drawText(ctx, name, tx, ty, { color: '#3a2a4a', scale: wide && textWidth(name) * 2 < tw ? 2 : 1 });
-    ty += wide && textWidth(name) * 2 < tw ? 16 : 10;
-    drawText(ctx, '★'.repeat(r) + ` · piece ${n}/${PIECES}`, tx, ty, { color: RARITY_COL[r], outline: '#3a2a4a' });
-    ty += 13;
-    facts.forEach((ls, i) => {
-      ctx.fillStyle = i < n ? '#ff6a9a' : '#c8b898'; ctx.fillRect(tx, ty + 2, 3, 3);
-      ls.forEach((ln, j) => drawText(ctx, ln, tx + 7, ty + j * 10, { color: i < n ? '#3a2a4a' : '#a89070' }));
-      ty += ls.length * 10 + 3;
-    });
-    // prizes
-    const by = y + chh - 30, ic = keychainIcon(key), full = n >= PIECES;
-    ctx.globalAlpha = full ? 1 : 0.35;
-    ctx.drawImage(ic, x + 8, by - 2);
-    ctx.globalAlpha = 1;
-    drawText(ctx, fit(`${name} keychain`, cw - 90), x + 26, by + 3, { color: full ? '#3a2a4a' : '#a89070' });
-    const on = this.cam.charm === 'k:' + key;
-    const tag = full ? (on ? 'equipped' : 'equip') : `${PIECES - n} more photo${PIECES - n > 1 ? 's' : ''}`;
-    const bw = textWidth(tag) + 8, bx = x + cw - bw - 8;
-    ctx.fillStyle = full ? (on ? '#8ad0a0' : '#ff6a9a') : '#d8c8a8'; ctx.fillRect(bx, by + 1, bw, 11);
-    drawText(ctx, tag, bx + bw / 2, by + 3, { align: 'center', color: '#ffffff' });
-    this.entryBtn = full ? [bx, by + 1, bw, 11] : null;
-    if (S) drawText(ctx, fit(`${S.name} banner: ${sd}/${S.keys.length} puzzles${this.cam.banners.includes(S.id) ? ' ✦ unlocked' : ''}`, cw - 16), x + 8, by + 15, { color: '#8a6a4a' });
   }
 
   // ----------------------------------------------------------- workshop --
@@ -1025,7 +994,7 @@ export class PhotoMode {
         ctx.fillStyle = '#fffaf0'; ctx.fillRect(x, y, w, h);
         drawText(ctx, U.name, x + 4, y + 3, { color: '#3a2a4a' });
         for (let k = 0; k < 3; k++) { ctx.fillStyle = k < lv ? '#ff8ab4' : '#d8c8a8'; ctx.fillRect(x + 8 + textWidth(U.name) + k * 5, y + 5, 4, 4); }
-        const say = (l) => (it.id === 'lens' ? LENSES[l] : it.id === 'film' ? `${FILMS[l]} x${FILM_MULT[l]}` : `${ROLL_CAP[l]} shots`);
+        const say = (l) => (it.id === 'lens' ? LENSES[l] : it.id === 'film' ? `${FILMS[l]} x${FILM_MULT[l]}` : it.id === 'dev' ? `${DEV_TIME[l]}s to develop` : `${ROLL_CAP[l]} shots`);
         drawText(ctx, fit(lv < 3 ? `${say(lv)} > ${say(lv + 1)}` : say(lv), w - 50), x + 4, y + 14, { color: '#8a6a4a' });
         const cost = U.costs[lv], tag = cost == null ? 'max' : `✦${cost}`, tw = textWidth(tag) + 6;
         ctx.fillStyle = cost == null ? '#c8b898' : this.points >= cost ? '#ff6a9a' : '#c8a8b0';
@@ -1139,26 +1108,8 @@ export class PhotoMode {
   }
 
   async shareCamera() {
-    const c = this.cameraCard();
-    const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
-    if (!blob) return;
-    const filename = 'my-camera.png';
-    // the system share sheet where there is one, otherwise save it
-    try {
-      const file = typeof File !== 'undefined' ? new File([blob], filename, { type: 'image/png' }) : null;
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'my camera' }); return; }
-    } catch (e) { if (e && e.name === 'AbortError') return; }
-    const dl = await this.downloads();
-    if (dl) {
-      try { await dl.save({ filename, data: blob }); this.say('camera saved'); } catch (err) { if (!err || err.code !== 'declined') this.say('saving isn\'t available here'); }
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    this.say('camera saved');
+    const blob = await new Promise((res) => this.cameraCard().toBlob(res, 'image/png'));
+    if (blob) await this.saveBlob(blob, 'my-camera.png', 'camera saved');
   }
 
   // Resolves the claude.ai downloads capability, or null outside the viewer.
@@ -1176,23 +1127,7 @@ export class PhotoMode {
     const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.92));
     if (!blob) return;
     const filename = `souvenir-${SPECIES[key][0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')}.jpg`;
-    const dl = await this.downloads();
-    if (dl) {
-      try { await dl.save({ filename, data: blob }); this.say('souvenir saved'); }
-      catch (err) {
-        const code = err && err.code;
-        if (code === 'rate_limited') this.say('one moment...');
-        else if (code !== 'declined') this.say('saving isn\'t available here');
-      }
-      return;
-    }
-    // outside the claude.ai viewer: an ordinary download
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    this.say('souvenir saved');
+    await this.saveBlob(blob, filename, 'souvenir saved');
   }
 }
 

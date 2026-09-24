@@ -37,36 +37,70 @@ Right after the yes, ME talks to YOU through the game: how many late nights it t
 
 The game stays open after the confession: walk the two of them along the
 glass with the arrow buttons (or arrow keys), wander between the big tank,
-the reef and the jellyfish hall, and keep filling the notebook. Finishing
+the reef and the jellyfish hall, and keep filling the notebook and the gallery board. Finishing
 every page wins the golden Always banner and a pearl keychain. In the
 camera workshop, *share my camera* saves (or shares) a card of your
 customised camera.
 
-### Photo mode and the notebook
+### Photo mode
 
 Tap the little camera (bottom right) to raise the viewfinder, then tap to
-snap. The shot prints out of the camera, develops, and is scored: rarer
-creatures are worth more (common ★ up to legendary ★★★★), a first catch
-scores triple, and a centred subject gets a bonus. Every species goes into
-the postcard album (the pink book); tap a card to see it as a postcard.
-Points are spent in the album's *camera* workshop, which shows your camera
+snap. The shot prints out of the camera and takes 8 seconds to develop,
+and the Mameshiba looks after it while you wait: it wipes the print with a
+little cloth, grabs the corner and shakes it, then swims off with a
+"ta-da!". Tapping the print helps it along, and the *developer* upgrade in
+the camera workshop gets it down to 6, 4.5 and then 3 seconds. Then it's
+scored: rarer creatures are worth more (common ★ up to legendary ★★★★), a
+first catch scores triple, and a centred subject gets a bonus. The little
+book next to the camera opens the album, with three tabs: *gallery*,
+*notebook* and *camera* (the workshop).
+
+Points are spent in the camera workshop, which shows your camera
 up close: switch model (instant, disposable, toy cam, rangefinder, SLR, each
 with its own perk and points multiplier), paint the body and trim, cover it
 in stickers (including tiny prints of your own photos), hang a charm on the
 strap, doodle on it with markers, and upgrade the lens, film (sepia, faded,
-warm, then vivid colour) and roll. Your camera shows in the corner as you play. Points come slowly (common fish are worth a few, legendaries more), and filling the album pays out bonuses at 3, 6, 10, 15 and all 22 species. Tap any postcard and *save as jpeg* to keep it as a souvenir: a big polaroid of the shot with its name, stars, date and a stamp. Albums and points are kept in the browser. The
-legendaries are the whale shark, the Mameshiba, the tree friend, and the
-two of them together.
+warm, then vivid colour), roll and developer. Your camera shows in the
+corner as you play. Points come slowly (common fish are worth a few,
+legendaries more), and filling the notebook pays out bonuses at 3, 6, 10, 15
+and every species. The legendaries are the whale shark, the Mameshiba, the
+tree friend, and the two of them together. Everything is kept in the
+browser.
 
-The viewfinder locks onto the best subject in the frame (its name and
-stars show), and that subject's page in the **encyclopedia** (the album's
-third tab, the notebook) gets a jigsaw piece and a fun fact with each photo: four pieces
-and four real facts per animal (the made-up friends get made-up facts). The
-fact appears on a little card under the print. Finishing a jigsaw wins that
-animal's keychain for the camera strap, and finishing every animal from one
-tank (Jelly Hall, Coral Reef, Great Tank, Legends, Just Us) wins that tank's
-striped camera banner. Keychains and banners are chosen in the camera
-workshop.
+### The gallery
+
+Every photo lands in a cardboard **photo box** under a cork board. Drag
+photos out of the box onto the board (or just tap one), move them around,
+and drag them back into the box to put them away. Pin them up with cute
+pins (red and blue are free; heart, star, flower, bow and clam pins cost
+points), stick stickers on the board, buy markers and draw on it, and
+switch the board between cork, paper, pink dots and night.
+*save postcard* saves the whole board as a big postcard picture.
+
+### The notebook
+
+The notebook is a little book with a ribbon bookmark for each tank (Jelly
+Hall, Coral Reef, Great Tank, Legends, Just Us); on a phone the bookmarks
+become tabs and it's one page at a time. Pages flip when you move around.
+
+- **Contents**: your stats, a shelf of every animal you've found (animated,
+  tap one to open its page), the Mameshiba with a "did you know?" fact, and
+  every tank with its progress.
+- **Tank pages**: a live little tank scene with everything you've found in
+  it swimming around (and "?" bubbles for the ones still missing), plus a
+  "who lives here" list.
+- **Animal pages**: the animal moving in a brass porthole, its stars and
+  photo count, a link to its postcard (tap *save as jpeg* to keep it), and
+  a jigsaw. Each photo of that animal gives you a new piece; drag the loose
+  pieces onto the board and they snap into place (or tap one and it flies
+  home). Next to it are field notes (size, what it eats, where it lives),
+  its fun facts (one unlocks per photo: four real facts per animal, and the
+  made-up friends get made-up ones), your best shot, and < > to flip to the
+  next animal.
+
+Finishing a jigsaw wins that animal's keychain for the camera strap, and
+finishing every animal from one tank wins that tank's striped camera
+banner. Keychains and banners are chosen in the camera workshop.
 
 The story has no subtitles by default; `lyrics` in `js/config.js` can bring
 them back (they type in over a soft backing and fade away in a few bubbles).

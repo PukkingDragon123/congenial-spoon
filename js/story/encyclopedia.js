@@ -3,12 +3,40 @@
 // finished jigsaw earns a keychain of that animal for your camera strap, and
 // finishing every animal from one tank earns that tank's camera banner.
 import { makeCanvas, clamp, bayer } from '../util.js';
-import { renderFish } from '../art/fish.js';
-import { renderJelly, renderCrab, renderRay, renderTurtle } from '../art/creatures.js';
-import { diverSprite, treeSprite } from '../art/divers.js';
-import { dolphinSprite, seahorseSprite } from '../world/friends.js';
+import { renderFish, fishSprite, SPECIES as FISH } from '../art/fish.js';
+import { renderJelly, renderCrab, renderRay, renderTurtle, JELLY_FRAMES, CRAB_FRAMES, RAY_FRAMES, TURTLE_FRAMES } from '../art/creatures.js';
+import { diverSprite, treeSprite, DIVER_FRAMES, TREE_FRAMES } from '../art/divers.js';
+import { dolphinSprite, seahorseSprite, DOLPHIN_FRAMES } from '../world/friends.js';
 
 export const PIECES = 4;
+
+// Field notes: size, what it eats, where it lives.
+export const NOTES = {
+  jelly: ['bell up to 40 cm', 'plankton', 'coastal seas worldwide'],
+  nettle: ['bell up to 50 cm', 'plankton, fish eggs, other jellies', 'the Pacific coast'],
+  bigjelly: ['bell over 2 m', 'fish, plankton, other jellies', 'cold northern seas'],
+  clown: ['about 11 cm', 'algae and tiny plankton', 'Indo-Pacific reefs, in anemones'],
+  tang: ['up to 31 cm', 'plankton and algae', 'Indo-Pacific reefs'],
+  butterfly: ['most 12-22 cm', 'coral polyps, tiny animals', 'warm reefs worldwide'],
+  snapper: ['up to 1 m', 'fish, crabs, shrimp', 'warm coasts and reefs'],
+  minnow: ['3-10 cm', 'zooplankton', 'big schools near the surface'],
+  trevally: ['up to 85 cm', 'fish, squid, shrimp', 'reefs and open water'],
+  giant: ['up to 1.7 m', 'fish, squid, even seabirds', 'the Indo-Pacific'],
+  batfish: ['up to 70 cm tall', 'algae, jellies, small animals', 'Indo-Pacific reefs'],
+  grouper: ['up to 2.7 m', 'fish, crabs, even small sharks', 'Indo-Pacific reefs'],
+  crab: ['pea-sized to 4 m legspan', 'almost anything', 'every ocean, and on land'],
+  shark: ['up to 3.2 m', 'fish, rays, squid', 'warm coasts worldwide'],
+  reefshark: ['up to 1.6 m', 'fish, octopus, crabs', 'Indo-Pacific coral reefs'],
+  ray: ['palm-sized to 2 m wide', 'shellfish, worms, shrimp', 'sandy seafloors'],
+  turtle: ['up to 1.5 m', 'seagrass and algae', 'tropical oceans worldwide'],
+  whaleshark: ['up to 18 m', 'plankton and tiny fish', 'warm oceans worldwide'],
+  dolphin: ['2 to 4 m', 'fish and squid', 'warm and temperate seas'],
+  seahorse: ['1.5 to 35 cm', 'tiny shrimp, all day long', 'seagrass and reefs'],
+  bean: ['exactly one bean', 'facts', 'wherever there is trivia'],
+  treefriend: ['tree-sized (it wishes)', 'sunlight, allegedly', 'the reef corner'],
+  me: ['just right', 'snacks', 'behind the camera'],
+  us: ['two people', 'shared snacks', 'the big tank'],
+};
 
 // Real facts for real animals; the made-up friends get made-up facts.
 export const FACTS = {
@@ -235,6 +263,65 @@ function owner(px, py) {
 }
 // pieces come in this order: corner, opposite corner, then the rest
 const ORDER = [0, 3, 1, 2];
+export const PIECE_ORDER = ORDER;
+export const PICTURE_SIZE = [PW, PH];
+
+// One jigsaw piece cut out of the picture, with a dark edge, on a
+// transparent canvas the size of the whole picture (so it sits exactly in
+// its slot when drawn at the picture's origin).
+export function pieceImage(key, i, photo = null) {
+  const pic = picture(key, photo);
+  const ck = 'p|' + key + '|' + i + (photo ? '|p' : '');
+  if (cache.has(ck) && cache.get(ck).src === pic) return cache.get(ck);
+  const c = makeCanvas(PW, PH), x = c.ctx;
+  const src = pic.ctx.getImageData(0, 0, PW, PH).data;
+  const out = x.createImageData(PW, PH), d = out.data;
+  const own = (px, py) => px >= 0 && py >= 0 && px < PW && py < PH && owner(px + 0.5, py + 0.5) === i;
+  for (let py = 0; py < PH; py++) for (let px = 0; px < PW; px++) {
+    if (!own(px, py)) continue;
+    const o = (py * PW + px) * 4;
+    const edge = !own(px + 1, py) || !own(px - 1, py) || !own(px, py + 1) || !own(px, py - 1);
+    d[o] = edge ? src[o] * 0.45 : src[o]; d[o + 1] = edge ? src[o + 1] * 0.45 : src[o + 1]; d[o + 2] = edge ? src[o + 2] * 0.5 : src[o + 2]; d[o + 3] = 255;
+  }
+  x.putImageData(out, 0, 0);
+  c.src = pic;
+  cache.set(ck, c);
+  return c;
+}
+// the middle of piece i, in picture pixels
+export const pieceCentre = (i) => [(i % 2 ? 0.75 : 0.25) * PW, (i >= 2 ? 0.75 : 0.25) * PH];
+
+// Which way an animal's sprite faces as drawn: -1 nose left, 1 nose right,
+// 0 no facing (jellies drift, crabs scuttle, the tree stands).
+export const NOSE = { ray: 1, dolphin: 1, seahorse: 1, bean: 1, jelly: 0, nettle: 0, bigjelly: 0, crab: 0, treefriend: 0, me: 0, us: 0 };
+export const noseOf = (key) => NOSE[key] ?? -1;
+// where it lives in a tank scene: 'sand' walks the floor, 'drift' bobs
+export const MOVES = { crab: 'sand', treefriend: 'sand', jelly: 'drift', nettle: 'drift', bigjelly: 'drift' };
+
+// The animal at time t, animated. size: 'icon' (small) or 'big'.
+export function animalFrame(key, t, size = 'big') {
+  const big = size === 'big';
+  const f = (n, fps) => Math.floor(t * fps) % n;
+  switch (key) {
+    case 'jelly': return renderJelly(big ? 22 : 12, f(JELLY_FRAMES, 8), 'pink');
+    case 'nettle': return renderJelly(big ? 16 : 10, f(JELLY_FRAMES, 8), 'nettle');
+    case 'bigjelly': return renderJelly(big ? 30 : 16, f(JELLY_FRAMES, 7), 'violet');
+    case 'crab': return renderCrab(big ? 18 : 10, f(CRAB_FRAMES, 10), 0, 'red');
+    case 'ray': return renderRay(big ? 40 : 22, f(RAY_FRAMES, 10));
+    case 'turtle': return renderTurtle(big ? 40 : 22, f(TURTLE_FRAMES, 8));
+    case 'bean': return diverSprite('bean', f(DIVER_FRAMES, 6));
+    case 'treefriend': return treeSprite(f(TREE_FRAMES, 4));
+    case 'dolphin': return dolphinSprite(f(DOLPHIN_FRAMES, 7));
+    case 'seahorse': return seahorseSprite(f(4, 5), big ? 1.2 : 0.6);
+    case 'me': case 'us': return null;
+    default: {
+      const sp = FISH[key];
+      if (!sp) return null;
+      const L = key === 'whaleshark' ? (big ? 60 : 30) : key === 'shark' || key === 'reefshark' ? (big ? 56 : 26) : key === 'minnow' ? (big ? 30 : 12) : big ? 44 : 18;
+      return fishSprite(key, L, f(sp.frames, 8));
+    }
+  }
+}
 
 // The jigsaw with `n` pieces in place; the rest are bare cardboard.
 export function jigsaw(key, n, photo = null) {
