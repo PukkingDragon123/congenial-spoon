@@ -4,7 +4,7 @@
 // coordinates, camera, couple and effect hooks, so the story can drive any of
 // them the same way.
 import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm } from '../util.js';
-import { CX, tallExtra, genCaustics, genSand, genFormation, toStone } from '../art/env.js';
+import { CX, tallExtra, genCaustics, genSand, genFormation, toStone, genBunny, genFrog } from '../art/env.js';
 import { sealCupidSprite } from '../art/divers.js';
 import { Creature, Crab, School, addBuddy, TreeFriend } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
@@ -606,6 +606,22 @@ function rocks(P, x0, x1, by, pal, seed, hMax) {
 
 // Anemone: a mound with swaying tentacles, pre-rendered as a loop.
 const ANEM_FRAMES = 10;
+// a starfish or a sea urchin sitting on the sand
+function drawSandThing(ctx, x, y, kind, col, rot, s) {
+  const r = Math.max(2, Math.round(4 * s));
+  ctx.fillStyle = kind === 'star' ? col : '#2a1640';
+  if (kind === 'star') {
+    for (let a = 0; a < 5; a++) { const an = rot + (a / 5) * TAU; for (let i = 0; i <= r; i++) ctx.fillRect(Math.round(x + Math.cos(an) * i), Math.round(y + Math.sin(an) * i * 0.5), 1, 1); }
+    ctx.fillRect(x - 1, y - 1, 2, 2);
+    ctx.fillStyle = '#fff0d0'; ctx.fillRect(x, y - 1, 1, 1);
+  } else {
+    ctx.beginPath(); ctx.arc(x, y - r * 0.5, r * 0.7, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#5a3a80';
+    for (let a = 0; a < 10; a++) { const an = (a / 10) * TAU; ctx.fillRect(Math.round(x + Math.cos(an) * r * 1.2), Math.round(y - r * 0.5 + Math.sin(an) * r * 0.9), 1, 1); }
+    ctx.fillStyle = '#9a7ac8'; ctx.fillRect(x - 1, y - r, 1, 1);
+  }
+}
+
 function genAnemone(w, hue, seed) {
   const r = rng(seed);
   const pal = hue === 'purple' ? PAL.purple : hue === 'lime' ? PAL.lime : PAL.pink;
@@ -711,12 +727,41 @@ export class ReefRoom extends Room {
       this.cupid = cu;
       this.decor.push({ z, draw(ctx) { self.drawCupid(ctx, cu); } });
     });
+    // statues: the big round garden bunny on the left, a little frog on the right
+    step(() => {
+      const self = this;
+      const statue = (img, x, z, sink) => this.decor.push({ z, draw(ctx) { const [sx, sy] = self.toScreen(x, self.floorY(z) + sink, z); ctx.drawImage(img, Math.round(sx - img.width / 2), Math.round(sy - img.height)); } });
+      statue(genBunny(), CX - 205 * k, 0.24, 6);
+      statue(genFrog(), CX + 200 * k, 0.2, 4);
+    });
+    // a second, nearer coral garden along the front edges, and starfish and
+    // urchins scattered over the sand
+    step(() => {
+      const h = 70, P = new Painter(LW, h), by = h - 2;
+      for (const [a, b] of [[0.3, 0.44], [0.56, 0.7]]) for (let x = LW * a; x < LW * b; x += 10 + r() * 14) {
+        const q = r();
+        if (q < 0.25) staghorn(P, x, by - 3, -Math.PI / 2 + (r() - 0.5) * 0.5, 9 + r() * 7, 1.8, 3, [PAL.orange, PAL.pink, PAL.teal][(r() * 3) | 0], r);
+        else if (q < 0.45) brain(P, x, by - 2, 5 + r() * 5, r() < 0.5 ? PAL.gold : PAL.lime, (x | 0) % 89);
+        else if (q < 0.62) fan(P, x, by - 3, 11 + r() * 8, r() < 0.5 ? PAL.purple : PAL.pink, (x | 0) % 61);
+        else if (q < 0.8) tubes(P, x, by - 2, 2 + ((r() * 3) | 0), 8 + r() * 6, r() < 0.5 ? PAL.orange : PAL.teal, r);
+        else P.blob(x, by - 2, 4 + r() * 3, 2 + r() * 2, PAL.pink, (l) => l + 0.6);
+      }
+      this.layers.push({ img: P.canvas(), x: X0, z: 0.1, sink: 4 });
+      const self = this;
+      for (let i = 0; i < 14; i++) {
+        const z = 0.04 + r() * 0.3, x = CX + (r() - 0.5) * 560 * k, kind = r() < 0.6 ? 'star' : 'urchin';
+        const col = ['#ff6a3a', '#ff4a8a', '#ffb03a', '#c86aff'][(r() * 4) | 0], rot = r() * TAU;
+        this.decor.push({ z, draw(ctx) { const [sx, sy] = self.toScreen(x, self.floorY(z) + 2, z); drawSandThing(ctx, Math.round(sx), Math.round(sy), kind, col, rot, 1 - z); } });
+      }
+    });
     // anemones with clownfish families
     step(() => {
       this.anemones = [
         { x: CX - 120 * k, z: 0.28, frames: genAnemone(44, 'pink', 1) },
         { x: CX + 110 * k, z: 0.26, frames: genAnemone(40, 'purple', 2) },
         { x: CX - 10, z: 0.18, frames: genAnemone(48, 'lime', 3) },
+        { x: CX - 300 * k, z: 0.14, frames: genAnemone(36, 'purple', 4) },
+        { x: CX + 290 * k, z: 0.12, frames: genAnemone(38, 'pink', 5) },
       ];
       for (const a of this.anemones) {
         const self = this;
@@ -814,6 +859,8 @@ export class ReefRoom extends Room {
 
   tick(dt) {
     for (const sc of this.schools || []) sc.update(dt, this);
+    // two bubble columns rising from the sand, like the aerators in the real tank
+    for (const [bx, bz] of [[CX - 250, 0.4], [CX + 240, 0.42]]) if (R() < dt * 9) this.bubbles.add({ kind: 'bubble', x: bx + (R() - 0.5) * 3, y: this.floorY(bz), z: bz, vx: 0, vy: -(30 + R() * 20), age: 0, life: 10, r: R() < 0.6 ? 1 : 2, wob: 5, wobF: 6, ph: R() * TAU, fade: false });
     if (R() < dt * 3 && this.anemones) {
       const a = this.anemones[(R() * this.anemones.length) | 0];
       this.bubbles.add({ kind: 'bubble', x: a.x + (R() - 0.5) * 10, y: this.floorY(a.z) - 18, z: a.z, vx: 0, vy: -(20 + R() * 20), age: 0, life: 12, r: R() < 0.7 ? 1 : 2, wob: 8, wobF: 5, ph: R() * TAU, fade: false });

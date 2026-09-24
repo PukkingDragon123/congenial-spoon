@@ -407,18 +407,67 @@ export class Story {
     // the quest prize: a fish guy keychain for the camera strap
     { const C = P.cam; if (!C.charms.includes('fishguy')) C.charms.push('fishguy'); C.charm = 'fishguy'; P.camDirty = true; P.save(); P.say('you got the fish guy keychain!'); this.sound.sfx('yes'); }
     await D.say('bean', "done! here, a fish guy keychain. he's on your camera now");
-    await D.say('bean', 'ok quick tour before you go');
-    await D.say('bean', 'that little book by your camera is your diary. gallery, notebook, and camera stuff');
-    await D.say('bean', 'every pic gets you coins. rare animals pay more, a first time pays triple, and centre it for a bonus');
-    await D.say('bean', 'spend them in the camera tab. better lens, better film, faster developing');
-    await D.say('bean', 'tap any postcard or your board and hit save. that one\'s a souvenir, keep it');
-    await D.say('bean', "oh and if you see a bottle floating around, tap it. there's a record inside");
-    await chat("that's it. you're kinda good at this btw", ['what now?', 'can i keep going?'], [
-      'reef is next door. someone\'s waiting there btw',
-      'always. but check the reef first. trust',
+    await D.say('bean', "come on, the reef's next door. i'll show you the rest there");
+    // the tour carries on in the clownfish reef, still on the instrumental
+    if (bean) bean.go = null;
+    const reef = this.rooms.reef;
+    if (reef) {
+      this.sound.sfx('chime');
+      await this.go(reef, new LightBloom(this.W, this.H, 2.6, [190, 240, 255]), () => {
+        this.enterRoom(reef, CX - 160, CX - 150);
+        c.apart = true; c.guyOn = false; c.girlOn = true; c.girlPose = 'walk';
+      });
+      this.grade(2.5, { tint: [0.96, 1.07, 1.08], sat: 1.28, vig: 0.48, sun: 0.35, light: 1.1 });
+      await this.walkTo(CX - 110, this.t + 2.2, () => this.t, true);
+      await this.turnToGlass();
+    }
+    await this.tour();
+    await chat("that's the tour. you're kinda good at this btw", ['thanks!', 'i know'], [
+      "ok go look around. someone's about to show up btw",
+      "humble too. anyway, someone's about to show up. trust",
     ]);
     if (this.sound.intro) this.sound.beginSong(VOCALS_AT);  // and here come the vocals
-    if (bean) bean.go = null;
+  }
+
+  // The Mameshiba's tour of the camera and the diary, one thing at a time,
+  // with a glowing ring round whatever it's talking about.
+  async tour() {
+    const D = this.dialog, P = this.photo;
+    const show = (rect, label) => { this.focus = { rect, label, t: 0 }; };
+    const step = async (line, rect, label) => { show(rect, label); await D.say('bean', line); };
+    await step('this little book is your diary. tap it!', () => P.bookRect(), 'diary');
+    // let her have a look inside (or move on after a bit)
+    const t0 = this.t;
+    await this.until(() => P.album || this.t - t0 > 10);
+    this.focus = null;
+    if (P.album) await this.until(() => !P.album || this.t - t0 > 40);
+    await D.say('bean', 'gallery is your photo board. notebook has puzzle pieces and facts. camera is where you shop');
+    await step('every pic gets you coins. rare ones pay more, first time pays triple, and centre it for a bonus', () => P.coinRect(), 'coins');
+    await step('spend them in the camera tab. better lens, better film, faster developing', () => P.bookRect(), 'camera tab');
+    await step("that's your record player. find the bottles floating in each tank and tap them to get records", () => this.vinyl.rect(), 'records');
+    this.focus = null;
+    await D.say('bean', "and any postcard or your board has a save button. that one's a souvenir, keep it");
+  }
+
+  drawFocus(ctx) {
+    const F = this.focus;
+    if (!F) return;
+    F.t += this.dt || 0;
+    const [x, y, w, h] = F.rect();
+    const p = 2 + Math.round((Math.sin(this.t * 6) + 1) * 1.5);
+    ctx.strokeStyle = '#fff4b0'; ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.9;
+    ctx.strokeRect(Math.round(x - p) + 0.5, Math.round(y - p) + 0.5, Math.round(w + p * 2), Math.round(h + p * 2));
+    ctx.strokeStyle = '#ff7a5a';
+    ctx.strokeRect(Math.round(x - p - 2) + 0.5, Math.round(y - p - 2) + 0.5, Math.round(w + p * 2 + 4), Math.round(h + p * 2 + 4));
+    ctx.globalAlpha = 1;
+    // a bouncing arrow and a little label pointing at it
+    const ax = Math.round(clamp(x + w / 2, 10, this.W - 10)), below = y < this.H / 2;
+    const ay = below ? Math.round(y + h + p + 6 + Math.abs(Math.sin(this.t * 5)) * 3) : Math.round(y - p - 6 - Math.abs(Math.sin(this.t * 5)) * 3);
+    ctx.fillStyle = '#ff7a5a';
+    for (let i = 0; i < 4; i++) ctx.fillRect(ax - i, below ? ay + i : ay - i, i * 2 + 1, 1);
+    const lw = textWidth(F.label), lx = clamp(ax, lw / 2 + 6, this.W - lw / 2 - 6);
+    drawText(ctx, F.label, lx, below ? ay + 6 : ay - 14, { align: 'center', color: '#ffffff', outline: '#c2402a' });
   }
 
   // Tap a creature and it reacts with a little sparkle.
@@ -476,6 +525,7 @@ export class Story {
     this.photoReady = true;
     this.credit = { a: 0 };
     { const C = this.credit; this.tween(1, (k) => { C.a = k; }); this.atSong(12).then(() => this.tween(1.2, (k) => { C.a = 1 - k; })); }
+    if (this.rooms.reef && this.stage === this.rooms.reef) return; // the tour already took her to the reef
     const cam0 = this.camX;
     this.tween(14, (k) => { this.camX = lerp(cam0, CX, k); }, ease.inOutSine);
     await this.atSong(8.5);
@@ -1626,6 +1676,20 @@ export class Story {
       const lit = Math.abs(cx - x0 - sweep) < 10 * sc;
       drawText(ctx, ch, cx, y + dy, { scale: sc, color: lit ? '#ffffff' : '#d8f0ff', outline: '#0a1a44', shadow: '#ff5a9a', alpha: T.a });
     });
+    // a wavy underline, the subtitle, and a few fish swimming past
+    const tw = textWidth(str) * sc, uy = y + 9 * sc;
+    ctx.globalAlpha = T.a * 0.8;
+    for (let i = 0; i < tw; i++) { ctx.fillStyle = i % 8 < 4 ? '#6ad8ff' : '#ff8ab4'; ctx.fillRect(x0 + i, Math.round(uy + Math.sin(i * 0.25 + t * 3) * 1.5), 1, 1); }
+    ctx.globalAlpha = 1;
+    if (CONFIG.subtitle) drawText(ctx, CONFIG.subtitle, W / 2, uy + 6, { align: 'center', color: '#fff4b0', outline: '#0a1a44', alpha: T.a * 0.9 });
+    for (let i = 0; i < 4; i++) {
+      const sp = 18 + i * 7, dir = i % 2 ? 1 : -1, fxp = ((t * sp + i * 97) % (W + 40)) - 20, fx = dir > 0 ? fxp : W - fxp;
+      const fy = Math.round(y - 22 - i * 9 + Math.sin(t * 2 + i) * 3), col = ['#ff8a3a', '#ffd24a', '#6ad8ff', '#ff8ab4'][i];
+      ctx.globalAlpha = T.a * 0.85;
+      ctx.fillStyle = col; ctx.fillRect(Math.round(fx), fy, 5, 3); ctx.fillRect(Math.round(fx) - dir * 2 - (dir > 0 ? 0 : -3), fy - 1, 2, 5);
+      ctx.fillStyle = '#1a1020'; ctx.fillRect(Math.round(fx) + (dir > 0 ? 4 : 0), fy, 1, 1);
+    }
+    ctx.globalAlpha = 1;
   }
 
   drawHint(ctx) {
@@ -1884,6 +1948,7 @@ export class Story {
     this.drawRoam(ctx);
     this.vinyl.draw(ctx);
     this.photo.draw(ctx);
+    if (!this.photo.album) this.drawFocus(ctx);
     if (!this.photo.album) {
       // over the viewfinder, under the album; on a narrow screen the quest
       // card tucks in under the dialogue box

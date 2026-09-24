@@ -174,6 +174,7 @@ export class PhotoMode {
   // the HUD shows your own camera, full size on big screens
   iconScale() { return this.W >= 560 ? 1 : 0.5; }
   camRect() { const k = this.iconScale(), w = CAM_W * k, h = CAM_H * k; return [this.W - w - 12, this.H - h - 4, w, h]; }
+  coinRect() { const [bx, by] = this.bookRect(), w = textWidth('✦' + Math.round(this.shown)); return [bx - 3 - w, by + 3, w, 9]; }
   bookRect() { const [cx] = this.camRect(); return [cx - 19, this.H - 17, 15, 14]; }
   model() { return MODELS[this.cam.model] || MODELS.instant; }
   camImage() {

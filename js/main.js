@@ -44,24 +44,55 @@ function resize() {
 // ------------------------------------------------------------------ loader --
 let loadP = 0;
 let loadT = 0;
+const LOAD_TIPS = ['tip: tap the pufferfish. he hates it', 'tip: rare animals pay more coins', 'tip: bottles hide records', 'tip: centre your shot for a bonus', 'tip: the notebook is a jigsaw book'];
+const loadBubbles = [];
 function drawLoader(dt) {
   loadT += dt;
   const c = world.ctx;
-  c.fillStyle = '#02040c';
-  c.fillRect(0, 0, W, H);
+  // deep water, light rays swaying down from the surface
+  const g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0a2a5a'); g.addColorStop(0.55, '#061634'); g.addColorStop(1, '#02060e');
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  c.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 5; i++) {
+    const x = W * (0.15 + i * 0.18) + Math.sin(loadT * 0.4 + i) * 20;
+    c.fillStyle = 'rgba(120,190,255,0.05)';
+    c.beginPath(); c.moveTo(x - 8, 0); c.lineTo(x + 8, 0); c.lineTo(x + 40, H); c.lineTo(x - 10, H); c.fill();
+  }
+  c.globalCompositeOperation = 'source-over';
   const u = ui.ctx;
   u.clearRect(0, 0, W, H);
-  const cx = Math.round(W / 2), cy = Math.round(H / 2);
-  // progress: a row of bubbles filling up
-  const n = 12;
-  for (let i = 0; i < n; i++) {
-    const on = i / n < loadP;
-    const b = bubbleSprite(on ? 2 : 1);
-    u.globalAlpha = on ? 1 : 0.3;
-    u.drawImage(b, cx - n * 4 + i * 8 - b.o + 4, cy - b.o + Math.round(on ? Math.sin(loadT * 5 + i) : 0));
-  }
+  // bubbles drifting up
+  if (Math.random() < dt * 14) loadBubbles.push({ x: Math.random() * W, y: H + 4, r: Math.random() < 0.7 ? 1 : 2, v: 14 + Math.random() * 20, ph: Math.random() * 6 });
+  for (const b of loadBubbles) { b.y -= b.v * dt; const s2 = bubbleSprite(b.r); u.globalAlpha = 0.6; u.drawImage(s2, Math.round(b.x + Math.sin(loadT * 2 + b.ph) * 3) - s2.o, Math.round(b.y) - s2.o); }
+  for (let i = loadBubbles.length - 1; i >= 0; i--) if (loadBubbles[i].y < -8) loadBubbles.splice(i, 1);
   u.globalAlpha = 1;
-  drawText(u, 'filling the tank...', cx, cy + 12, { align: 'center', color: '#6aa8e8' });
+  const cx = Math.round(W / 2), cy = Math.round(H / 2);
+  drawText(u, 'Very Cool Aquarium Game', cx, cy - 44, { align: 'center', color: '#d8f0ff', outline: '#0a1a44', shadow: '#ff5a9a', scale: W > 360 ? 2 : 1 });
+  // a little glass tank filling up with water
+  const tw = 70, th = 40, tx = cx - tw / 2, ty = cy - 14;
+  u.fillStyle = '#0e2448'; u.fillRect(tx - 2, ty - 2, tw + 4, th + 4);
+  u.fillStyle = '#081a36'; u.fillRect(tx, ty, tw, th);
+  const lvl = Math.round(th * clamp(loadP, 0, 1));
+  for (let x = 0; x < tw; x++) {
+    const wy = ty + th - lvl + Math.round(Math.sin(x * 0.3 + loadT * 4) * 1);
+    const hgt = ty + th - wy;
+    if (hgt <= 0) continue;
+    u.fillStyle = '#2a8ad8'; u.fillRect(tx + x, wy, 1, hgt);
+    u.fillStyle = '#9ae0ff'; u.fillRect(tx + x, wy, 1, 1);
+  }
+  // a little fish swimming in it once there's enough water
+  if (lvl > 10) {
+    const fx = tx + 8 + ((loadT * 18) % (tw - 16)), fy = ty + th - Math.min(lvl, th) / 2 + Math.sin(loadT * 3) * 2;
+    u.fillStyle = '#ff8a3a'; u.fillRect(Math.round(fx), Math.round(fy), 5, 3); u.fillRect(Math.round(fx) - 2, Math.round(fy) - 1, 2, 5);
+    u.fillStyle = '#ffffff'; u.fillRect(Math.round(fx) + 1, Math.round(fy), 1, 3);
+    u.fillStyle = '#1a1020'; u.fillRect(Math.round(fx) + 4, Math.round(fy), 1, 1);
+  }
+  u.fillStyle = 'rgba(255,255,255,0.35)'; u.fillRect(tx + 3, ty + 3, 1, th - 8); u.fillRect(tx + 5, ty + 3, 1, 6);
+  u.fillStyle = '#5a4a3a'; u.fillRect(tx - 4, ty + th + 2, tw + 8, 3);
+  drawText(u, `filling the tank... ${Math.round(loadP * 100)}%`, cx, ty + th + 10, { align: 'center', color: '#9ad8ff' });
+  const tip = LOAD_TIPS[Math.floor(loadT / 2.6) % LOAD_TIPS.length];
+  drawText(u, tip, cx, ty + th + 24, { align: 'center', color: '#fff4b0', alpha: 0.6 + Math.sin(loadT * 3) * 0.2 });
   post.p.fade = 0;
   post.render(world, ui, loadT);
 }

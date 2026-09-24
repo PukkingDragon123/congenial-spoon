@@ -14,6 +14,7 @@ export const TRACKS = [
 // one bottle hides in each tank; each unlocks the next record
 const BOTTLE_AT = { JellyRoom: 0.62, ReefRoom: 0.28, Aquarium: 0.74 };
 const SAVE_KEY = 'vcag-vinyl-1';
+const DISC = 37; // the record, in pixels across
 
 export class Vinyl {
   constructor(story) {
@@ -29,6 +30,8 @@ export class Vinyl {
     this.flash = 0;     // the player glows when a record is unlocked
     this.t = 0;
     this.covers = {};
+    this.pix = {};
+    this.disc = makeCanvas(DISC, DISC);
     try {
       const d = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
       this.unlocked = (d.unlocked || []).filter((id) => TRACKS.some((q) => q.id === id));
@@ -42,6 +45,12 @@ export class Vinyl {
         c.ctx.imageSmoothingEnabled = true;
         c.ctx.drawImage(img, 0, 0, 24, 24);
         this.covers[tr.id] = c;
+        // and a chunky 12x12 version for the record's label
+        const q = makeCanvas(12, 12);
+        q.ctx.imageSmoothingEnabled = true;
+        q.ctx.drawImage(img, 0, 0, 12, 12);
+        this.pix[tr.id] = q.ctx.getImageData(0, 0, 12, 12).data;
+        this.covers[tr.id] = q; // pixel-art thumbnails in the crate too
       };
       img.src = tr.cover;
     }
@@ -56,8 +65,8 @@ export class Vinyl {
   get H() { return this.story.H; }
   // shows once the photo quest is done
   visible() { const s = this.story; return s.photoReady && !s.quest && !(s.photo && s.photo.album); }
-  rect() { return [6, this.story.replay ? 22 : 6, 50, 34]; }
-  crateRect() { const [x, y, , h] = this.rect(); return [x, y + h + 3, Math.min(150, this.W - 12), 14 + TRACKS.length * 20 + 12]; }
+  rect() { return [6, this.story.replay ? 22 : 6, DISC, DISC]; }
+  crateRect() { const [x, y, , h] = this.rect(); return [x, y + h + 6, Math.min(150, this.W - 12), 14 + TRACKS.length * 20 + 12]; }
   rowRect(i) { const [x, y, w] = this.crateRect(); return [x + 3, y + 13 + i * 20, w - 6, 18]; }
 
   // ---------------------------------------------------------------- bottles --
@@ -131,7 +140,7 @@ export class Vinyl {
     this.flash = Math.max(0, this.flash - dt * 1.2);
     if (on && this.visible()) {
       const [x, y] = this.rect();
-      if (R() < dt * 6) this.parts.push({ x: x + 16 + (R() - 0.5) * 16, y: y + 18, vx: (R() - 0.5) * 6, vy: -10 - R() * 10, age: 0, life: 2 + R(), kind: R() < 0.3 ? 'note' : 'bubble', r: 1 + (R() * 2 | 0), ph: R() * TAU });
+      if (R() < dt * 6) this.parts.push({ x: x + DISC / 2 + (R() - 0.5) * 26, y: y + DISC / 2, vx: (R() - 0.5) * 6, vy: -10 - R() * 10, age: 0, life: 2 + R(), kind: R() < 0.3 ? 'note' : 'bubble', r: 1 + (R() * 2 | 0), ph: R() * TAU });
     }
     for (const p of this.parts) { p.age += dt; p.x += (p.vx + Math.sin(p.age * 4 + p.ph) * 4) * dt; p.y += p.vy * dt; }
     this.parts = this.parts.filter((p) => p.age < p.life);
@@ -154,45 +163,72 @@ export class Vinyl {
       if (p.kind === 'note') drawText(ctx, '♪', Math.round(p.x), Math.round(p.y), { color: '#fff4b0', outline: '#1a1030', alpha: a });
       else drawBubble(ctx, p.x, p.y, p.r, a);
     }
-    // the box: a little wooden deck with a teal trim
-    if (this.flash > 0) { ctx.globalAlpha = this.flash * 0.6; ctx.fillStyle = '#fff4b0'; ctx.fillRect(x - 3, y - 3, w + 6, h + 6); ctx.globalAlpha = 1; }
-    ctx.fillStyle = '#1a0e08'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-    ctx.fillStyle = '#8a5230'; ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = '#a86a3e'; ctx.fillRect(x, y, w, 2);
-    ctx.fillStyle = '#6a3a1e'; for (let i = 3; i < w; i += 7) ctx.fillRect(x + i, y + 4, 4, 1);
-    ctx.fillStyle = '#2aa8c8'; ctx.fillRect(x, y + h - 3, w, 3);
-    // platter and record
-    const cx = x + 17, cy = y + 17, r = 14;
-    ctx.fillStyle = '#2a2a30'; ctx.beginPath(); ctx.arc(cx, cy, r + 1, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#0e0e12'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
-    ctx.strokeStyle = '#26262e'; ctx.lineWidth = 1;
-    for (const rr of [11, 9, 7.5]) { ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU); ctx.stroke(); }
-    // a shine that turns with the record
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath(); ctx.arc(cx, cy, 10, this.spin, this.spin + 0.7); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx, cy, 10, this.spin + Math.PI, this.spin + Math.PI + 0.7); ctx.stroke();
-    // label: the cover art, spinning
+    // just the record, floating and spinning, drawn pixel by pixel so it
+    // stays crisp: grooves, a fixed sheen, and the album cover as its label
     const tr = TRACKS.find((q) => q.id === this.playing) || TRACKS.find((q) => this.unlocked.includes(q.id));
-    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, TAU); ctx.clip();
-    ctx.translate(cx, cy); ctx.rotate(this.spin);
-    const cv = tr && this.covers[tr.id];
-    if (cv) { ctx.imageSmoothingEnabled = true; ctx.drawImage(cv, -6, -6, 12, 12); ctx.imageSmoothingEnabled = false; }
-    else { ctx.fillStyle = tr ? tr.label : '#444'; ctx.fillRect(-6, -6, 12, 12); }
-    ctx.restore();
-    ctx.fillStyle = '#e8e8f0'; ctx.fillRect(cx, cy, 1, 1);
-    // tone arm: rests off to the side, swings onto the record when playing
-    const px = x + w - 9, py = y + 6, ang = lerp(1.95, 2.45, this.arm), len = 17;
-    const ex = px + Math.cos(ang) * len, ey = py + Math.sin(ang) * len;
-    ctx.fillStyle = '#c8c8d0'; ctx.fillRect(px - 2, py - 2, 5, 5);
-    ctx.strokeStyle = '#e0e0e8'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.fillStyle = '#f0f0f8'; ctx.fillRect(Math.round(ex) - 1, Math.round(ey) - 1, 3, 3);
-    // light and knob
-    ctx.fillStyle = this.playing ? (Math.sin(t * 6) > 0 ? '#6aff8a' : '#3ac85a') : '#3a4a3a'; ctx.fillRect(x + w - 7, y + h - 9, 3, 3);
-    ctx.fillStyle = '#d8b070'; ctx.fillRect(x + w - 13, y + h - 10, 4, 4);
-    // what's on, or how many records are unlocked
-    const cap = this.playing ? `♪ ${tr.title}` : this.unlocked.length ? 'tap to play' : `records ${this.unlocked.length}/${TRACKS.length}`;
-    drawText(ctx, cap, x, y + h + 3, { color: '#fff4dc', outline: '#1a1030', alpha: this.open ? 0 : 0.85 });
+    const bob = Math.round(Math.sin(t * 1.6) * 2);
+    this.renderDisc(tr);
+    // soft shadow and a glow when it plays
+    ctx.globalAlpha = 0.25; ctx.fillStyle = '#02081a';
+    ctx.beginPath(); ctx.ellipse(x + w / 2, y + h + 4, w * 0.36 - bob, 2, 0, 0, TAU); ctx.fill();
+    if (this.playing || this.flash > 0) {
+      ctx.globalAlpha = 0.18 + 0.12 * Math.sin(t * 4) + this.flash * 0.4; ctx.fillStyle = '#9ae8ff';
+      ctx.beginPath(); ctx.arc(x + w / 2, y + h / 2 + bob, w / 2 + 3, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.drawImage(this.disc, x, y + bob);
+    // what's playing, next to it
+    const tx = x + w + 5, ty = y + h / 2 + bob - 8;
+    if (!this.open) {
+      if (this.playing) {
+        drawText(ctx, '♪ now playing', tx, ty, { color: '#9ae8ff', outline: '#0a1030' });
+        const line = `${tr.title} · ${tr.artist}`, room = Math.min(120, this.W - tx - 8), lw = textWidth(line);
+        if (lw <= room) drawText(ctx, line, tx, ty + 9, { color: '#ffffff', outline: '#0a1030' });
+        else {
+          // a little marquee when the name's too long
+          const off = Math.floor((t * 14) % (lw + 20));
+          ctx.save(); ctx.beginPath(); ctx.rect(tx - 1, ty + 7, room + 2, 12); ctx.clip();
+          drawText(ctx, line, tx - off, ty + 9, { color: '#ffffff', outline: '#0a1030' });
+          drawText(ctx, line, tx - off + lw + 20, ty + 9, { color: '#ffffff', outline: '#0a1030' });
+          ctx.restore();
+        }
+        // a tiny bouncing equaliser
+        for (let i = 0; i < 5; i++) { const hh = 1 + Math.round((Math.sin(t * (7 + i * 1.7) + i) + 1) * 2.5); ctx.fillStyle = ['#ff7a5a', '#ffd24a', '#5ad08a', '#5ac8ff', '#c08aff'][i]; ctx.fillRect(tx + i * 3, ty + 24 - hh, 2, hh); }
+      } else drawText(ctx, this.unlocked.length ? 'tap to play' : `records ${this.unlocked.length}/${TRACKS.length}`, tx, ty + 4, { color: '#fff4dc', outline: '#0a1030', alpha: 0.85 });
+    }
     if (this.open) this.drawCrate(ctx);
+  }
+
+  renderDisc(tr) {
+    const c = this.disc, R0 = DISC / 2, id = c.ctx.createImageData(DISC, DISC), d = id.data;
+    const pix = tr && this.pix[tr.id], lab = 8.5, sp = this.spin, cs = Math.cos(-sp), sn = Math.sin(-sp);
+    for (let py = 0; py < DISC; py++) for (let px = 0; px < DISC; px++) {
+      const x = px + 0.5 - R0, y = py + 0.5 - R0, r = Math.hypot(x, y);
+      if (r > R0) continue;
+      let col;
+      if (r < 1.2) col = [10, 10, 14];                       // the hole
+      else if (r < lab) {
+        // the label turns with the record: sample the cover, rotated
+        const u = x * cs - y * sn, v = x * sn + y * cs;
+        const ix = clamp(Math.floor((u / lab + 1) * 6), 0, 11), iy = clamp(Math.floor((v / lab + 1) * 6), 0, 11);
+        if (pix) { const o = (iy * 12 + ix) * 4; col = [pix[o], pix[o + 1], pix[o + 2]]; }
+        else col = (ix + iy) % 2 ? [90, 96, 110] : [70, 76, 90];
+        if (r > lab - 1) col = col.map((v) => v * 0.6);
+      } else {
+        // grooves, with a light sheen that stays put while the record turns
+        const a = Math.atan2(y, x), groove = Math.floor(r) % 2;
+        let l = groove ? 26 : 18;
+        const sheen = Math.max(0, Math.cos((a - 0.8) * 2)) ** 6;
+        l += sheen * (r > lab + 1 && r < R0 - 1.5 ? 70 : 20);
+        const ang = a - sp, streak = Math.abs(Math.sin(ang * 3 + r * 0.4)) > 0.985 ? 14 : 0;
+        l += streak;
+        col = [l, l, l + 6];
+        if (r > R0 - 1.3) col = [48, 48, 58];                  // the rim
+      }
+      const o = (py * DISC + px) * 4;
+      d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+    }
+    c.ctx.putImageData(id, 0, 0);
   }
 
   drawCrate(ctx) {
@@ -206,7 +242,7 @@ export class Vinyl {
       const [rx, ry, rw, rh] = this.rowRect(i), have = this.unlocked.includes(tr.id), on = this.playing === tr.id;
       ctx.fillStyle = on ? '#ffd8c8' : '#ffffff'; ctx.fillRect(rx, ry, rw, rh);
       const cv = this.covers[tr.id];
-      if (have && cv) { ctx.imageSmoothingEnabled = true; ctx.drawImage(cv, rx + 1, ry + 1, 16, 16); ctx.imageSmoothingEnabled = false; }
+      if (have && cv) { ctx.imageSmoothingEnabled = false; ctx.drawImage(cv, rx + 1, ry + 1, 16, 16); }
       else { ctx.fillStyle = '#bcd8e0'; ctx.fillRect(rx + 1, ry + 1, 16, 16); drawBottleIcon(ctx, rx + 9, ry + 9, 0); }
       if (have) {
         drawText(ctx, fitW(tr.title, rw - 34), rx + 21, ry + 1, { color: '#1a2a4a' });

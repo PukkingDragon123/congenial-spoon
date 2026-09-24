@@ -325,7 +325,7 @@ export function genStatue() {
 }
 
 // Lights a carved height field as mossy stone (shared by the statues).
-function shadeStone(W, Ht, heights, mask, mossy) {
+function shadeStone(W, Ht, heights, mask, mossy, PAL = STONE, mossAmt = 0.4) {
   // Cavity (ambient occlusion) from blurred height
   const blur = new Float32Array(W * Ht);
   const R = 3;
@@ -354,13 +354,13 @@ function shadeStone(W, Ht, heights, mask, mossy) {
       b *= 1 - 0.3 * (y / Ht);
       b += (noise2(x * 0.6, y * 0.6, 51) - 0.5) * 0.08;
       if (ridge(x * 0.05, y * 0.03 + noise2(x * 0.1, y * 0.1, 5), 53) < 0.03) b -= 0.2;
-      let lvl = b * (STONE.length - 1);
+      let lvl = b * (PAL.length - 1);
       if (!mk(x, y - 1) && dif > 0.3) lvl += 1.5;
       if (!mk(x, y + 1) || !mk(x - 1, y) || !mk(x + 1, y)) lvl -= 1.2;
-      const idx = clamp(Math.round(lvl + (bayer(x, y) - 0.5) * 0.9), 0, STONE.length - 1);
-      let col = STONE[idx];
+      const idx = clamp(Math.round(lvl + (bayer(x, y) - 0.5) * 0.9), 0, PAL.length - 1);
+      let col = PAL[idx];
       const up = -ny;
-      if (mossy[y * W + x] > 0.7 && up > 0.25) col = mixRGB(col, MOSS[clamp(Math.round(dif * 4 + (bayer(x, y) - 0.5)), 0, 4)], 0.4);
+      if (mossy[y * W + x] > 0.7 && up > 0.25) col = mixRGB(col, MOSS[clamp(Math.round(dif * 4 + (bayer(x, y) - 0.5)), 0, 4)], mossAmt);
       buf.set(x, y, col);
       if (up > 0.2 && dif > 0.35) light.set(x, y, [255, 255, 255], Math.round(clamp((up - 0.2) * 1.6) * 255));
     }
@@ -483,6 +483,116 @@ export function toStone(img) {
   c.ctx.putImageData(id, 0, 0);
   c.ox = img.ox; c.oy = img.oy;
   return c;
+}
+
+// The chubby garden bunny: a near-perfect ball of a body with carved fur
+// running all over it, a little smug face at the top, a heavy-lidded eye,
+// long ears laid flat along its back, tiny paws folded on its tummy and a
+// foot poking out underneath. Weathered cement with an olive-gold patina.
+const PATINA = ramp(['#0e120a', '#1c2212', '#2c3218', '#3e4420', '#525828', '#686c30', '#80823c', '#9a9a4c', '#b4b262', '#cccb80', '#e2e0a4'], 11);
+export function genBunny() {
+  const W = 128, Ht = 122;
+  const buf = new Buf(W, Ht);
+  const P = PATINA, N = P.length - 1;
+  const L = [-0.55, -0.62, 0.56];                      // light from the top left
+  const idx = new Int8Array(W * Ht).fill(-1);          // ramp index per pixel
+  const put = (x, y, i) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < Ht) idx[y * W + x] = clamp(Math.round(i), 0, N); };
+  const get = (x, y) => (x < 0 || y < 0 || x >= W || y >= Ht ? -1 : idx[y * W + x]);
+  // a shaded ellipsoid blob: bias lightens or darkens it
+  const blob = (cx, cy, rx, ry, bias = 0, rot = 0) => {
+    const c = Math.cos(rot), s2 = Math.sin(rot), R = Math.max(rx, ry) + 1;
+    for (let y = Math.floor(cy - R); y <= cy + R; y++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy, u = (dx * c + dy * s2) / rx, v = (-dx * s2 + dy * c) / ry, r = u * u + v * v;
+      if (r > 1) continue;
+      const nz = Math.sqrt(1 - r), nx = dx / Math.max(rx, ry), ny = dy / Math.max(rx, ry);
+      const l = clamp(nx * L[0] + ny * L[1] + nz * L[2]);
+      put(x, y, 1.2 + l * (N - 2) + bias + (bayer(x, y) - 0.5) * 0.9);
+    }
+  };
+  // the ball of a body
+  const bx = 70, by = 64, br = 50;
+  blob(bx, by, br, br * 1.02);
+  // carved fur: short strokes radiating back from the face, each a dark
+  // groove with a lit edge beside it
+  const fx = 28, fy = 44;
+  for (let gy = by - br; gy < by + br; gy += 3.2) for (let gx = bx - br; gx < bx + br; gx += 3.2) {
+    const jx = gx + (hash2(gx | 0, gy | 0, 5) - 0.5) * 2.4, jy = gy + (hash2(gx | 0, gy | 0, 7) - 0.5) * 2.4;
+    if (Math.hypot(jx - bx, jy - by) > br - 5 || Math.hypot(jx - fx - 8, jy - fy - 2) < 20) continue;
+    let dx = jx - fx, dy = jy - fy; const d = Math.hypot(dx, dy); dx /= d; dy /= d;
+    const len = 4 + hash2(gx | 0, gy | 0, 9) * 3;
+    for (let i = 0; i < len; i++) {
+      const x = jx + dx * i, y = jy + dy * i, cur = get(x, y);
+      if (cur < 0) continue;
+      put(x, y, cur - 1.4);
+      const hx = x - dy, hy = y + dx, ch = get(hx, hy);
+      if (ch >= 0 && i > 0 && i < len - 1) put(hx, hy, ch + 1);
+    }
+  }
+  // ears laid back along the top: long, flat, with a groove down the middle
+  for (const [ax, ay, ex, ey, wd] of [[58, 24, 104, 30, 7], [62, 32, 108, 50, 6]]) {
+    const n = 60;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = lerp(ax, ex, t), y = lerp(ay, ey, t) - Math.sin(t * Math.PI) * 5, w = wd * (0.5 + Math.sin(Math.min(1, t * 1.3) * Math.PI) * 0.55);
+      blob(x, y, w, w * 0.8, 0.8);
+    }
+    for (let i = 8; i < n - 8; i++) { const t = i / n; put(lerp(ax, ex, t) + 1, lerp(ay, ey, t) - Math.sin(t * Math.PI) * 5 + 1, 2); }
+  }
+  // the face: cheek, then a snout that pokes out past the ball
+  blob(fx + 12, fy + 6, 14, 11, 0.6);
+  blob(fx - 1, fy + 1, 10, 7.5, 0.9);
+  // smug closed smile, nose, chin
+  for (let x = fx - 10; x <= fx + 7; x++) { const y = fy + 4 + 0.055 * (x - fx) ** 2 - (x - fx) * 0.22; put(x, y, 1); }
+  put(fx - 10, fy - 2, 1); put(fx - 9, fy - 2, 1); put(fx - 10, fy - 1, 2);
+  for (let x = fx - 4; x <= fx + 4; x++) { const c = get(x, fy + 9); if (c >= 0) put(x, fy + 9, c + 1); }
+  // the eye: a dark almond, a heavy lit lid over it, a catchlight
+  const ex = fx + 17, ey = fy - 9;
+  for (let y = -6; y <= 6; y++) for (let x = -9; x <= 9; x++) {
+    const e = (x / 8) ** 2 + (y / 4.4) ** 2, lid = -4.4 + 0.06 * x * x;
+    if (e < 1 && y > lid) put(ex + x, ey + y, e < 0.5 ? 0 : e < 0.8 ? 1 : 3);
+    if (Math.abs(y - lid) < 1.1 && Math.abs(x) < 8.5) put(ex + x, ey + y, y < lid ? N : N - 2);  // the heavy lid
+    if (Math.abs(y - (lid - 2.2)) < 0.6 && Math.abs(x) < 7) put(ex + x, ey + y, 3);             // crease above it
+  }
+  put(ex - 3, ey - 1, N - 1); put(ex - 2, ey - 1, N - 2);
+  // tiny front paws folded on the tummy, toes to the left
+  blob(72, 90, 17, 6.5, 1.3, 0.28);
+  for (let i = 0; i < 3; i++) { put(57, 86 + i * 2, 2); put(58, 86 + i * 2, 2); }
+  // a foot poking out underneath, and a paw peeking round the side
+  blob(56, 112, 12, 6, 0.6);
+  for (let i = 0; i < 3; i++) put(46 + i * 3, 114, 2);
+  blob(19, 70, 5, 9, 0.3);
+  // outline, then paint
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+    const i = get(x, y);
+    if (i < 0) continue;
+    const edge = get(x - 1, y) < 0 || get(x + 1, y) < 0 || get(x, y - 1) < 0 || get(x, y + 1) < 0;
+    buf.set(x, y, P[edge ? Math.min(i, 1) : i]);
+  }
+  const c = buf.toCanvas();
+  // a light mask for the water caustics: the lit upper faces
+  const lb = new Buf(W, Ht);
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) { const i = get(x, y); if (i >= N - 3) lb.set(x, y, [255, 255, 255], 160); }
+  c.light = lb.toCanvas();
+  return c;
+}
+
+// A little stone frog sitting up, for the other side of the reef.
+export function genFrog() {
+  const W = 56, Ht = 46;
+  const heights = new Float32Array(W * Ht), mask = new Uint8Array(W * Ht), mossy = new Float32Array(W * Ht);
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+    const X = x + 0.5, Y = y + 0.5;
+    let h = -1;
+    const b = Math.hypot((X - 28) / 20, (Y - 30) / 15);
+    if (b < 1) h = 14 * Math.sqrt(1 - b * b) + (Math.abs(Y - 30 + 0.025 * (X - 28) ** 2) < 0.7 && Math.abs(X - 28) < 12 ? -1.8 : 0);
+    for (const sd of [-1, 1]) {
+      const e = Math.hypot((X - 28 - sd * 11) / 5.5, (Y - 16) / 5);
+      if (e < 1) h = Math.max(h, 14 + 4 * Math.sqrt(1 - e * e) - (Math.hypot(X - 28 - sd * 11, Y - 16) < 2 ? 2.4 : 0));
+      const l = Math.hypot((X - 28 - sd * 17) / 7, (Y - 40) / 5);
+      if (l < 1) h = Math.max(h, 10 + 3 * Math.sqrt(1 - l * l));
+    }
+    if (h > 0) { h += (fbm(X * 0.3, Y * 0.3, 71, 2) - 0.5) * 1.4; heights[y * W + x] = h; mask[y * W + x] = 1; mossy[y * W + x] = fbm(X * 0.1, Y * 0.1, 73, 3); }
+  }
+  return shadeStone(W, Ht, heights, mask, mossy);
 }
 
 // Ruined carved pillar for the background.

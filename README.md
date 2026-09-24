@@ -74,13 +74,14 @@ browser.
 
 ### The record player
 
-After the photo quest a little record player sits in the top-left corner.
+After the photo quest a pixel-art record floats and spins in the top-left
+corner, with a pixelated copy of the album cover as its label and the name
+of what's playing (and a little equaliser) next to it.
 It has three records, *Always* (Daniel Caesar), *Blue Hair* (TV Girl) and
 *Octopus's Garden* (The Beatles), and each one starts locked. A message
 bottle floats in each tank (jelly hall, reef, big tank); tap it and it
 pops open in a burst of bubbles with a record inside. Tap the player to open
-the crate and pick a record: it spins with its cover art on the label, the
-arm swings over, and bubbles and notes drift up. Records play once the
+the crate and pick a record; bubbles and notes drift up while it plays. Records play once the
 story is over, so they don't cut off the song that tells it.
 
 ### New animals
@@ -90,6 +91,17 @@ beaded tentacles), glowing crystal jellies and rainbow comb jellies you can
 photograph. Two octopuses creep around the reef sand and jet up when you tap
 them. The seahorses in the finale are smaller and come in pink, teal,
 yellow, purple and orange.
+
+### The reef and the tour
+
+After the photo quest the Mameshiba takes her next door to the clownfish
+reef and gives the tour there, one thing at a time with a glowing ring
+around what it's talking about: the diary (open it to carry on), coins,
+the camera tab, the record player and souvenirs. The reef now has a big
+round garden-bunny statue (olive patina, carved fur, ears laid back, a
+smug little face), a small stone frog, more anemones and clownfish, a
+second coral garden along the front, starfish and urchins on the sand, and
+two bubble columns. The loading screen fills a little tank with water.
 
 ### Pufferfish, statues and keychains
 
