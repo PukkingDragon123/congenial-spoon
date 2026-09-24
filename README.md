@@ -23,7 +23,7 @@ schools, crabs wave their claws, and the light breathes with the song.
 5. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
 6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
 7. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
-8. **Finale**: a whale shark glides in carrying a heart of minnows, and in the middle of the screen bubbles float up and gather into *I ♥ you*, where the heart is a little heart-shaped fish swimming between the words. The crabs line up to dance, and the minnows come home to frame the Buddha.
+8. **Finale**: a whale shark glides in carrying a heart of minnows, and in the middle of the screen bubbles float up and gather into *I ♥ you*, where the heart is a little heart-shaped fish swimming between the words. When she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates; dolphins and seahorses swim a heart around the couple, and all the fish gather in the background to spell *I LOVE U*. The crabs line up to dance, and the minnows come home to frame the Buddha.
 
 ### Photo mode
 
@@ -38,7 +38,7 @@ with its own perk and points multiplier), paint the body and trim, cover it
 in stickers (including tiny prints of your own photos), hang a charm on the
 strap, doodle on it with markers, and upgrade the lens, film (sepia, faded,
 warm, then vivid colour) and roll. Your camera shows in the corner as you play. Points come slowly (common fish are worth a few, legendaries more), and filling the album pays out bonuses at 3, 6, 10, 15 and all 22 species. Tap any postcard and *save as jpeg* to keep it as a souvenir: a big polaroid of the shot with its name, stars, date and a stamp. Albums and points are kept in the browser. The
-legendaries are the whale shark, the bean pup, the tree friend, and the
+legendaries are the whale shark, the Mameshiba, the tree friend, and the
 two of them together.
 
 Subtitles type in over a soft backing, one line at a time, and fade away in a few bubbles.

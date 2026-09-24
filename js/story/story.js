@@ -8,6 +8,7 @@ import { drawText, textWidth, textPixels, textPixelsBold, wrap, chars, charX, LI
 import { bottleSprite, makePaper, drawRoll, drawSeal, drawBubbleButton, drawSpeaker, Sweep, BubbleCurtain, LightBloom, bubbleLetter, heartFish } from './ui.js';
 import { SoundEngine } from '../audio.js';
 import { AnimeFX } from './anime.js';
+import { heartFriends } from '../world/friends.js';
 import { PhotoMode } from './photo.js';
 
 const WHALE_Z = 0.62;
@@ -23,6 +24,7 @@ export class Story {
     this.fxBack = new Particles();
     this.anime = new AnimeFX();
     this.meetX = null; // where she stands before they meet
+    this.sun = 0;      // summer sunlight streaming in from above, 0..1
     this.sound = new SoundEngine(CONFIG.sound, CONFIG.music);
     this.rooms = opts.rooms || {};
     this.stage = this.rooms.jelly || aq;   // whichever tank is on screen
@@ -443,7 +445,9 @@ export class Story {
     // the heart's pink glow falls on them
     const blue = aq.coupleLight.slice(), pink = [255, 160, 210];
     this.tween(3, (k) => {
-      p.tint = [1 + 0.06 * k, 1 - 0.01 * k, 1 + 0.03 * k]; p.bloom = 0.75 + 0.3 * k;
+      // the light turns bright and warm, like summer sun through the water
+      p.tint = [1 + 0.07 * k, 1 + 0.035 * k, 1 - 0.02 * k]; p.bloom = 0.75 + 0.1 * k;
+      aq.light = 1 + 0.1 * k; this.sun = 0.45 * k;
       aq.coupleLight = blue.map((v, i) => lerp(v, pink[i], k * 0.7));
     });
     // "this could be us", pointing at them as they face each other
@@ -474,7 +478,8 @@ export class Story {
     for (const k of crabs) { k.form = null; k.react(cx, aq.floorY(0.1), 0.8); }
     const lit = aq.coupleLight.slice();
     this.tween(2, (k) => {
-      glow.a = 0.5 * (1 - k); p.tint = [1.06 - 0.03 * k, 0.99, 1.03 - 0.015 * k];
+      glow.a = 0.5 * (1 - k); p.tint = [1.07 - 0.04 * k, 1.035 - 0.035 * k, 0.98 + 0.03 * k];
+      aq.light = 1.1 - 0.1 * k; this.sun = 0.45 * (1 - k) + 0.1 * k;
       aq.coupleLight = lit.map((v, i) => lerp(v, blue[i], k));
     }).then(() => { aq.glows.splice(aq.glows.indexOf(glow), 1); });
     // back to the glass, hand in hand now
@@ -483,6 +488,54 @@ export class Story {
     await this.tween(0.22, (k) => { c.flip = 0.55 + 0.45 * k; }, ease.outBack);
     c.flip = 1;
     this.tween(3, (k) => { c.lean = k; }, ease.inOutSine);
+  }
+
+  // Everyone in the tank celebrates: fish flip and hop, crabs jump, the
+  // buddies roll, and sparkles and bubbles burst all over the water.
+  celebrate() {
+    const aq = this.aq;
+    for (const c of aq.creatures) {
+      if (c.react) c.react(c.x + (R() - 0.5) * 20, c.y + 10, 0.9);
+      if (c.kind === 'crab') c.hop = 1;
+      if (c.kind === 'jelly') c.lit = 1.6;
+      if ('hopT' in c) c.hopT = 1;
+    }
+    for (let i = 0; i < 8; i++) {
+      this.wait(i * 0.35).then(() => {
+        const x = R() * this.W, y = 30 + R() * this.H * 0.5;
+        burstStars(this.fx, x, y, 8, { speed: 60, size: 5 });
+        popRing(this.fx, x, y, { r1: 20, col: '#fff4c0' });
+      });
+    }
+    aq.sendWave(CX - 800, 1, { speed: 900, amp: 9, width: 260, life: 3 });
+  }
+
+  // Summer sunlight: a warm glow at the surface and beams slanting down.
+  drawSun(ctx) {
+    const a = this.sun;
+    if (a <= 0.01) return;
+    const W = this.W, H = this.H, t = this.t;
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(W * 0.92, -H * 0.15, 0, W * 0.92, -H * 0.15, H * 0.8);
+    g.addColorStop(0, `rgba(255,230,160,${0.2 * a})`);
+    g.addColorStop(0.5, `rgba(255,210,140,${0.05 * a})`);
+    g.addColorStop(1, 'rgba(255,200,120,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 7; i++) {
+      const x0 = W * (0.1 + i * 0.14) + Math.sin(t * 0.3 + i * 1.7) * 14;
+      const w = 10 + (i % 3) * 7;
+      const al = a * (0.03 + 0.025 * Math.sin(t * 0.8 + i * 2.3));
+      if (al <= 0) continue;
+      const bg = ctx.createLinearGradient(0, 0, 0, H * 0.85);
+      bg.addColorStop(0, `rgba(255,240,190,${al})`);
+      bg.addColorStop(1, 'rgba(255,240,190,0)');
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.moveTo(x0, 0); ctx.lineTo(x0 + w, 0); ctx.lineTo(x0 + w - H * 0.35, H * 0.85); ctx.lineTo(x0 - H * 0.35 - w * 0.5, H * 0.85);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   formHeart(fish, cx, cy, cz, s, t0, full = false, center = null) {
@@ -653,22 +706,22 @@ export class Story {
     }
   }
 
-  formWords(str) {
+  formWords(str, o = {}) {
     const aq = this.aq;
     const lines = String(str).split('\n');
     const pix = lines.map((l) => textPixelsBold(l));
     const tw = Math.max(...pix.map((p) => p.w));
     const cell = clamp(Math.floor((this.W - 30) / tw), 3, 6);
     const lineH = 10 * cell;
-    const cz = 0.1;
+    const cz = o.cz ?? 0.1;
     const totalH = lines.length * lineH - 3 * cell;
-    const top = 128 - totalH / 2;
+    const top = o.top ?? 128 - totalH / 2;
     const targets = [];
     pix.forEach((p, li) => {
       const ox = CX - (p.w * cell) / 2;
       for (const [x, y] of p.px) targets.push([ox + x * cell + cell / 2, top + li * lineH + y * cell, cz + (x % 2) * 0.004]);
     });
-    const pool = aq.bait.slice();
+    const pool = (o.pool || aq.bait).slice();
     let tgts = targets;
     if (targets.length > pool.length) {
       tgts = [];
@@ -686,7 +739,7 @@ export class Story {
       f.formK = 0;
       chosen.push(f);
     });
-    const glow = { x: CX, y: top + totalH / 2, z: 0.12, r: Math.round(Math.min(this.W * 0.5, tw * cell * 0.62)), col: '#9fe0ff', a: 0 };
+    const glow = { x: CX, y: top + totalH / 2, z: cz + 0.02, r: Math.round(Math.min(this.W * 0.5, tw * cell * 0.62)), col: o.glow || '#9fe0ff', a: 0 };
     aq.glows.push(glow);
     return { fish: chosen, glow, center: [CX, top + totalH / 2] };
   }
@@ -715,7 +768,9 @@ export class Story {
     if (this.trevPath) aq.trevSchool.path = this.trevPath;
     // hug
     this.tween(1.8, (k) => { c.hug = k; }, ease.inOutCubic);
-    this.tween(2, (k) => { p.tint = [1 + 0.05 * k, 1 - 0.02 * k, 1 + 0.02 * k]; p.bloom = 0.75 + 0.25 * k; });
+    // summer: bright, warm, sunbeams pouring in
+    this.tween(2.5, (k) => { p.tint = [1 + 0.09 * k, 1 + 0.05 * k, 1 - 0.03 * k]; p.bloom = 0.75 + 0.12 * k; this.sun = Math.max(this.sun, k); }, ease.inOutSine);
+    this.celebrate();
     await this.wait(1.6);
     this.sound.sfx('heart');
     aq.fx.add({ kind: 'heart', x: aq.coupleX, y: aq.coupleY - 100, z: 0, vx: 0, vy: -10, drag: 0.3, age: 0, life: 4, size: 3, ph: 0, wob: 6, wobF: 2 });
@@ -731,7 +786,15 @@ export class Story {
     for (let i = 0; i < 7; i++) this.spawnJelly(true);
     const crabs = aq.crabs || [];
     crabs.forEach((k, i) => { const u = crabs.length > 1 ? i / (crabs.length - 1) - 0.5 : 0; k.form = [CX + u * 260, 0.05 + Math.abs(u) * 0.16]; });
-    this.tween(4, (k) => { aq.light = 1 + 0.35 * k; });
+    this.tween(4, (k) => { aq.light = 1 + 0.18 * k; });
+    // dolphins and seahorses arrive and swim a heart around the couple
+    this.friends = heartFriends(CX, aq.coupleY - 105, 0.15, Math.min(95, this.W * 0.32), CX + this.W / 2);
+    aq.creatures.push(...this.friends);
+    // and every fish in the tank gathers behind them to spell it out
+    const crowd = aq.trevSchool.m.concat(aq.creatures.filter((f) => ['tang', 'butterfly', 'snapper', 'batfish', 'giant'].includes(f.kind)));
+    for (const f of crowd) { f.len0 = f.len; f.len = 11; }
+    this.loveWords = this.formWords('I LOVE U', { pool: crowd, cz: 0.08, top: 58, glow: '#ffe0a0' });
+    this.tween(4, (k) => { for (const f of this.loveWords.fish) { f.formK = k; f.shadeA = k; } }, ease.inOutSine);
     await this.wait(1.2);
     const whale = aq.spawnWhaleShark();
     whale.x = CX + this.W / 2 + 60;
@@ -749,7 +812,6 @@ export class Story {
     this.heartSparkle = { cx: 0, cy: 0, cz: WHALE_Z - 0.06, s };
     this.tween(4, (k) => { for (const f of aq.bait) f.formK = k; glow.a = 0.45 * k; }, ease.inOutSine);
     this.trevPath = this.trevPath || aq.trevSchool.path;
-    aq.trevSchool.path = (t) => [whale.x + Math.cos(t * 0.7) * 170, whale.y + Math.sin(t * 0.7) * 46, WHALE_Z + 0.06 + Math.sin(t * 0.7) * 0.12];
     await this.wait(2.2);
     this.finale = { a: 0 };
     { const F = this.finale; this.tween(1.6, (k) => { F.a = k; }, ease.outCubic); }
@@ -769,7 +831,7 @@ export class Story {
     this.tween(5, (k) => { for (const f of aq.bait) f.formK = k; }, ease.inOutSine);
     await this.atSong(203);
     this.chorus = false;
-    this.tween(8, (k) => { aq.light = 1.35 - 0.3 * k; p.bloom = 1 - 0.15 * k; });
+    this.tween(8, (k) => { aq.light = 1.18 - 0.1 * k; p.bloom = 0.87 - 0.05 * k; this.sun = 1 - 0.3 * k; });
     await this.wait(3);
     this.replay = { a: 0 };
     { const Rp = this.replay; this.tween(1, (k) => { Rp.a = k; }); }
@@ -1251,6 +1313,7 @@ export class Story {
 
   draw(ctx) {
     this.fxBack.draw(ctx);
+    if (this.worldCanvas) this.drawSun(this.worldCanvas.ctx); // light in the water, not on the glass
     if (this.title) this.drawTitle(ctx);
     this.drawLyrics(ctx);
     this.drawThisCouldBeUs(ctx);

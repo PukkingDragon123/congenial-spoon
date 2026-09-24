@@ -21,7 +21,7 @@ export const SPECIES = {
   snapper: ['Snapper', 1], minnow: ['Minnow', 1], trevally: ['Trevally', 1], crab: ['Crab', 1], me: ['Just Me', 1],
   nettle: ['Sea Nettle', 2], batfish: ['Batfish', 2], giant: ['Giant GT', 2], grouper: ['Grouper', 2],
   bigjelly: ['Giant Jelly', 3], shark: ['Sand Tiger', 3], reefshark: ['Reef Shark', 3], ray: ['Stingray', 3], turtle: ['Sea Turtle', 3],
-  whaleshark: ['Whale Shark', 4], bean: ['Bean Pup', 4], treefriend: ['Tree Friend', 4], us: ['Us Two', 4],
+  whaleshark: ['Whale Shark', 4], bean: ['Mameshiba', 4], dolphin: ['Dolphin', 4], seahorse: ['Seahorse', 3], treefriend: ['Tree Friend', 4], us: ['Us Two', 4],
 };
 const ORDER = Object.keys(SPECIES).sort((a, b) => SPECIES[a][1] - SPECIES[b][1]);
 const RARITY_PTS = [0, 3, 8, 20, 50];

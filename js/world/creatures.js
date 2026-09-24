@@ -183,6 +183,13 @@ export class Creature {
     const hop = this.hopT > 0 ? -Math.sin((1 - this.hopT) * Math.PI) * (3 + this.len * 0.08) : 0;
     const lift = Math.sin(this.bob) * (this.calm ? 0.4 : 1 + this.len * 0.02) + hop + (aq.waveAt ? aq.waveAt(this.x, this.z) : 0);
     const X = Math.round(sx), Y = Math.round(sy + lift);
+    if (this.shadeA > 0.01) {
+      // a soft dark halo so fish spelling words stand out against bright water
+      const g = glowSprite(8, '#04143a');
+      ctx.globalAlpha = this.shadeA * 0.8;
+      ctx.drawImage(g, X - 8, Y - 8);
+      ctx.globalAlpha = 1;
+    }
     if (this.glowA > 0.01) {
       const g = glowSprite(7, '#9fe8ff');
       ctx.globalCompositeOperation = 'lighter';
@@ -372,10 +379,13 @@ export class Diver {
     this.bounds = o.bounds ?? null;
     this.len = 24;
   }
-  react() { this.hopT = 1; }
+  react() { this.hopT = 1; this.rollT = 1; }
   update(dt, aq) {
     this.t += dt;
     this.hopT = Math.max(0, this.hopT - dt * 1.8);
+    this.rollT = Math.max(0, (this.rollT || 0) - dt * 1.4);
+    this.rollIn = (this.rollIn ?? 3 + Math.random() * 4) - dt;
+    if (this.rollIn <= 0) { this.rollT = 1; this.rollIn = 5 + Math.random() * 6; }
     if (this.lead) {
       const L = this.lead;
       this.dir = L.dir;
@@ -404,12 +414,16 @@ export class Diver {
     if (sx < -40 || sx > aq.W + 40) return;
     const img = diverSprite(this.kind, Math.floor(this.ph) % DIVER_FRAMES);
     const hop = Math.sin(this.hopT * Math.PI) * -8;
-    const bob = Math.sin(this.t * 1.6) * 1.5;
-    const tilt = Math.sin(this.t * 1.1) * 0.08 + (this.hopT > 0 ? Math.sin(this.hopT * Math.PI * 2) * 0.25 : 0);
+    // it swims like the fish: a nose-up/nose-down wiggle, a little squash
+    // and stretch with each paddle, and every so often a happy barrel roll
+    const bob = Math.sin(this.t * 2.2) * 2;
+    const roll = this.rollT > 0 ? (1 - this.rollT) * TAU : 0;
+    const tilt = Math.sin(this.t * 2.2 + 1) * 0.14 + roll + (this.hopT > 0 ? Math.sin(this.hopT * Math.PI * 2) * 0.25 : 0);
+    const sq = 1 + Math.sin(this.ph * 1.3) * 0.07;
     let f = this.face;
     if (Math.abs(f) < 0.2) f = 0.2 * Math.sign(f || 1);
     const c = Math.cos(tilt), s = Math.sin(tilt);
-    ctx.setTransform(f * c, f * s, -s, c, Math.round(sx), Math.round(sy + bob + hop));
+    ctx.setTransform(f * c * sq, f * s * sq, -s / sq, c / sq, Math.round(sx), Math.round(sy + bob + hop));
     ctx.drawImage(img, -img.ox, -img.oy);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
