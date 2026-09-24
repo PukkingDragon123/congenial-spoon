@@ -16,9 +16,9 @@ import { Dialog } from './dialog.js';
 
 // the finale: the whole tank spells these out, one after another
 const LOVE_WORDS = ['I', 'LOVE', 'YOU'];
-// the stretch of the song's opening that repeats during the photo quest:
-// one phrase, measured so the jump back lands on the same beat
-const SONG_LOOP = [1.2, 6.25];
+// where the full song picks up when the quest is done: just before the
+// first sung line
+const VOCALS_AT = 18.6;
 const CROWD_KINDS = ['tang', 'butterfly', 'snapper', 'batfish', 'giant'];
 
 const WHALE_Z = 0.62;
@@ -36,6 +36,7 @@ export class Story {
     this.meetX = null; // where she stands before they meet
     this.sun = 0;      // summer sunlight streaming in from above, 0..1
     this.sound = new SoundEngine(CONFIG.sound, CONFIG.music);
+    this.sound.introSrc = CONFIG.musicIntro || null;
     this.rooms = opts.rooms || {};
     this.stage = this.rooms.jelly || aq;   // whichever tank is on screen
     this.camX = CX - 260;
@@ -296,9 +297,9 @@ export class Story {
     await this.wait(0.6);
     this.hint = { text: CONFIG.tapToBegin, y: () => Math.round(this.H * 0.66), a: 0 };
     { const h = this.hint; this.tween(0.8, (k) => { h.a = k; }); }
-    // the song starts inside the tap, going round its first few seconds
-    // until the photo quest is done
-    this.sound.loop = SONG_LOOP;
+    // the instrumental starts inside the tap and plays through the photo
+    // quest; the vocals come in when it's done
+    this.sound.useIntro = !!this.sound.introSrc;
     this.sound.armed = true;
     await this.waitTap();
     this.hint = null;
@@ -403,7 +404,7 @@ export class Story {
       'The clownfish reef is next door. Go say hi!',
       'Always! Your album is by the camera. Now go, go, the reef is next door!',
     ]);
-    this.sound.loop = null;  // the song carries on from here
+    if (this.sound.intro) this.sound.beginSong(VOCALS_AT);  // and here come the vocals
     if (bean) bean.go = null;
   }
 
@@ -1111,6 +1112,34 @@ export class Story {
     this.tween(1.2, (k) => { c.hug = 1 - k; }).then(() => { c.mode = 'back'; c.hold = 1; c.hug = 0; });
     this.photoReady = true;
     this.hud = true;
+    this.wait(2.5).then(() => this.devChat());
+  }
+
+  // The one who made this, talking to her through the game.
+  async devChat() {
+    const D = this.dialog;
+    const chat = async (line, replies, answers) => {
+      const i = await D.ask('me', line, replies);
+      await D.say('her', replies[i], { life: 0.55, cps: 80 });
+      await D.say('me', answers[i]);
+    };
+    await D.say('me', "Hi. It's me. The real me, not the pixel one.");
+    await D.say('me', 'Quick confession about the confession...');
+    await chat('Do you know how long this took to make?', ['a weekend?', 'tell me'], [
+      'A WEEKEND?? I wish. Try way too many late nights.',
+      'Way too many late nights. My brain is basically a moon jelly now.',
+    ]);
+    await D.say('me', 'Every fish is drawn with code. The dolphin was skinny, then chubby, then skinny again.');
+    await D.say('me', 'The tree guy got remade like five times. He is fine. He is a professional.');
+    await chat('So here\'s the truth: this was never really an aquarium game.', ['wait, what', 'I knew it'], [
+      'It was a very elaborate excuse to ask you that one question.',
+      'Okay detective. Yes. The fish, the bean, the camera... all a cover story.',
+    ]);
+    await D.say('me', "So thank you for saying yes. Or for clicking yes. I'm counting it.");
+    await chat("Anyway, the aquarium's all yours now. Walk around, fill the notebook. There's a prize.", ['okay!', 'is the prize you?'], [
+      'Go get it! The bean says hi.',
+      '...Maybe. Keep playing and find out.',
+    ]);
   }
   walkKey(dir, down) {
     if (!this.roam) return;

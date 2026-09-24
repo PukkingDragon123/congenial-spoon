@@ -50,6 +50,9 @@ export const CONFIG = {
   // re-timing `lyrics` and the atSong(...) beats in js/story/story.js.
   sound: true,
   music: 'audio/always.mp3',
+  // The instrumental that plays during the photo quest; the full song (with
+  // the vocals) takes over when the quest is done.
+  musicIntro: 'audio/always-instrumental.mp3',
 
   // Words that drift up through the water, in song seconds. These are our own
   // lines written to the song's shape — replace them with anything you like

@@ -18,6 +18,8 @@ export class SoundEngine {
     this.ready = false;
     this.sim = false;       // tests: follow the simulated clock instead of the track
     this.loop = null;       // [from, to]: play round this stretch until released
+    this.introSrc = null;   // an instrumental to play before the vocals
+    this.useIntro = false;
     // live analysis, all 0..1
     this.level = 0;
     this.bass = 0;
@@ -53,6 +55,17 @@ export class SoundEngine {
     const tw = (this.el2 = new Audio());
     tw.preload = 'auto'; tw.playsInline = true; tw.setAttribute('playsinline', '');
     tw.src = el.src; tw.load();
+    // the instrumental, for before the vocals come in
+    if (this.introSrc) {
+      const it = (this.intro = new Audio());
+      it.preload = 'auto'; it.playsInline = true; it.setAttribute('playsinline', ''); it.loop = true;
+      try {
+        const r2 = await fetch(this.introSrc);
+        if (!r2.ok) throw new Error('fetch ' + r2.status);
+        it.src = URL.createObjectURL(new Blob([await r2.blob()], { type: 'audio/mpeg' }));
+      } catch (e) { it.src = this.introSrc; }
+      it.load();
+    }
     this.ready = true;
   }
 
@@ -93,6 +106,17 @@ export class SoundEngine {
       if (ctx.state === 'suspended') ctx.resume();
       this.bus();
     }
+    if (this.intro && this.useIntro) {
+      // the instrumental plays now; the full song is woken silently in the
+      // same tap so it can take over later without one
+      const it = this.intro;
+      it.muted = !this.enabled; it.volume = 1;
+      const pr = it.play();
+      if (pr && pr.catch) pr.catch((e) => { console.warn('play blocked:', e.message); this.blocked = true; });
+      this.source = it;
+      if (this.el) { const el = this.el; el.muted = true; const p2 = el.play(); if (p2 && p2.then) p2.then(() => { if (this.source !== el) el.pause(); }).catch(() => {}); }
+      return;
+    }
     if (this.el) {
       const el = this.el;
       try { el.currentTime = 0; } catch (e) { /* not seekable yet */ }
@@ -105,6 +129,21 @@ export class SoundEngine {
       const tw = this.el2;
       if (tw) { tw.muted = true; const p2 = tw.play(); if (p2 && p2.then) p2.then(() => { if (this.source !== tw) tw.pause(); }).catch(() => {}); }
     }
+  }
+
+  // The vocals come in: the full song takes over at `at` seconds while the
+  // instrumental fades away.
+  beginSong(at) {
+    this.useIntro = false;
+    this.free = at;
+    const el = this.el, it = this.intro;
+    if (el) {
+      try { el.currentTime = at; } catch (e) { /* ignore */ }
+      el.muted = !this.enabled; el.volume = 1;
+      el.play().catch(() => { this.blocked = true; });
+      this.source = el;
+    }
+    if (it && !it.paused) this.fading = it;
   }
 
   // A later tap retries if the browser refused the first play().
@@ -142,7 +181,8 @@ export class SoundEngine {
     // the old player fades out after a handover
     if (this.fading) {
       const f = this.fading;
-      f.volume = Math.max(0, f.volume - dt * 14);
+      // the instrumental fades slowly under the vocals, a loop handover fast
+      f.volume = Math.max(0, f.volume - dt * (f === this.intro ? 0.8 : 14));
       if (f.volume <= 0) { f.pause(); f.volume = 1; this.fading = null; }
     }
     if (this.loop) {

@@ -20,7 +20,7 @@ the whole tank moves with the music: fish bounce and squash on the beat, waves
 ripple through the schools, crabs wave their claws, and the light breathes
 with the song.
 
-1. **Title**: "Very Cool Aquarium Game". Tap to dive in; "Always" starts, and its opening phrase (about five seconds) loops seamlessly until the photo quest is done.
+1. **Title**: "Very Cool Aquarium Game". Tap to dive in; the instrumental of "Always" plays (no loop) through the photo quest, and the full song with the vocals takes over just before the first sung line when the quest is done.
 2. **Mameshiba and the photo quest**: she walks into the jellyfish hall on her own with a camera. A Mameshiba in a scuba suit paddles up and chats in a dialogue box, and you pick her replies (it's a talking bean with a degree in jellyfish; jellies are older than trees). It's making an encyclopedia and asks for help: a quest card wants a moon jelly, a sea nettle and a giant jelly. An arrow points at the camera; raise it and she lifts hers to her eye. The last photo stamps QUEST CLEAR!, one more exchange, and the song carries on as she heads for the reef.
 3. **Jellyfish hall** (0:00): she wanders along the glass pointing out jellies. Tap any creature to make it react. A Mameshiba in a little scuba suit (hood with its floppy ear, air tank, mask, flipper) paddles around here and in the other tanks.
 4. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a fat seal dressed as Cupid sitting on a rock in the middle, anemones, clownfish families and schools of fish. He's already there at the glass. She walks in past him, he spots her ("!" with anime focus lines) and can't keep still, jumping around, then comes over and they shake hands, and they watch the reef together.
@@ -32,6 +32,8 @@ with the song.
 10. **Finale**: when she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates. Dolphins and seahorses swim a heart around the couple, and all the fish come to the middle of the window to spell *I*, then *LOVE*, then *YOU*, over and over: the letters light up as they settle, and between words the whole crowd breaks off and circles round before it regroups. A whale shark glides past, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
 ### After the story
+
+Right after the yes, ME talks to YOU through the game: how many late nights it took, the dolphin that was skinny then chubby then skinny again, and the truth: it was never really an aquarium game, just a very elaborate excuse to ask that one question.
 
 The game stays open after the confession: walk the two of them along the
 glass with the arrow buttons (or arrow keys), wander between the big tank,
