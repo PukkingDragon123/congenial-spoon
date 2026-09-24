@@ -83,8 +83,9 @@ window.addEventListener('resize', () => resize());
 document.addEventListener('visibilitychange', () => {
   const snd = story && story.sound;
   if (!snd || !snd.ctx) return;
-  if (document.hidden) { snd.ctx.suspend(); if (snd.el && snd.playing) snd.el.pause(); }
-  else { snd.ctx.resume(); if (snd.el && snd.playing) snd.el.play().catch(() => {}); }
+  const el = snd.source || snd.el;
+  if (document.hidden) { snd.ctx.suspend(); if (el && snd.playing) el.pause(); }
+  else { snd.ctx.resume(); if (el && snd.playing) el.play().catch(() => {}); }
 });
 
 // -------------------------------------------------------------------- boot --
