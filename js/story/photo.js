@@ -24,22 +24,24 @@ export const SPECIES = {
   whaleshark: ['Whale Shark', 4], bean: ['Bean Pup', 4], treefriend: ['Tree Friend', 4], us: ['Us Two', 4],
 };
 const ORDER = Object.keys(SPECIES).sort((a, b) => SPECIES[a][1] - SPECIES[b][1]);
-const RARITY_PTS = [0, 10, 25, 60, 150];
+const RARITY_PTS = [0, 3, 8, 20, 50];
 const RARITY_COL = ['#888', '#a8d8ff', '#8affc0', '#ffb04a', '#ff6ad0'];
 const RARITY_NAME = ['', 'common', 'uncommon', 'rare', 'legendary'];
 
 export const UPGRADES = {
-  lens: { name: 'Lens', costs: [60, 160, 320], info: ['a wider frame'] },
-  film: { name: 'Film', costs: [80, 200, 400], info: ['richer colour, more points'] },
-  roll: { name: 'Roll', costs: [50, 130, 260], info: ['more shots, faster reload'] },
+  lens: { name: 'Lens', costs: [40, 110, 240], info: ['a wider frame'] },
+  film: { name: 'Film', costs: [50, 130, 280], info: ['richer colour, more points'] },
+  roll: { name: 'Roll', costs: [30, 80, 180], info: ['more shots, faster reload'] },
 };
 const FRAME_W = [0.26, 0.33, 0.41, 0.5]; // share of the screen width
 const LENSES = ['small', 'medium', 'wide', 'ultra'];
 const FILMS = ['sepia', 'faded', 'warm', 'vivid'];
-const FILM_MULT = [1, 1.25, 1.5, 2];
+const FILM_MULT = [1, 1.15, 1.3, 1.5];
 const ROLL_CAP = [6, 9, 12, 16];
 const RELOAD = [4, 3, 2.2, 1.5];
 const SAVE_KEY = 'vcag-photo-1';
+// album milestones: [species found, bonus]
+const MILESTONES = [[3, 15], [6, 30], [10, 60], [15, 100], [22, 250]];
 
 const keyOf = (c) => {
   if (c.kind === 'jelly') return c.hue === 'nettle' ? 'nettle' : c.len >= 40 ? 'bigjelly' : 'jelly';
@@ -57,10 +59,13 @@ export class PhotoMode {
     this.levels = { lens: 0, film: 0, roll: 0 };
     this.book = {};          // key -> { n, score, img (canvas) }
     this.shots = 0;
+    this.claimed = [];       // milestones already paid out
+    this.toast = null;
     this.cam = defaultCam();
     this.load();
     this.camDirty = true;
     this.charmA = 0.3; this.charmV = 0;
+    this.downloads(); // find out early whether this view can save files
     this.film = ROLL_CAP[this.levels.roll];
     this.reload = 0;
     this.prints = [];        // queued prints; the first one animates
@@ -78,6 +83,7 @@ export class PhotoMode {
       this.points = d.points | 0; this.shown = this.points; this.shots = d.shots | 0;
       Object.assign(this.levels, d.levels || {});
       if (d.cam) this.cam = Object.assign(defaultCam(), d.cam);
+      if (Array.isArray(d.claimed)) this.claimed = d.claimed;
       for (const [k, v] of Object.entries(d.book || {})) {
         if (!SPECIES[k]) continue;
         const e = { n: v.n | 0, score: v.score | 0, img: null };
@@ -90,7 +96,7 @@ export class PhotoMode {
     try {
       const book = {};
       for (const [k, v] of Object.entries(this.book)) book[k] = { n: v.n, score: v.score, img: v.img ? v.img.toDataURL() : v.url || null };
-      localStorage.setItem(SAVE_KEY, JSON.stringify({ points: this.points, shots: this.shots, levels: this.levels, cam: this.cam, book }));
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ points: this.points, shots: this.shots, levels: this.levels, cam: this.cam, claimed: this.claimed, book }));
     } catch (e) { /* ignore */ }
   }
 
@@ -201,12 +207,12 @@ export class PhotoMode {
     let pts = 0, fresh = [];
     for (const f of list) {
       const r = SPECIES[f.key][1];
-      let p = RARITY_PTS[r] + Math.min(f.n - 1, 6) * 2;
-      if (!this.book[f.key]) { p *= 3; fresh.push(f.key); }
+      let p = RARITY_PTS[r] + Math.min(f.n - 1, 4);
+      if (!this.book[f.key]) { p *= 2; fresh.push(f.key); }
       pts += p;
     }
     const main = list[0] || null;
-    if (main && main.d < 0.22) pts *= 1.5; // nicely centred
+    if (main && main.d < 0.22) pts *= 1.25; // nicely centred
     pts = Math.max(1, Math.round(pts * mult));
     // develop the picture
     const img = this.develop(fx, fy, fw, fh);
@@ -216,11 +222,26 @@ export class PhotoMode {
       if (f === main && pts >= e.score) { e.score = pts; e.img = img; }
       else if (!e.img) e.img = img;
     }
+    this.checkMilestones();
     this.camDirty = true; // photo stickers may show the new shot
     this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0 });
     if (this.prints.length === 1) s.sound.sfx('print');
     this.save();
   }
+
+  found() { return ORDER.filter((k) => this.book[k]).length; }
+  nextMilestone() { return MILESTONES.find(([n]) => !this.claimed.includes(n)) || null; }
+  checkMilestones() {
+    const n = this.found();
+    for (const [need, bonus] of MILESTONES) {
+      if (n < need || this.claimed.includes(need)) continue;
+      this.claimed.push(need);
+      this.points += bonus;
+      this.say(`album ${need}/${ORDER.length}! +${bonus} ✦`);
+      this.story.sound.sfx('sparkle');
+    }
+  }
+  say(text) { this.toast = { text, t: 0 }; }
 
   // Copy the frame out of the world and age it with the current film.
   develop(fx, fy, fw, fh) {
@@ -267,6 +288,7 @@ export class PhotoMode {
     this.flash = Math.max(0, this.flash - dt * 4);
     this.shake = Math.max(0, this.shake - dt);
     this.albumBounce = Math.max(0, this.albumBounce - dt * 2.5);
+    if (this.toast && (this.toast.t += dt) > 2.8) this.toast = null;
     // the charm swings on its chain and settles
     this.charmV += (-this.charmA * 22 - this.charmV * 2.2 + Math.sin(this.t * 1.7) * 0.8) * dt;
     this.charmA += this.charmV * dt;
@@ -303,6 +325,18 @@ export class PhotoMode {
     if (this.available()) this.drawHud(ctx);
     if (this.prints.length) this.drawPrint(ctx, this.prints[0]);
     if (this.album) this.drawAlbum(ctx);
+    if (this.toast) this.drawToast(ctx);
+  }
+
+  drawToast(ctx) {
+    const T = this.toast, k = Math.min(1, T.t * 5, (2.8 - T.t) * 3);
+    const w = textWidth(T.text) + 14, x = Math.round(this.W / 2 - w / 2), y = Math.round(this.H - 34 + (1 - k) * 8);
+    ctx.globalAlpha = Math.max(0, k);
+    ctx.fillStyle = '#10142a'; ctx.fillRect(x - 1, y - 1, w + 2, 13);
+    ctx.fillStyle = '#ff6a9a'; ctx.fillRect(x, y, w, 11);
+    ctx.fillStyle = '#ffb4cc'; ctx.fillRect(x, y, w, 1);
+    drawText(ctx, T.text, this.W / 2, y + 2, { align: 'center', color: '#ffffff' });
+    ctx.globalAlpha = 1;
   }
 
   drawHud(ctx) {
@@ -413,7 +447,10 @@ export class PhotoMode {
   navRects() { const [px, py, pw, ph] = this.panel(); return { prev: [px + 6, py + ph - 14, 12, 11], next: [px + pw - 18, py + ph - 14, 12, 11] }; }
   albumTap(x, y) {
     const A = this.album, snd = this.story.sound;
-    if (A.card) { A.card = null; snd.sfx('pop'); return; }
+    if (A.card) {
+      if (this.cardBtn && this.hit(this.cardBtn, x, y)) { this.exportSouvenir(A.card); snd.sfx('shutter'); return; }
+      A.card = null; snd.sfx('pop'); return;
+    }
     if (this.hit(this.closeRect(), x, y)) { this.album = null; snd.sfx('pop'); return; }
     const tabs = this.tabRects();
     for (const k of ['album', 'camera']) if (this.hit(tabs[k], x, y)) { A.tab = k; snd.sfx('type'); return; }
@@ -481,7 +518,8 @@ export class PhotoMode {
       if (e && r === 4) { ctx.fillStyle = '#ff6ad0'; ctx.fillRect(x + G.cw - 7, y + 1 + tilt, 5, 5); ctx.fillStyle = '#fff'; ctx.fillRect(x + G.cw - 6, y + 2 + tilt, 3, 3); }
     }
     const nav = this.navRects();
-    const label = `${found}/${ORDER.length} found`;
+    const nx = this.nextMilestone();
+    const label = nx && pw > 170 ? `${found}/${ORDER.length} found · next +${nx[1]}✦ at ${nx[0]}` : `${found}/${ORDER.length} found`;
     drawText(ctx, label, px + pw / 2, py + ph - 12, { align: 'center', color: '#6a4a2a' });
     if (G.pages > 1) {
       drawText(ctx, '<', nav.prev[0] + 4, nav.prev[1] + 1, { color: '#c2466e' });
@@ -745,7 +783,87 @@ export class PhotoMode {
     const ly = ty + (wide ? 18 : 10);
     drawText(ctx, '★'.repeat(r) + ' ' + RARITY_NAME[r], tx, ly, { color: RARITY_COL[r], outline: '#3a2a4a' });
     drawText(ctx, `snapped ×${e.n}`, tx, ly + 10, { color: '#8a6a4a' });
-    drawText(ctx, `best ✦${e.score}`, tx, ly + 20, { color: '#c27a10' });
+    if (e.score) drawText(ctx, `best ✦${e.score}`, tx, ly + 20, { color: '#c27a10' });
+    // save it as a souvenir photo
+    const label = 'save as jpeg', bw = textWidth(label) + 10;
+    const bx = x + cw - bw - 6, by = y + chh - 17;
+    ctx.fillStyle = '#10142a'; ctx.fillRect(bx - 1, by - 1, bw + 2, 13);
+    ctx.fillStyle = '#ff6a9a'; ctx.fillRect(bx, by, bw, 11);
+    drawText(ctx, label, bx + bw / 2, by + 2, { align: 'center', color: '#ffffff' });
+    this.cardBtn = [bx, by, bw, 11];
+  }
+
+  // ---------------------------------------------------------- souvenirs --
+  // A big polaroid of your best shot of a species: the photo blown up in
+  // crisp pixels, the name and stars written below, a stamp and a postmark.
+  souvenir(key) {
+    const e = this.book[key];
+    if (!e || !e.img) return null;
+    const [name, r] = SPECIES[key], im = e.img;
+    const k = clamp(Math.floor(760 / im.width), 4, 12);
+    const pw = im.width * k, ph = im.height * k, side = 7 * k, top = 7 * k, bottom = 32 * k;
+    const W = pw + side * 2, H = ph + top + bottom;
+    const c = makeCanvas(W, H), x = c.ctx;
+    x.imageSmoothingEnabled = false;
+    x.fillStyle = '#fbf6ea'; x.fillRect(0, 0, W, H);
+    x.fillStyle = 'rgba(150,110,60,0.07)';
+    const g = Math.max(1, k >> 1);
+    for (let i = 0; i < (W * H) / (g * g * 90); i++) x.fillRect(((i * 97) % Math.ceil(W / g)) * g, ((i * 57 + (i >> 4)) % Math.ceil(H / g)) * g, g, g);
+    x.fillStyle = '#2a1a10'; x.fillRect(side - g, top - g, pw + g * 2, ph + g * 2);
+    x.drawImage(im, side, top, pw, ph);
+    const ts = Math.max(2, Math.round(k * 0.8)), ss = Math.max(1, Math.round(k * 0.45));
+    const ty = top + ph + 5 * k;
+    drawText(x, name, side, ty, { scale: ts, color: '#3a2a4a' });
+    drawText(x, '★'.repeat(r) + ' ' + RARITY_NAME[r], side, ty + 10 * ts, { scale: ss, color: RARITY_COL[r], outline: '#3a2a4a' });
+    const now = new Date(), date = `'${String(now.getFullYear()).slice(2)} ${now.getMonth() + 1} ${now.getDate()}`;
+    drawText(x, 'Very Cool Aquarium Game', side, H - 5 * k - 7 * ss, { scale: ss, color: '#8a6a4a' });
+    drawText(x, `${date} · ${this.model().name}`, W - side, H - 5 * k - 7 * ss, { scale: ss, align: 'right', color: '#8a6a4a' });
+    // stamp and postmark
+    const st = makeCanvas(18, 20), sx = st.ctx;
+    sx.fillStyle = '#ffffff'; sx.fillRect(1, 1, 16, 18);
+    for (let i = 1; i < 17; i += 2) { sx.clearRect(i, 1, 1, 1); sx.clearRect(i, 18, 1, 1); }
+    sx.fillStyle = RARITY_COL[r]; sx.fillRect(3, 3, 12, 14);
+    drawStickerIcon(sx, 'fish', 9, 10);
+    const sk = Math.max(2, Math.round(k * 0.9)), stx = W - side - 18 * sk, sty = top + ph + 4 * k;
+    x.drawImage(st, stx, sty, 18 * sk, 20 * sk);
+    x.fillStyle = 'rgba(60,40,80,0.5)';
+    for (let a = 0; a < TAU; a += 0.2) x.fillRect(Math.round(stx - 4 * sk + Math.cos(a) * 9 * sk), Math.round(sty + 13 * sk + Math.sin(a) * 9 * sk), g, g);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 20; j++) x.fillRect(Math.round(stx - 26 * sk + j * sk), Math.round(sty + 8 * sk + i * 5 * sk + Math.sin(j * 0.8) * sk), g, g);
+    return c;
+  }
+
+  // Resolves the claude.ai downloads capability, or null outside the viewer.
+  downloads() {
+    if (!this.dlP) {
+      const cl = typeof window !== 'undefined' && window.claude;
+      this.dlP = cl && cl.use ? cl.use('downloads').catch(() => null) : Promise.resolve(null);
+    }
+    return this.dlP;
+  }
+
+  async exportSouvenir(key) {
+    const c = this.souvenir(key);
+    if (!c) return;
+    const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.92));
+    if (!blob) return;
+    const filename = `souvenir-${SPECIES[key][0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')}.jpg`;
+    const dl = await this.downloads();
+    if (dl) {
+      try { await dl.save({ filename, data: blob }); this.say('souvenir saved'); }
+      catch (err) {
+        const code = err && err.code;
+        if (code === 'rate_limited') this.say('one moment...');
+        else if (code !== 'declined') this.say('saving isn\'t available here');
+      }
+      return;
+    }
+    // outside the claude.ai viewer: an ordinary download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    this.say('souvenir saved');
   }
 }
 

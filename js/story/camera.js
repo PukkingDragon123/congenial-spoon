@@ -10,10 +10,10 @@ export const CAM_W = 48, CAM_H = 32;
 // leak always adds a light leak; dream deepens the vignette; clean cuts grain.
 export const MODELS = {
   instant: { name: 'Instant', price: 0, mult: 1, perk: 'the classic', frame: 0 },
-  disposable: { name: 'Disposable', price: 40, mult: 1.1, perk: 'light leaks, x1.1', frame: 0, leak: true },
-  toy: { name: 'Toy Cam', price: 120, mult: 1.25, perk: 'dreamy, x1.25', frame: 0, dream: true },
-  range: { name: 'Rangefinder', price: 250, mult: 1.4, perk: 'sharp, wider, x1.4', frame: 0.03 },
-  slr: { name: 'SLR', price: 480, mult: 1.7, perk: 'pro, widest, x1.7', frame: 0.06, clean: true },
+  disposable: { name: 'Disposable', price: 60, mult: 1.05, perk: 'light leaks, x1.05', frame: 0, leak: true },
+  toy: { name: 'Toy Cam', price: 150, mult: 1.1, perk: 'dreamy, x1.1', frame: 0, dream: true },
+  range: { name: 'Rangefinder', price: 320, mult: 1.2, perk: 'sharp, wider, x1.2', frame: 0.03 },
+  slr: { name: 'SLR', price: 600, mult: 1.35, perk: 'pro, widest, x1.35', frame: 0.06, clean: true },
 };
 
 // paint colours for the body and trim; the first few are free
@@ -23,7 +23,7 @@ export const PAINTS = {
   lilac: '#b8a0f0', red: '#e84a4a', yellow: '#ffd84a', navy: '#3a4a8a',
 };
 export const FREE_PAINTS = ['cream', 'black', 'silver', 'brown'];
-export const PAINT_PRICE = 15;
+export const PAINT_PRICE = 10;
 
 // stickers as tiny pixel sprites: rows of palette letters
 const SPR = {
@@ -41,7 +41,7 @@ const SPR_COL = {
   p: '#ff5a8a', P: '#ffc4d8', y: '#ffcf3a', Y: '#fff4b0', o: '#ff8a3a', O: '#1a1020', l: '#b890ff', L: '#f0e4ff',
   w: '#ffffff', W: '#fff4b0', K: '#1a1020', b: '#4a8aff', r: '#e84a4a',
 };
-export const STICKERS = { heart: 10, star: 10, fish: 10, jelly: 10, flower: 10, smile: 10, note: 10, crab: 10, sparkle: 10, photo: 25 };
+export const STICKERS = { heart: 8, star: 8, fish: 8, jelly: 8, flower: 8, smile: 8, note: 8, crab: 8, sparkle: 8, photo: 20 };
 
 // charms hang from the strap lug and swing
 const CHARM_SPR = {
@@ -54,10 +54,10 @@ const CHARM_SPR = {
   tree: ['G.G.G', 'GGtGG', '.ttt.', '.tKt.', '.ttt.', '.t.t.'],
 };
 const CHARM_COL = { ...SPR_COL, g: '#b8dc3a', G: '#5cae3e', t: '#b27e54' };
-export const CHARMS = { heart: 20, star: 20, bell: 30, fish: 30, jelly: 40, bean: 60, tree: 80 };
+export const CHARMS = { heart: 15, star: 15, bell: 20, fish: 20, jelly: 30, bean: 45, tree: 60 };
 
 export const PENS = ['#ffffff', '#1a1020', '#ff5a8a', '#ffcf4a', '#5ad08a', '#4aa8ff', '#a07aff', '#ff8a3a', '#8a5a34'];
-export const MARKER_PRICE = 30;
+export const MARKER_PRICE = 25;
 
 export function defaultCam() {
   return {

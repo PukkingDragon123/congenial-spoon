@@ -42,7 +42,7 @@ export const CONFIG = {
   noEscapes: ['nope', 'try again', 'are you sure?', 'hmm', 'okay fine'], // what "no" says as it swims away
 
   // Final card after "yes"
-  finale: '{to} ♥ {from}',
+  finale: 'I ♥ you',          // the ♥ is drawn as a little heart-shaped fish
   finaleSub: 'this is just the beginning',
 
   // Soundtrack. `music` is the file that plays and that the whole piece is

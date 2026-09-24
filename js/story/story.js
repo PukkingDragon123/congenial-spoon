@@ -1191,9 +1191,9 @@ export class Story {
     const fishW = (sp) => (B ? sp * 11 : 0);
     // one line if the bubbles can stay big, otherwise the names stack with
     // the fish between them
-    let sp = [6, 5, 4].find((q) => (A.w + (B ? B.w : 0)) * q + fishW(q) + (B ? q * 4 : 0) < W - 16);
+    let sp = [8, 7, 6, 5, 4].find((q) => (A.w + (B ? B.w : 0)) * q + fishW(q) + (B ? q * 4 : 0) < W - 16);
     const stacked = !sp;
-    if (stacked) sp = [6, 5, 4, 3, 2].find((q) => Math.max(A.w, B ? B.w : 0) * q < W - 12) || 2;
+    if (stacked) sp = [8, 7, 6, 5, 4, 3, 2].find((q) => Math.max(A.w, B ? B.w : 0) * q < W - 12) || 2;
     const bubbles = [], cy = Math.round(H * 0.44);
     const place = (P, x0, y0) => { for (const [px, py] of P.px) bubbles.push({ tx: Math.round(x0 + px * sp), ty: Math.round(y0 + py * sp) }); };
     let fish;
@@ -1238,7 +1238,7 @@ export class Story {
     if (fk > 0) {
       const size = Math.max(2, L.sp * 3 * ease.outBack(fk));
       const img = heartFish(size, t);
-      const fx = L.fish[0] + Math.sin(t * 1.3) * L.sp * 0.5, fy = L.fish[1] + Math.sin(t * 2.1) * L.sp * 0.6;
+      const fx = L.fish[0] + size * 0.3 + Math.sin(t * 1.3) * L.sp * 0.5, fy = L.fish[1] + Math.sin(t * 2.1) * L.sp * 0.6;
       const x = Math.round(fx - img.cx), y = Math.round(fy - img.cy);
       ctx.drawImage(img, x, y);
       if (fk >= 1 && t - (F.lastBub || 0) > 0.9) {
