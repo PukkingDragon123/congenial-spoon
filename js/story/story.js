@@ -4,8 +4,8 @@ import { CONFIG, fill } from '../config.js';
 import { CX, CY } from '../world/scene.js';
 import { Creature } from '../world/creatures.js';
 import { Particles, burstSparks, burstHearts, burstStars, popRing, bubbleSprite } from '../world/fx.js';
-import { drawText, textWidth, textPixelsBold, wrap, chars, charX, LINE_H } from '../font.js';
-import { bottleSprite, makePaper, drawRoll, drawSeal, drawBubbleButton, drawSpeaker, Sweep, BubbleCurtain, LightBloom } from './ui.js';
+import { drawText, textWidth, textPixels, textPixelsBold, wrap, chars, charX, LINE_H } from '../font.js';
+import { bottleSprite, makePaper, drawRoll, drawSeal, drawBubbleButton, drawSpeaker, Sweep, BubbleCurtain, LightBloom, bubbleLetter, heartFish } from './ui.js';
 import { SoundEngine } from '../audio.js';
 import { AnimeFX } from './anime.js';
 import { PhotoMode } from './photo.js';
@@ -1180,18 +1180,73 @@ export class Story {
     });
   }
 
+  // The names, spelled in bubbles in the middle of the screen, with a little
+  // heart-shaped fish swimming between them. The bubbles float up from below
+  // and gather into the letters, then keep bobbing like they're underwater.
+  finaleLayout() {
+    const F = this.finale, W = this.W, H = this.H, key = W + 'x' + H;
+    if (F.layout && F.layout.key === key) return F.layout;
+    const parts = fill(CONFIG.finale).split(/♥|❤/).map((p) => p.trim()).filter(Boolean);
+    const A = textPixels(parts[0] || ''), B = parts[1] ? textPixels(parts[1]) : null;
+    const fishW = (sp) => (B ? sp * 11 : 0);
+    // one line if the bubbles can stay big, otherwise the names stack with
+    // the fish between them
+    let sp = [6, 5, 4].find((q) => (A.w + (B ? B.w : 0)) * q + fishW(q) + (B ? q * 4 : 0) < W - 16);
+    const stacked = !sp;
+    if (stacked) sp = [6, 5, 4, 3, 2].find((q) => Math.max(A.w, B ? B.w : 0) * q < W - 12) || 2;
+    const bubbles = [], cy = Math.round(H * 0.44);
+    const place = (P, x0, y0) => { for (const [px, py] of P.px) bubbles.push({ tx: Math.round(x0 + px * sp), ty: Math.round(y0 + py * sp) }); };
+    let fish;
+    if (!stacked) {
+      const total = A.w * sp + (B ? fishW(sp) + sp * 4 + B.w * sp : 0);
+      let x = W / 2 - total / 2;
+      place(A, x, cy - 3.5 * sp);
+      x += A.w * sp + sp * 2;
+      fish = [x + fishW(sp) / 2, cy];
+      if (B) place(B, x + fishW(sp) + sp * 2, cy - 3.5 * sp);
+    } else {
+      const lh = 8 * sp;
+      place(A, W / 2 - (A.w * sp) / 2, cy - lh - sp * 5);
+      fish = [W / 2, cy];
+      if (B) place(B, W / 2 - (B.w * sp) / 2, cy + sp * 5);
+    }
+    for (const b of bubbles) {
+      b.sx = b.tx + (R() - 0.5) * 70; b.sy = H + 8 + R() * 90;
+      b.delay = R() * 0.8 + (b.tx / W) * 0.5; b.ph = R() * TAU;
+    }
+    const bottom = Math.max(...bubbles.map((b) => b.ty), fish[1] + sp * 3);
+    F.layout = { key, bubbles, sp, r: Math.max(1, Math.floor(sp / 2)), fish, bottom };
+    return F.layout;
+  }
+
   drawFinale(ctx) {
     const F = this.finale;
-    const str = fill(CONFIG.finale);
-    const sc = textWidth(str) * 3 < this.W - 24 ? 3 : textWidth(str) * 2 < this.W - 16 ? 2 : 1;
-    const wt = this.aq.curves.top(0) - 4;
-    const y = Math.max(6, Math.round(wt / 2 - (7 * sc) / 2) - 5);
-    const t = this.t;
-    drawText(ctx, str, this.W / 2, y, {
-      scale: sc, align: 'center', color: '#ffffff', outline: '#08265e', shadow: '#3aa8ff', alpha: F.a,
-      wave: (i) => Math.sin(t * 2.4 - i * 0.5) * 1.5,
-    });
-    drawText(ctx, fill(CONFIG.finaleSub), this.W / 2, y + 7 * sc + 6, { align: 'center', color: '#bfe4ff', outline: '#08265e', alpha: F.a * 0.9 });
+    if (F.t0 == null) F.t0 = this.t;
+    const L = this.finaleLayout(), t = this.t, age = t - F.t0;
+    const spr = bubbleLetter(L.r);
+    for (const b of L.bubbles) {
+      const k = clamp((age - b.delay) / 1.5);
+      if (k <= 0) continue;
+      const e = ease.outBack(k);
+      const drift = (1 - k) * Math.sin(age * 5 + b.ph) * 5;
+      const wave = Math.sin(t * 2.2 - b.tx * 0.035) * 1.4 * k;
+      const wob = Math.sin(t * 2.6 + b.ph) * 0.6 * k;
+      ctx.drawImage(spr, Math.round(lerp(b.sx, b.tx, e) + drift) - spr.o, Math.round(lerp(b.sy, b.ty, e) + wave + wob) - spr.o);
+    }
+    // the heart fish pops in once the names have gathered
+    const fk = clamp((age - 1.6) / 0.6);
+    if (fk > 0) {
+      const size = Math.max(2, L.sp * 3 * ease.outBack(fk));
+      const img = heartFish(size, t);
+      const fx = L.fish[0] + Math.sin(t * 1.3) * L.sp * 0.5, fy = L.fish[1] + Math.sin(t * 2.1) * L.sp * 0.6;
+      const x = Math.round(fx - img.cx), y = Math.round(fy - img.cy);
+      ctx.drawImage(img, x, y);
+      if (fk >= 1 && t - (F.lastBub || 0) > 0.9) {
+        F.lastBub = t;
+        this.fx.add({ kind: 'bubble', x: x + img.mouth[0] + 1, y: y + img.mouth[1] - 1, vx: 6, vy: -14, drag: 0.6, age: 0, life: 1.8, r: R() < 0.5 ? 1 : 2 });
+      }
+    }
+    drawText(ctx, fill(CONFIG.finaleSub), this.W / 2, Math.round(L.bottom + L.sp * 2 + 4), { align: 'center', color: '#e6f6ff', outline: '#08265e', alpha: clamp((age - 2) / 1) * F.a });
   }
 
   draw(ctx) {

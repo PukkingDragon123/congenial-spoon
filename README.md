@@ -23,7 +23,7 @@ schools, crabs wave their claws, and the light breathes with the song.
 5. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
 6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
 7. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
-8. **Finale**: a whale shark glides in carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
+8. **Finale**: a whale shark glides in carrying a heart of minnows, and in the middle of the screen bubbles float up and gather into the names, with a little heart-shaped fish swimming between them. The crabs line up to dance, and the minnows come home to frame the Buddha.
 
 ### Photo mode
 

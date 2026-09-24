@@ -302,3 +302,76 @@ export class LightBloom {
 }
 
 export { textWidth, LINE_H };
+
+// ------------------------------------------------------------ bubble title --
+// One bubble of a bubble-lettered word: a dark ring so it reads over the
+// bright tank, a pale glassy fill, and a white glint.
+const letterCache = new Map();
+export function bubbleLetter(r) {
+  let c = letterCache.get(r);
+  if (c) return c;
+  const s = r * 2 + 5, o = s / 2;
+  const b = new Buf(s, s);
+  const ring = hex('#08265e'), rim = hex('#7fd0ff'), fill = hex('#d6f2ff'), deep = hex('#a8e0ff'), hi = [255, 255, 255];
+  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+    const d = Math.hypot(x + 0.5 - o, y + 0.5 - o);
+    if (d <= r + 1.2) b.set(x, y, ring, 235);
+    if (d <= r + 0.3) b.set(x, y, d > r - 0.7 ? rim : y + 0.5 > o + r * 0.2 ? deep : fill, 255);
+  }
+  const g = Math.round(o - r * 0.45 - 0.5);
+  b.set(g, g, hi, 255);
+  if (r >= 3) { b.set(g + 1, g, hi, 200); b.set(g, g + 1, hi, 200); }
+  c = b.toCanvas();
+  c.o = Math.floor(s / 2);
+  letterCache.set(r, c);
+  return c;
+}
+
+// A little fish whose body is a heart: the point is its nose, the two lobes
+// are its back, a tail wags behind and an eye peeks out near the front.
+export function heartFish(size, t) {
+  const tail = size * 0.55, w = Math.ceil(size * 2.2 + tail + 4), h = Math.ceil(size * 2.3 + 4);
+  const c = makeCanvas(w, h), x = c.ctx;
+  const cx = tail + size * 1.1 + 2, cy = h / 2;
+  const d = x.createImageData(w, h);
+  const body = hex('#ff5a8a'), shadow = hex('#d8336a'), light = hex('#ffb4cc'), ink = hex('#08265e'), fin = hex('#ff8ab0');
+  const wag = Math.sin(t * 9) * 0.45;
+  const inside = (px, py) => {
+    // heart with its tip pointing right, lobes to the left
+    const u = (px - cx) / size, v = (py - cy) / size;
+    const X = v * 1.05, Y = -u * 1.05 + 0.2;
+    const q = X * X + Y * Y - 1;
+    if (q * q * q - X * X * Y * Y * Y <= 0) return 1;
+    // the tail: a fan behind the lobes, swinging
+    const tx = px - (cx - size * 1.05), ty = py - cy - wag * (cx - size * 1.05 - px) * 0.8;
+    if (tx < 0 && tx > -tail && Math.abs(ty) < (-tx / tail) * size * 0.75 + 1) return 2;
+    // a small dorsal fin
+    const fx = px - (cx - size * 0.1), fy = py - (cy - size * 1.02);
+    if (fy < 0 && fy > -size * 0.35 && fx > -size * 0.35 && fx < size * 0.25 + fy * 0.6) return 2;
+    return 0;
+  };
+  const m = new Uint8Array(w * h);
+  for (let py = 0; py < h; py++) for (let px = 0; px < w; px++) m[py * w + px] = inside(px + 0.5, py + 0.5);
+  for (let py = 0; py < h; py++) for (let px = 0; px < w; px++) {
+    const k = m[py * w + px];
+    const i = (py * w + px) * 4;
+    let col = null;
+    if (k) {
+      const edge = !m[py * w + px - 1] || !m[py * w + px + 1] || !m[(py - 1) * w + px] || !m[(py + 1) * w + px];
+      if (edge) col = ink;
+      else if (k === 2) col = fin;
+      else col = py > cy + size * 0.35 ? shadow : (px < cx - size * 0.2 && py < cy - size * 0.2) ? light : body;
+    }
+    if (col) { d.data[i] = col[0]; d.data[i + 1] = col[1]; d.data[i + 2] = col[2]; d.data[i + 3] = 255; }
+  }
+  x.putImageData(d, 0, 0);
+  // eye and a blush near the nose
+  const ex = Math.round(cx + size * 0.28), ey = Math.round(cy - size * 0.28);
+  x.fillStyle = '#ffffff'; x.fillRect(ex - 1, ey - 1, 3, 3);
+  x.fillStyle = '#08265e'; x.fillRect(ex, ey, 2, 2);
+  x.fillStyle = '#ffffff'; x.fillRect(ex, ey, 1, 1);
+  x.fillStyle = '#ff9ab8'; x.fillRect(Math.round(cx + size * 0.1), Math.round(cy + size * 0.12), 2, 1);
+  c.mouth = [Math.round(cx + size * 1.0), Math.round(cy)];
+  c.cx = cx; c.cy = cy;
+  return c;
+}
