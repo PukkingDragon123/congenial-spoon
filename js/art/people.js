@@ -168,7 +168,8 @@ function drawBack(R, C, ox, p) {
   for (const s of [-1, 1]) {
     const sx = ox + s * (C.sh - (C.girl ? 1.2 : 1.8)) + bx * 0.5, sy = shY + (C.girl ? 2.4 : 3);
     const tgt = s < 0 ? p.lhand : p.rhand;
-    const tx = tgt ? tgt[0] : sx + s * 1.8 + wt * 0.3, ty = tgt ? tgt[1] : sy + C.ua + C.fa - 1.2;
+    // at rest the arm hangs straight down at the side, not folded in
+    const tx = tgt ? tgt[0] : sx + s * 0.8 + wt * 0.3, ty = tgt ? tgt[1] : sy + C.ua + C.fa;
     const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, p.bend ? p.bend[s < 0 ? 0 : 1] : s > 0 ? 1 : -1);
     const r0 = C.girl ? 1.6 : 2.4, r1 = C.girl ? 1.3 : 1.8, r2 = C.girl ? 1.1 : 1.4;
     R.capsule(sx, sy, ex, ey, r0, r1, MAT.skin);
@@ -406,7 +407,7 @@ export class Couple {
     else if (this.mode === 'front') {
       const w = Math.sin(t * 14);
       const P = {
-        cheer: { lhand: [gx - 18 + w, gs - 18], rhand: [gx + 18 - w, gs - 18], bend: [1, -1] },
+        cheer: { lhand: [gx - 16 + w * 0.5, gs - 21], rhand: [gx + 16 - w * 0.5, gs - 21] }, // arms straight up, no flex
         wave: { rhand: [gx + 11 + Math.sin(t * 9) * 2, gs - 9] },
         surprised: { lhand: [gx - 11, gs + 9], rhand: [gx + 11, gs + 9] },
       }[this.pose] || {};
