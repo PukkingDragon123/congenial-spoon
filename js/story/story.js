@@ -151,7 +151,6 @@ export class Story {
   walkTo(x1, until) {
     const st = this.stage, c = this.aq.couple;
     c.mode = 'walk';
-    c.walkHold = c.hold > 0.5 ? 1 : 0;
     let v = 0;
     return this.until(() => {
       const d = x1 - st.coupleX;
@@ -180,6 +179,17 @@ export class Story {
     c.mode = 'back';
     await this.tween(0.2, (k) => { c.flip = 0.55 + 0.45 * k; }, ease.outBack);
     c.flip = 1;
+  }
+
+  // A small idle gesture in the back view (c.point / c.glance): ease in,
+  // hold for a moment, ease out.
+  gesture(key, at, hold) {
+    const c = this.aq.couple;
+    return this.atSong(at).then(async () => {
+      await this.tween(0.5, (k) => { c[key] = k; }, ease.inOutSine);
+      await this.wait(hold);
+      await this.tween(0.5, (k) => { c[key] = 1 - k; }, ease.inOutSine);
+    });
   }
 
   heartPop(st, x, y, big = false) {
@@ -270,7 +280,7 @@ export class Story {
     this.camX = CX;
     this.setStage(aq);
     aq.coupleX = CX;
-    c.flip = 1; c.moving = 0; c.mode = 'back'; c.hug = 0;
+    c.flip = 1; c.moving = 0; c.mode = 'back'; c.hug = 0; c.point = 0; c.glance = 0;
     c.hold = together ? 1 : 0; c.lean = together ? 1 : 0;
   }
 
@@ -281,30 +291,23 @@ export class Story {
     this.setStage(room);
     room.cam.x = camFrom;
     room.coupleX = coupleFrom;
-    c.hold = 0; c.lean = 0; c.hug = 0; c.mode = 'walk'; c.flip = 1;
+    c.hold = 0; c.lean = 0; c.hug = 0; c.point = 0; c.glance = 0; c.mode = 'walk'; c.flip = 1;
   }
 
-  // Chapter 1: the jellyfish hall. Just two people visiting an aquarium.
+  // Chapter 1: the jellyfish hall. Just two people visiting an aquarium, not
+  // holding hands yet: she points at the jellies, he looks at her instead.
   async jellyScene() {
-    const c = this.aq.couple;
     this.tween(14, (k) => { this.camX = lerp(CX - 260, CX, k); }, ease.inOutSine);
     await this.atSong(8.5);
     await this.walkTo(CX, 16);
     await this.turnToGlass();
-    await this.atSong(19.6);
-    await this.tween(2.4, (k) => { c.hold = k; }, ease.inOutCubic);
-    this.tween(2.6, (k) => { c.lean = k; }, ease.inOutSine);
-    await this.atSong(21.2);
-    this.cbu = { a: 0 };
-    { const C = this.cbu; this.tween(0.5, (k) => { C.a = k; }, ease.outBack); }
-    await this.atSong(27.5);
-    { const C = this.cbu; this.tween(0.6, (k) => { C.a = 1 - k; }).then(() => { if (this.cbu === C) this.cbu = null; }); }
+    this.gesture('point', 17.2, 2.0);
+    this.gesture('glance', 20.2, 1.8);
   }
 
   // Chapter 2: the clownfish reef.
   async reefScene() {
     const reef = this.rooms.reef;
-    const c = this.aq.couple;
     if (reef && this.stage !== reef) {
       await this.atSong(23.6);
       this.sound.sfx('chime');
@@ -313,14 +316,15 @@ export class Story {
     this.tween(10, (k) => { this.camX = lerp(CX - 160, CX, k); }, ease.inOutSine);
     await this.walkTo(CX - 20, 29.5);
     await this.turnToGlass();
-    await this.tween(1.6, (k) => { c.hold = k; }, ease.inOutCubic);
+    this.gesture('point', 31.0, 2.4);
+    // he looks over at her, and a little heart gives him away
+    this.gesture('glance', 36.8, 2.2);
     await this.atSong(37.6);
-    this.heartPop(this.stage, this.stage.coupleX, this.stage.coupleY - 34);
-    this.tween(2.4, (k) => { c.lean = k; }, ease.inOutSine);
+    this.heartPop(this.stage, this.stage.coupleX - 8, this.stage.coupleY - 80);
   }
 
-  // Chapter 3: along the great Buddha tank, hand in hand, arriving at the
-  // middle of the window right as the chorus hits.
+  // Chapter 3: along the great Buddha tank, arriving at the middle of the
+  // window right as the chorus hits.
   async mainWalk() {
     const aq = this.aq, c = aq.couple;
     await this.atSong(41.4);
@@ -330,7 +334,7 @@ export class Story {
       this.camX = CX - 520;
       this.setStage(aq);
       aq.coupleX = CX - 470;
-      c.mode = 'walk'; c.hold = 1; c.lean = 0; c.hug = 0; c.flip = 1;
+      c.mode = 'walk'; c.hold = 0; c.lean = 0; c.hug = 0; c.flip = 1;
     });
     this.tween(13.5, (k) => { this.camX = lerp(CX - 520, CX, k); }, ease.inOutSine);
     await this.walkTo(CX, 56.6);
@@ -341,7 +345,7 @@ export class Story {
     const aq = this.aq, c = aq.couple, p = this.post.p;
     const s = Math.min(96, this.W * 0.36);
     const cx = CX + 34, cy = 146, cz = 0.3;
-    if (this.stage !== aq) this.enterMainTank(true);
+    if (this.stage !== aq) this.enterMainTank(false);
     await this.atSong(55.0);
     this.formHeart(aq.bait, cx, cy, cz, s, aq.t, true);
     for (const f of aq.bait) f.formFace = 0;
@@ -357,7 +361,18 @@ export class Story {
     this.heartPop(aq, aq.coupleX, aq.coupleY - 62, true);
     this.sound.sfx('sparkle');
     this.heartSparkle = { cx, cy, cz, s };
-    this.tween(3, (k) => { p.tint = [1 + 0.06 * k, 1 - 0.01 * k, 1 + 0.03 * k]; p.bloom = 0.75 + 0.3 * k; });
+    // the heart's pink glow falls on them
+    const blue = aq.coupleLight.slice(), pink = [255, 160, 210];
+    this.tween(3, (k) => {
+      p.tint = [1 + 0.06 * k, 1 - 0.01 * k, 1 + 0.03 * k]; p.bloom = 0.75 + 0.3 * k;
+      aq.coupleLight = blue.map((v, i) => lerp(v, pink[i], k * 0.7));
+    });
+    // "this could be us", pointing at them as they face each other
+    this.atSong(59.6).then(() => {
+      const C = this.cbu = { a: 0 };
+      this.tween(0.5, (k) => { C.a = k; }, ease.outBack);
+      this.atSong(69.5).then(() => this.tween(0.6, (k) => { C.a = 1 - k; })).then(() => { if (this.cbu === C) this.cbu = null; });
+    });
     aq.sendWave(CX - 800, 1, { speed: 780, amp: 6, width: 200, life: 3 });
     burstStars(aq.fx, cx, cy, 18, { speed: 70, size: 6 });
     this.chorus = true;
@@ -378,7 +393,11 @@ export class Story {
     this.heartRain = 0;
     this.releaseForm(aq.bait, 40, [cx, cy + 14]);
     for (const k of crabs) { k.form = null; k.react(cx, aq.floorY(0.1), 0.8); }
-    this.tween(2, (k) => { glow.a = 0.5 * (1 - k); p.tint = [1.06 - 0.03 * k, 0.99, 1.03 - 0.015 * k]; }).then(() => { aq.glows.splice(aq.glows.indexOf(glow), 1); });
+    const lit = aq.coupleLight.slice();
+    this.tween(2, (k) => {
+      glow.a = 0.5 * (1 - k); p.tint = [1.06 - 0.03 * k, 0.99, 1.03 - 0.015 * k];
+      aq.coupleLight = lit.map((v, i) => lerp(v, blue[i], k));
+    }).then(() => { aq.glows.splice(aq.glows.indexOf(glow), 1); });
     // back to the glass, hand in hand now
     await this.tween(0.16, (k) => { c.flip = 1 - 0.45 * k; });
     c.mode = 'back'; c.hold = 1; c.lean = 0; c.hug = 0;
@@ -756,14 +775,15 @@ export class Story {
     const text = 'this could be us 👀';
     const tw = textWidth(text);
     const bob = Math.round(Math.sin(this.t * 3) * 1.5);
-    let tx = Math.round(cx + 34), ty = Math.round(cy - 34 + bob);
-    if (tx + tw + 18 > this.W - 4) { tx = Math.round(cx - 34 - tw - 16); }
-    const leftSide = tx < cx;
+    // beside them if there's room, otherwise centred above their heads
+    let tx = Math.round(cx + 34), ty = Math.round(cy - 34 + bob), side = 1;
+    if (tx + tw + 18 > this.W - 4) { tx = Math.round(cx - 34 - tw - 16); side = -1; }
+    if (tx < 4) { tx = Math.round(clamp(cx - tw / 2, 4, this.W - tw - 4)); ty = Math.round(cy - 30 + bob); side = 0; }
     ctx.globalAlpha = C.a;
     drawText(ctx, text, tx, ty, { color: '#ffffff', outline: '#0a1a44', shadow: '#3aa8ff' });
     // a hand-drawn arrow curving down to them
-    const sx = leftSide ? tx + tw - 4 : tx + 4, sy = ty + 10;
-    const hx = cx + (leftSide ? -10 : 10), hy = cy - 4;
+    const sx = side < 0 ? tx + tw - 4 : side > 0 ? tx + 4 : Math.round(clamp(cx, tx + 4, tx + tw - 4)), sy = ty + 10;
+    const hx = cx + side * 10, hy = cy - 4;
     ctx.fillStyle = '#ffffff';
     let lx = sx, ly = sy;
     for (let k = 1; k <= 16; k++) {

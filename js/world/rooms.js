@@ -26,6 +26,7 @@ class Room {
     this.couple = couple;
     this.coupleX = CX;
     this.coupleY = 352;
+    this.coupleLight = [150, 205, 255]; // the tank's light on the couple
     this.pulse = 0;
     this.energy = 0;
     this.waves = [];
@@ -253,7 +254,7 @@ class Room {
       ctx.globalCompositeOperation = 'source-over';
     }
     // the couple + reflection
-    const img = this.couple.render();
+    const img = this.couple.render(this.coupleLight, this.coupleX, this.pulse);
     const [cx, cy] = this.toScreen(this.coupleX, this.coupleY, 0);
     const X = Math.round(cx - this.couple.R.ox), Y = Math.round(cy - this.couple.R.oy);
     // a soft shadow where they stand
@@ -289,6 +290,7 @@ export class JellyRoom extends Room {
   constructor(couple) {
     super(couple);
     this.rimCols = [hex('#d8b4ff'), hex('#8a5ad8'), hex('#3a2070')];
+    this.coupleLight = [205, 165, 255];
     this.wallCol = [hex('#140a2e'), hex('#05030e')];
     this.floorCol = [hex('#0e0824'), hex('#020106')];
     this.reflA = 0.34;
@@ -592,6 +594,7 @@ export class ReefRoom extends Room {
   constructor(couple) {
     super(couple);
     this.rimCols = [hex('#a8e8ff'), hex('#3a8ad0'), hex('#123a70')];
+    this.coupleLight = [140, 228, 255];
     this.wallCol = [hex('#0a1838'), hex('#030814')];
     this.floorCol = [hex('#081632'), hex('#02050c')];
     this.reflA = 0.3;

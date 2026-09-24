@@ -41,6 +41,7 @@ export class Aquarium {
     this.couple = new Couple();
     this.coupleX = CX - 260;
     this.coupleY = 352;
+    this.coupleLight = [130, 200, 255]; // the tank's light on the couple
     this.heartLight = 0;
     this.light = 1;
     // music reactivity + travelling waves through the tank
@@ -544,7 +545,7 @@ export class Aquarium {
       ctx.globalCompositeOperation = 'source-over';
     }
     // the couple + reflection
-    const img = this.couple.render();
+    const img = this.couple.render(this.coupleLight, this.coupleX, this.pulse);
     const [cx, cy] = this.toScreen(this.coupleX, this.coupleY, 0);
     const X = Math.round(cx - this.couple.R.ox), Y = Math.round(cy - this.couple.R.oy);
     // a soft shadow where they stand
