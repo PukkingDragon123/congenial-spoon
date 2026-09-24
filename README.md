@@ -67,6 +67,17 @@ index.html?sound=0          # start muted
 Keep `fishWords` short, about 2–10 characters per line. Use `\n` for a second
 line.
 
+## Water
+
+The tank glass has live water on it: a 2D wave simulation (`js/world/water.js`)
+over a coarse grid, disturbed by every fish swimming through, by taps, by the
+beat, by the odd drip and by a slow swell under the surface. Its slopes are
+sent to the compositor, which refracts the tank through them (sampling from
+texel centres, so still water stays pixel-crisp and moving water slides
+smoothly), adds glints where the surface catches the light, and lays soft
+diagonal reflections across the glass. The couple, who stand on this side of
+the glass, are masked out, and their faint reflection shows in it behind them.
+
 ## Run it
 
 It's a static site with ES modules, so serve it over HTTP. Opening the file

@@ -277,6 +277,7 @@ export class Story {
       const d = Math.hypot(sx - x, sy - y);
       if (d < r && d < bd) { bd = d; best = c; }
     }
+    if (this.water) this.water.splash(x, y, best ? 2.6 : 3.4, 3.2);
     if (!best) {
       // a tap in empty water still makes a splash
       popRing(this.fx, x, y, { r1: 12, life: 0.4 });

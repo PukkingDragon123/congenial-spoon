@@ -70,7 +70,7 @@ function ik(sx, sy, tx, ty, a, b, bend) {
 }
 
 // Proportions: about six and a half heads tall, legs half the height.
-export const GUY = { headRx: 5.0, headRy: 5.7, neck: 2.8, sh: 10, torso: 22, leg: 36, foot: 4.4, ua: 12.8, fa: 12.2, girl: false };
+export const GUY = { headRx: 5.0, headRy: 5.7, neck: 2.8, sh: 8.4, torso: 22, leg: 36, foot: 4.4, ua: 12.8, fa: 12.2, girl: false };
 export const GIRL = { headRx: 4.8, headRy: 5.4, neck: 2.8, sh: 7.4, torso: 19.5, leg: 32, foot: 3.8, ua: 11.2, fa: 10.6, girl: true };
 
 // ----------------------------------------------------------------- gait --
@@ -154,15 +154,14 @@ function drawBack(R, C, ox, p) {
       (x, y) => (y > waistY - 2 && Math.round(x - ox) % 3 === 0 ? -1 : 0));
     R.capsule(ox - 5.8 + bx, shY + 1.4, ox + 5.8 + bx, shY + 1.4, 1.6, 1.6, MAT.tee);
   } else {
-    // broad shoulders tapering to the waist: a fitted tee
-    const hemY = hipY + 2.6, b = bx * 0.5;
-    R.ellipse(ox + bx * 0.6, hipY, 5.2, 3.4, MAT.bottom);
+    // a lean build: shoulders only a little wider than the hips, a loose tee
+    const hemY = hipY + 3, b = bx * 0.5;
+    R.ellipse(ox + bx * 0.6, hipY, 5, 3.4, MAT.bottom);
     R.poly([
-      [ox - 3.6 + b, shY - 1.2], [ox + 3.6 + b, shY - 1.2], [ox + C.sh - 0.6 + b, shY + 1.6], [ox + C.sh + 0.4 + b, shY + 4.6], [ox + 8.2 + b, shY + 8.5],
-      [ox + 6.4 + b * 0.6, hipY - 3], [ox + 6.6, hemY], [ox - 6.6, hemY], [ox - 6.4 + b * 0.6, hipY - 3],
-      [ox - 8.2 + b, shY + 8.5], [ox - C.sh - 0.4 + b, shY + 4.6], [ox - C.sh + 0.6 + b, shY + 1.6],
+      [ox - 3.4 + b, shY - 1], [ox + 3.4 + b, shY - 1], [ox + C.sh - 1 + b, shY + 1.4], [ox + C.sh - 0.4 + b, shY + 4.4], [ox + 6.8 + b, shY + 9],
+      [ox + 6.2 + b * 0.6, hipY - 3], [ox + 6.4, hemY], [ox - 6.4, hemY], [ox - 6.2 + b * 0.6, hipY - 3],
+      [ox - 6.8 + b, shY + 9], [ox - C.sh + 0.4 + b, shY + 4.4], [ox - C.sh + 1 + b, shY + 1.4],
     ], MAT.top);
-    for (const s2 of [-1, 1]) R.ellipse(ox + b + s2 * (C.sh - 1.4), shY + 2.6, 2.6, 2.4, MAT.top);
   }
   // arms
   for (const s of [-1, 1]) {
@@ -171,16 +170,16 @@ function drawBack(R, C, ox, p) {
     // at rest the arm hangs straight down at the side, not folded in
     const tx = tgt ? tgt[0] : sx + s * 0.8 + wt * 0.3, ty = tgt ? tgt[1] : sy + C.ua + C.fa;
     const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, p.bend ? p.bend[s < 0 ? 0 : 1] : s > 0 ? 1 : -1);
-    const r0 = C.girl ? 1.6 : 2.4, r1 = C.girl ? 1.3 : 1.8, r2 = C.girl ? 1.1 : 1.4;
+    const r0 = C.girl ? 1.6 : 1.9, r1 = C.girl ? 1.3 : 1.5, r2 = C.girl ? 1.1 : 1.3;
     R.capsule(sx, sy, ex, ey, r0, r1, MAT.skin);
     R.capsule(ex, ey, wx, wy, r1, r2, MAT.skin);
     R.ellipse(wx + Math.sign(wx - ex) * 0.5, wy + 1.1, r2 + 0.4, r2 + 0.8, MAT.skin);
     if (C.girl) R.capsule(sx, sy, lerp(sx, ex, 0.35), lerp(sy, ey, 0.35), 2.5, 2.2, MAT.tee);
-    else R.capsule(sx, sy, lerp(sx, ex, 0.4), lerp(sy, ey, 0.4), 2.9, 2.7, MAT.top);
+    else R.capsule(sx, sy, lerp(sx, ex, 0.4), lerp(sy, ey, 0.4), 2.4, 2.2, MAT.top);
   }
   // neck & head
   const hx = ox + headX, rot = (p.tilt || 0) * 0.25;
-  R.capsule(ox + bx * 0.5, shY + 1, hx, headY + 3, C.girl ? 2.0 : 2.3, C.girl ? 1.8 : 2.1, MAT.skin);
+  R.capsule(ox + bx * 0.5, shY + 1, hx, headY + 3, C.girl ? 2.0 : 2.0, C.girl ? 1.8 : 1.8, MAT.skin);
   R.ellipse(hx - C.headRx + 0.2, headY + 1.2, 1.0, 1.6, MAT.skin);
   R.ellipse(hx + C.headRx - 0.2, headY + 1.2, 1.0, 1.6, MAT.skin);
   if (!C.girl) {
@@ -257,12 +256,12 @@ function drawSide(R, C, ox, f, p) {
       ex = sx + Math.sin(up) * C.ua * f; ey = sy + Math.cos(up) * C.ua;
       wx = ex + Math.sin(up + el) * C.fa * f; wy = ey + Math.cos(up + el) * C.fa;
     }
-    const r0 = C.girl ? 1.6 : 2.4, r1 = C.girl ? 1.3 : 1.8, r2 = C.girl ? 1.1 : 1.4;
+    const r0 = C.girl ? 1.6 : 1.9, r1 = C.girl ? 1.3 : 1.5, r2 = C.girl ? 1.1 : 1.3;
     R.capsule(sx, sy, ex, ey, r0, r1, MAT.skin, sh);
     R.capsule(ex, ey, wx, wy, r1, r2, MAT.skin, sh);
     R.ellipse(wx, wy + 0.8, r2 + 0.4, r2 + 0.8, MAT.skin, sh);
     if (C.girl) R.capsule(sx, sy, lerp(sx, ex, 0.35), lerp(sy, ey, 0.35), 2.4, 2.1, MAT.tee, sh);
-    else R.capsule(sx, sy, lerp(sx, ex, 0.4), lerp(sy, ey, 0.4), 2.9, 2.6, MAT.top, sh);
+    else R.capsule(sx, sy, lerp(sx, ex, 0.4), lerp(sy, ey, 0.4), 2.4, 2.1, MAT.top, sh);
   };
   armFor(1, -1);
   drawLeg(legs[1], -1);
@@ -285,8 +284,8 @@ function drawSide(R, C, ox, f, p) {
     R.ellipse(X(-0.4), hipY - 0.4, 4.6, 3.4, MAT.bottom);
     // fitted tee: chest out front, shoulder blade behind, narrowing to the waist
     R.poly([
-      [X(shX - 3.8), shY - 0.4], [X(shX + 3.2), shY + 0.2], [X(shX + 5.4), shY + 4.4], [X(shX * 0.8 + 5.0), shY + 9], [X(shX * 0.4 + 4.0), hipY - 3],
-      [X(4.4), hipY + 2.4], [X(-4.6), hipY + 2.4], [X(shX * 0.4 - 3.8), hipY - 4.5], [X(shX * 0.8 - 5.0), shY + 7], [X(shX - 5.2), shY + 3],
+      [X(shX - 3.4), shY - 0.3], [X(shX + 3), shY + 0.2], [X(shX + 4.2), shY + 4.4], [X(shX * 0.8 + 4.2), shY + 9], [X(shX * 0.4 + 4.0), hipY - 3],
+      [X(4.4), hipY + 2.6], [X(-4.4), hipY + 2.6], [X(shX * 0.4 - 3.8), hipY - 4.5], [X(shX * 0.8 - 4.4), shY + 7], [X(shX - 4.4), shY + 3],
     ], MAT.top);
   }
   // neck & head: the face stays in shadow, the fringe falling over the eyes

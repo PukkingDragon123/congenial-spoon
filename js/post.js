@@ -9,7 +9,8 @@ void main(){ vUv = p * 0.5 + 0.5; vUv.y = 1.0 - vUv.y; gl_Position = vec4(p, 0.0
 const FS = `#version 300 es
 precision highp float;
 in vec2 vUv; out vec4 o;
-uniform sampler2D uW, uU;
+uniform sampler2D uW, uU, uN;
+uniform float uWater;   // strength of the water surface (0 = off)
 uniform vec2 uRes;
 uniform float uTime, uBlur, uBloom, uWarp, uDim, uFade, uVig, uUIGlow, uSat;
 uniform vec4 uRip;      // center.xy (uv), radius, strength
@@ -56,6 +57,19 @@ void main(){
   uv = clamp(uv, vec2(0.0), vec2(0.99999));
   ivec2 ip = ivec2(floor(uv * uRes));
   vec3 w = texelFetch(uW, ip, 0).rgb;
+  // water: refract the tank through the wave slopes. Sampling from the texel
+  // centre keeps still water pixel-crisp; as the surface moves, the image
+  // slides smoothly between texels instead of jumping.
+  vec4 nm = texture(uN, vUv);
+  float wm = nm.b * uWater;
+  vec2 wn = (nm.rg - 0.5) * 2.0;
+  if (wm > 0.01) {
+    vec2 base = (vec2(ip) + 0.5) / uRes;
+    vec2 off = wn * wm * 3.0 / uRes;
+    w = mix(w, textureLod(uW, clamp(base + off, vec2(0.0), vec2(0.99999)), 0.0).rgb, clamp(wm * 4.0, 0.0, 1.0));
+    // crests a touch brighter, troughs a touch darker
+    w *= 1.0 + (nm.a - 0.5) * 0.18 * wm;
+  }
   if (uBlur > 0.001) w = mix(w, blurred(uW, uv, 1.2 + uBlur * 1.6), clamp(uBlur * 1.4, 0.0, 1.0));
   vec3 bw = bloom(uW, uv);
   w += max(bw - 0.5, 0.0) * uBloom * 1.3 + bw * uBloom * 0.08;
@@ -68,6 +82,17 @@ void main(){
   vec3 col = mix(w, u.rgb, u.a);
   col += ub * uUIGlow;
   col += ripLight * vec3(0.6, 0.85, 1.0);
+  if (wm > 0.01) {
+    // glints where the moving surface catches the light
+    vec3 N = normalize(vec3(-wn * 1.8, 1.0));
+    float sp = pow(clamp(dot(N, normalize(vec3(-0.35, -0.75, 0.56))), 0.0, 1.0), 14.0);
+    col += sp * smoothstep(0.08, 0.5, length(wn)) * wm * vec3(0.7, 0.9, 1.0) * 0.22;
+    // the glass itself: two soft diagonal streaks of reflected hall light
+    float g = vUv.x * asp * 0.55 + vUv.y * 0.42;
+    float s1 = exp(-pow((fract(g * 0.9 + 0.12) - 0.5) / 0.05, 2.0));
+    float s2 = exp(-pow((fract(g * 0.9 + 0.2) - 0.5) / 0.018, 2.0));
+    col += (s1 * 0.045 + s2 * 0.035) * wm * vec3(0.8, 0.9, 1.0);
+  }
   // vignette
   vec2 q = vUv - 0.5; q.x *= asp * 0.8;
   col *= 1.0 - uVig * smoothstep(0.35, 1.05, length(q));
@@ -119,8 +144,15 @@ export class Post {
       return t;
     };
     this.tW = mk(); this.tU = mk();
+    this.tN = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.tN);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128, 128, 0, 128]));
     this.u = {};
-    for (const n of ['uW', 'uU', 'uRes', 'uTime', 'uBlur', 'uBloom', 'uWarp', 'uDim', 'uFade', 'uVig', 'uUIGlow', 'uSat', 'uRip', 'uFlash', 'uTint']) this.u[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['uW', 'uU', 'uN', 'uWater', 'uRes', 'uTime', 'uBlur', 'uBloom', 'uWarp', 'uDim', 'uFade', 'uVig', 'uUIGlow', 'uSat', 'uRip', 'uFlash', 'uTint']) this.u[n] = gl.getUniformLocation(prog, n);
     return true;
   }
 
@@ -130,7 +162,7 @@ export class Post {
     if (this.ctx) this.ctx.imageSmoothingEnabled = false;
   }
 
-  render(world, ui, time) {
+  render(world, ui, time, water = null) {
     const p = this.p;
     if (!this.gl) {
       const c = this.ctx;
@@ -155,8 +187,12 @@ export class Post {
     gl.bindTexture(gl.TEXTURE_2D, this.tU);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ui);
     gl.generateMipmap(gl.TEXTURE_2D);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.tN);
+    if (water && water.tex) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, water.gw, water.gh, 0, gl.RGBA, gl.UNSIGNED_BYTE, water.tex);
     const u = this.u;
-    gl.uniform1i(u.uW, 0); gl.uniform1i(u.uU, 1);
+    gl.uniform1i(u.uW, 0); gl.uniform1i(u.uU, 1); gl.uniform1i(u.uN, 2);
+    gl.uniform1f(u.uWater, water && water.tex ? water.strength : 0);
     gl.uniform2f(u.uRes, world.width, world.height);
     gl.uniform1f(u.uTime, time);
     gl.uniform1f(u.uBlur, p.blur);

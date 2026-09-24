@@ -7,6 +7,7 @@ import { Story } from './story/story.js';
 import { drawText } from './font.js';
 import { bubbleSprite } from './world/fx.js';
 import { B, pumpWarm } from './art/budget.js';
+import { Water } from './world/water.js';
 
 const params = new URLSearchParams(location.search);
 const SPEED = +(params.get('speed') || 1);
@@ -17,6 +18,7 @@ const world = makeCanvas(2, 2);
 const ui = makeCanvas(2, 2);
 const aq = new Aquarium();
 const rooms = { jelly: new JellyRoom(aq.couple), reef: new ReefRoom(aq.couple) };
+const water = new Water();
 let story = null;
 let W = 0, H = 0, S = 1, DPR = 1;
 
@@ -35,6 +37,7 @@ function resize() {
   view.style.height = (H * s) / DPR + 'px';
   aq.resize(W, H);
   for (const r of Object.values(rooms)) r.resize(W, H);
+  water.resize(W, H);
   if (story) story.resize(W, H);
 }
 
@@ -94,6 +97,7 @@ async function boot() {
   requestAnimationFrame(loaderLoop);
   story = new Story(aq, post, { debug: params.get('scene'), rooms });
   story.worldCanvas = world; // photo mode prints from the rendered tank
+  story.water = water;
   story.sound.sim = params.get('sim') === '1';
   const song = story.sound.load(); // decode in parallel with the art
   await rooms.jelly.build((p) => { loadP = p * 0.6; });
@@ -122,7 +126,8 @@ async function boot() {
     story.stage.render(world.ctx);
     ui.ctx.clearRect(0, 0, W, H);
     story.draw(ui.ctx);
-    post.render(world, ui, time);
+    water.update(dt, loading ? null : story.stage, story.sound.pulse);
+    post.render(world, ui, time, water);
     pumpWarm(raw < 0.02 ? 5 : 2);
     requestAnimationFrame(loop);
   };

@@ -261,6 +261,12 @@ class Room {
     ctx.fillStyle = 'rgba(0,4,18,0.38)';
     ctx.beginPath(); ctx.ellipse(Math.round(cx), Math.round(cy) + 1, 22, 2.5, 0, 0, TAU); ctx.fill();
     const fs = this.couple.flip;
+    // their faint reflection in the tank glass behind them: a little smaller
+    // and higher, as if the dark hall made the glass a soft mirror
+    ctx.globalAlpha = 0.14;
+    ctx.setTransform(fs * 0.93, 0, 0, 0.93, Math.round(cx) + 3, Math.round(cy) - 9 - (this.couple.hop || 0) * 0.9);
+    ctx.drawImage(img, -this.couple.R.ox, -this.couple.R.oy);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 0.28;
     ctx.setTransform(fs, 0, 0, -0.55, Math.round(cx), Math.round(cy) + 1);
     ctx.drawImage(img, -this.couple.R.ox, -this.couple.R.oy);
