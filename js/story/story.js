@@ -7,6 +7,8 @@ import { Particles, burstSparks, burstHearts, burstStars, popRing, bubbleSprite 
 import { drawText, textWidth, textPixelsBold, wrap, chars, charX, LINE_H } from '../font.js';
 import { bottleSprite, makePaper, drawRoll, drawSeal, drawBubbleButton, drawSpeaker, Sweep, BubbleCurtain, LightBloom } from './ui.js';
 import { SoundEngine } from '../audio.js';
+import { AnimeFX } from './anime.js';
+import { PhotoMode } from './photo.js';
 
 const WHALE_Z = 0.62;
 
@@ -19,6 +21,8 @@ export class Story {
     this.tweens = [];
     this.fx = new Particles();
     this.fxBack = new Particles();
+    this.anime = new AnimeFX();
+    this.meetX = null; // where she stands before they meet
     this.sound = new SoundEngine(CONFIG.sound, CONFIG.music);
     this.rooms = opts.rooms || {};
     this.stage = this.rooms.jelly || aq;   // whichever tank is on screen
@@ -54,6 +58,7 @@ export class Story {
     post.p.blur = 1;
     post.p.dim = 0.4;
     this.debug = opts.debug;
+    this.photo = new PhotoMode(this);
   }
 
   start() { this.run(this.debug).catch((e) => console.error(e)); }
@@ -181,6 +186,16 @@ export class Story {
     c.flip = 1;
   }
 
+  // Screen point just above his or her head, for emotes and effects.
+  headAt(who = 'guy') {
+    return () => {
+      const st = this.stage, c = this.aq.couple, gh = c.gap / 2;
+      const x = st.coupleX + (who === 'guy' ? -gh : gh + (c.apart ? c.girlDX : 0));
+      const [sx, sy] = st.toScreen(x, st.coupleY - (who === 'guy' ? 76 : 70) - (who === 'guy' ? c.hop : 0), 0);
+      return [Math.round(sx), Math.round(sy)];
+    };
+  }
+
   // A small idle gesture in the back view (c.point / c.glance): ease in,
   // hold for a moment, ease out.
   gesture(key, at, hold) {
@@ -240,6 +255,7 @@ export class Story {
     this.title = null;
     this.fxBack.clear();
     this.enterRoom(this.rooms.jelly || this.aq, CX - 260, CX - 320);
+    this.aq.couple.apart = true; this.aq.couple.girlOn = false; // he comes on his own
     this.hud = true;
     this.stage.sendWave(CX - 700, 1, { speed: 900, amp: 7, width: 220, life: 3 });
     await this.until(() => tr.done);
@@ -281,6 +297,7 @@ export class Story {
     this.setStage(aq);
     aq.coupleX = CX;
     c.flip = 1; c.moving = 0; c.mode = 'back'; c.hug = 0; c.point = 0; c.glance = 0;
+    c.apart = false; c.girlDX = 0; c.hop = 0; this.meetX = null;
     c.hold = together ? 1 : 0; c.lean = together ? 1 : 0;
   }
 
@@ -294,30 +311,84 @@ export class Story {
     c.hold = 0; c.lean = 0; c.hug = 0; c.point = 0; c.glance = 0; c.mode = 'walk'; c.flip = 1;
   }
 
-  // Chapter 1: the jellyfish hall. Just two people visiting an aquarium, not
-  // holding hands yet: she points at the jellies, he looks at her instead.
+  // Chapter 1: the jellyfish hall. He's here on his own, pointing out the
+  // jellies to nobody.
   async jellyScene() {
+    const c = this.aq.couple;
+    if (!c.apart) { c.apart = true; c.girlOn = false; }
     this.tween(14, (k) => { this.camX = lerp(CX - 260, CX, k); }, ease.inOutSine);
     await this.atSong(8.5);
     await this.walkTo(CX, 16);
     await this.turnToGlass();
-    this.gesture('point', 17.2, 2.0);
-    this.gesture('glance', 20.2, 1.8);
+    this.gesture('point', 17.2, 1.6);
+    this.gesture('point', 20.4, 1.4);
   }
 
-  // Chapter 2: the clownfish reef.
+  // Chapter 2: the clownfish reef, where he runs into her. He can't hide how
+  // happy he is: a jump, three more, and a dab. She laughs and waves.
   async reefScene() {
     const reef = this.rooms.reef;
+    const c = this.aq.couple, gh = c.gap / 2;
+    const Xg = CX + 40;
+    const meet = () => {
+      c.apart = true; c.girlOn = true; c.girlPose = 'back'; c.girlWave = 0; c.girlHappy = false; c.hop = 0;
+      this.meetX = Xg;
+    };
     if (reef && this.stage !== reef) {
       await this.atSong(23.6);
       this.sound.sfx('chime');
-      await this.go(reef, new LightBloom(this.W, this.H, 2.6, [190, 240, 255]), () => this.enterRoom(reef, CX - 160, CX - 220));
-    }
+      await this.go(reef, new LightBloom(this.W, this.H, 2.6, [190, 240, 255]), () => { this.enterRoom(reef, CX - 160, CX - 150); meet(); });
+    } else meet();
+    const st = this.stage, A = this.anime;
+    const him = this.headAt('guy'), her = this.headAt('girl');
+    const hop = (h, d) => this.tween(d, (k) => { c.hop = Math.sin(k * Math.PI) * h; });
     this.tween(10, (k) => { this.camX = lerp(CX - 160, CX, k); }, ease.inOutSine);
-    await this.walkTo(CX - 20, 29.5);
+    await this.walkTo(Xg - 2 * gh - 40, 27.4);
+    // he sees her
+    c.mode = 'side';
+    this.sound.sfx('ding');
+    A.emote(him, '!', 1.3);
+    A.focus = 1; A.focusAt = him;
+    await hop(7, 0.32);
+    await this.atSong(28.2);
+    // she turns round and waves
+    c.girlPose = 'side';
+    A.emote(her, '?', 0.8, '#3a6aff');
+    await this.wait(0.5);
+    c.girlHappy = true;
+    this.tween(0.4, (k) => { c.girlWave = k; }, ease.outBack);
+    A.emote(her, '♥', 1.2);
+    await this.atSong(29.0);
+    // he can't keep still
+    c.mode = 'front'; c.pose = 'cheer';
+    this.sound.sfx('boing');
+    for (let i = 0; i < 3; i++) {
+      const [hx, hy] = st.toScreen(st.coupleX - gh, st.coupleY - 40, 0);
+      burstStars(this.fx, hx, hy - 30, 5, { speed: 36, size: 4 });
+      this.fx.add({ kind: 'spark', x: hx + 6, y: hy - 38, vx: 20, vy: -30, drag: 1, age: 0, life: 0.6, size: 2, col: '#9ad8ff' });
+      A.burst(him, 0.35);
+      await hop(10 - i * 2, 0.36);
+      if (i === 1) { this.sound.sfx('boing'); A.shout(him, 'yay!', 0.9, '#ff6ab4'); }
+    }
+    c.pose = 'wave';
+    await this.atSong(31.2);
+    // the dab
+    c.pose = 'dab';
+    this.sound.sfx('pop'); this.sound.sfx('sparkle');
+    A.impact(him, 1);
+    A.shout(him, '✦ DAB ✦', 1.4);
+    { const [hx, hy] = him(); burstStars(this.fx, hx, hy + 20, 14, { speed: 70, size: 6 }); popRing(this.fx, hx, hy + 20, { r1: 40, col: '#fff4a0' }); }
+    await this.wait(1.5);
+    // she laughs
+    A.emote(her, 'haha', 1.4, '#ff5aa0');
+    this.tween(0.4, (k) => { c.girlWave = 1 - k; });
+    await this.atSong(33.4);
+    c.mode = 'side';
+    // he goes over to stand with her, and they watch the reef together
+    await this.walkTo(Xg - gh, 35.4);
     await this.turnToGlass();
-    this.gesture('point', 31.0, 2.4);
-    // he looks over at her, and a little heart gives him away
+    c.girlPose = 'back'; c.girlHappy = false;
+    c.apart = false; c.girlDX = 0; this.meetX = null;
     this.gesture('glance', 36.8, 2.2);
     await this.atSong(37.6);
     this.heartPop(this.stage, this.stage.coupleX - 8, this.stage.coupleY - 80);
@@ -335,6 +406,7 @@ export class Story {
       this.setStage(aq);
       aq.coupleX = CX - 470;
       c.mode = 'walk'; c.hold = 0; c.lean = 0; c.hug = 0; c.flip = 1;
+      c.apart = false; c.girlOn = true; c.girlDX = 0; c.hop = 0; this.meetX = null;
     });
     this.tween(13.5, (k) => { this.camX = lerp(CX - 520, CX, k); }, ease.inOutSine);
     await this.walkTo(CX, 56.6);
@@ -843,10 +915,24 @@ export class Story {
     // camera: smooth follow with a gentle floating drift that breathes on the beat
     st.cam.x += (this.camX + Math.sin(this.t * 0.21) * 3 - st.cam.x) * Math.min(1, dt * 3);
     st.cam.y += (st.camY0 + this.camY + Math.sin(this.t * 0.17) * 1.5 - snd.pulse * 1.2 - st.cam.y) * Math.min(1, dt * 3);
+    const [jx, jy] = this.anime.jitter();
+    st.cam.x += jx; st.cam.y += jy;
+    this.anime.update(dt);
+    this.photo.update(dt);
+    if (aq.couple.apart && this.meetX != null) aq.couple.girlDX = this.meetX - st.coupleX - aq.couple.gap / 2;
     // the music reaches into the tank
     st.pulse = snd.pulse;
     st.energy = snd.level;
-    if (!this.letter) this.post.p.bloom = lerp(this.post.p.bloom, 0.75 + snd.level * 0.35 + snd.pulse * 0.15, Math.min(1, dt * 4));
+    if (this.photo.album) {
+      // keep the paper readable: no glow over the album
+      this.post.p.bloom = lerp(this.post.p.bloom, 0.12, Math.min(1, dt * 8));
+      this.post.p.uiGlow = lerp(this.post.p.uiGlow, 0.06, Math.min(1, dt * 10));
+      this.albumGlow = true;
+    } else if (this.albumGlow) {
+      this.post.p.uiGlow = lerp(this.post.p.uiGlow, 0.55, Math.min(1, dt * 6));
+      if (this.post.p.uiGlow > 0.54) { this.post.p.uiGlow = 0.55; this.albumGlow = false; }
+    }
+    if (this.photo.album) { /* bloom handled above */ } else if (!this.letter) this.post.p.bloom = lerp(this.post.p.bloom, 0.75 + snd.level * 0.35 + snd.pulse * 0.15, Math.min(1, dt * 4));
     if (this.chorus && snd.pulse === 1) {
       this.waveAcc++;
       if (this.waveAcc % 4 === 0) st.sendWave(this.waveAcc % 8 === 0 ? st.cam.x - 700 : st.cam.x + 700, this.waveAcc % 8 === 0 ? 1 : -1, { speed: 720, amp: 4, width: 170, life: 3 });
@@ -912,6 +998,7 @@ export class Story {
       if (Math.hypot(this.mouse[0] - bx, this.mouse[1] - by) < 34) this.hoverClickable = true;
     }
     if (this.speakerHover() || (this.replay && this.replayHover())) this.hoverClickable = true;
+    if (this.photo.wantsPointer(this.mouse)) this.hoverClickable = true;
   }
 
   // -------------------------------------------------------------- input --
@@ -922,17 +1009,15 @@ export class Story {
 
   pointer(type, x, y) {
     this.mouse = [x, y];
+    if (this.photo.album && this.photo.pointer(type, x, y)) return; // the album sits over everything
+    if (type === 'down' && this.speakerHover()) { this.speakerOn = !this.speakerOn; this.sound.setEnabled(this.speakerOn); return; }
+    if (this.photo.pointer(type, x, y)) return;
     if (type === 'move') {
       const no = this.buttons.find((b) => b.id === 'no');
       if (no && no.alpha > 0.9 && Math.hypot(x - no.x, y - no.y) < no.w / 2 + 8) this.escapeNo(x, y);
       return;
     }
     if (type !== 'down' && type !== 'key') return;
-    if (type === 'down' && this.speakerHover()) {
-      this.speakerOn = !this.speakerOn;
-      this.sound.setEnabled(this.speakerOn);
-      return;
-    }
     if (type === 'down' && this.replay && this.replay.a > 0.5 && this.replayHover()) { location.reload(); return; }
     for (const b of this.buttons) {
       if (b.alpha < 0.5) continue;
@@ -1114,6 +1199,7 @@ export class Story {
     if (this.finale) this.drawFinale(ctx);
     if (this.hint) this.drawHint(ctx);
     this.fx.draw(ctx);
+    this.anime.draw(ctx, this.W, this.H);
     if (this.trans) this.trans.draw(ctx);
     if (this.replay) {
       const [x, y, w] = this.replayRect();
@@ -1121,5 +1207,6 @@ export class Story {
       drawText(ctx, '♥ replay', x + w / 2, y + 2, { align: 'center', color: hv ? '#ffffff' : '#ffb3d4', outline: '#2a0a24', alpha: this.replay.a * (hv ? 1 : 0.75) });
     }
     if (this.showSpeaker) { const [x, y] = this.speakerRect(); drawSpeaker(ctx, x + 2, y + 2, this.speakerOn, this.speakerHover()); }
+    this.photo.draw(ctx);
   }
 }

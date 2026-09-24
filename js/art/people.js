@@ -110,8 +110,8 @@ function hipHeight(C, feet, moving) {
 }
 
 // ---------------------------------------------------------------- views --
-// Back view (facing the tank). x is screen-right.
-// p: { breath, tilt, lhand, rhand, sway, tip, headX, headY, weight }
+// Back view (facing the tank), or with p.front facing us. x is screen-right.
+// p: { breath, tilt, lhand, rhand, sway, tip, headX, headY, weight, front, happy, mouth }
 function drawBack(R, C, ox, p) {
   const breath = p.breath || 0;
   const tip = p.tip || 0;
@@ -170,7 +170,7 @@ function drawBack(R, C, ox, p) {
     const sx = ox + s * (C.sh - (C.girl ? 1.5 : 3.2)) + bx * 0.5, sy = shY + (C.girl ? 2.5 : 3.5);
     const tgt = s < 0 ? p.lhand : p.rhand;
     const tx = tgt ? tgt[0] : sx + s * 2.2 + wt * 0.3, ty = tgt ? tgt[1] : sy + C.ua + C.fa - 1.5;
-    const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, s > 0 ? 1 : -1);
+    const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, p.bend ? p.bend[s < 0 ? 0 : 1] : s > 0 ? 1 : -1);
     const r0 = C.girl ? 2.0 : 2.7, r1 = C.girl ? 1.6 : 2.2, r2 = C.girl ? 1.4 : 1.8;
     R.capsule(sx, sy, ex, ey, r0, r1, MAT.skin);
     R.capsule(ex, ey, wx, wy, r1, r2, MAT.skin);
@@ -186,7 +186,24 @@ function drawBack(R, C, ox, p) {
   R.ellipse(ox + hx + C.headRx - 0.2, headY + 1.2, 1.2, 1.8, MAT.skin);
   R.ellipse(ox + hx, headY - 0.4, C.headRx + 0.6, C.headRy - 0.2, MAT.hair, 0, (p.tilt || 0) * 0.25);
   R.capsule(ox + hx - 3.2, headY - 3.2, ox + hx + 0.4, headY - 4.3, 0.55, 0.55, MAT.shine);
-  if (C.girl) {
+  if (p.front) {
+    // facing us: the face under a fringe, eyes, blush and a mouth
+    const tl = (p.tilt || 0) * 0.8;
+    const fx0 = ox + hx + tl * 0.4;
+    R.ellipse(fx0, headY + 1.2, C.headRx - 0.7, C.headRy - 1.7, MAT.skin, 0, (p.tilt || 0) * 0.25);
+    R.ellipse(fx0 - 1.6, headY - C.headRy + 2.7, 3.4, 1.7, MAT.hair);
+    R.ellipse(fx0 + 2.1, headY - C.headRy + 2.3, 2.8, 1.5, MAT.hair);
+    const ey = Math.floor(headY + 0.8 + R.oy);
+    for (const sx of [-1, 1]) {
+      const ex = Math.floor(fx0 + sx * 2.3 + R.ox);
+      if (p.happy) { R.put(ex - 1, ey + 1, MAT.eye, 0); R.put(ex, ey, MAT.eye, 0); R.put(ex + 1, ey + 1, MAT.eye, 0); }
+      else { R.put(ex, ey, MAT.eye, 0); R.put(ex, ey + 1, MAT.eye, 0); }
+      R.put(Math.floor(fx0 + sx * 3.6 + R.ox), ey + 3, MAT.blush, 0);
+    }
+    const mx = Math.floor(fx0 + R.ox), my = Math.floor(headY + 4 + R.oy);
+    if (p.mouth) { R.put(mx - 1, my, MAT.eye, 0); R.put(mx, my, MAT.eye, 0); R.put(mx - 1, my + 1, MAT.blush, 0); R.put(mx, my + 1, MAT.blush, 0); }
+    else { R.put(mx - 1, my, MAT.eye, 0); R.put(mx, my, MAT.eye, 0); }
+  } else if (C.girl) {
     const hs = p.hairSway || 0;
     const top = headY - 2;
     R.poly([
@@ -323,8 +340,9 @@ function drawSide(R, C, ox, f, p) {
 // ---------------------------------------------------------------- couple --
 export class Couple {
   constructor() {
-    this.W = 150; this.H = 124;
-    this.R = new Raster(this.W, this.H, 75, 116);
+    // wide enough for her to stand well apart from him before they meet
+    this.W = 440; this.H = 124;
+    this.R = new Raster(this.W, this.H, 220, 116);
     this.buf = new Buf(this.W, this.H);
     this.canvas = makeCanvas(this.W, this.H);
     this.img = new ImageData(this.buf.d, this.W, this.H);
@@ -341,6 +359,16 @@ export class Couple {
     this.glance = 0; // back view: he sneaks a look at her
     this.flip = 1; // horizontal squash during turns
     this.gap = 17;
+    // before they meet each moves on their own: his mode is `mode`
+    // (walk | back | front | side), hers is `girlPose` (back | side)
+    this.apart = false;
+    this.girlOn = true;
+    this.girlDX = 0;      // how much further right she stands than usual
+    this.girlPose = 'back';
+    this.girlWave = 0;
+    this.girlHappy = false;
+    this.pose = 'cheer'; // his front-view pose: cheer | dab | wave | surprised
+    this.hop = 0;        // lift off the floor, applied by the stage
   }
 
   update(dt) {
@@ -355,7 +383,8 @@ export class Couple {
     const t = this.t;
     const breath = (Math.sin(t * 1.6) + 1) * 0.5;
     const gh = this.gap / 2;
-    if (this.mode === 'walk') {
+    if (this.apart) this.renderApart(t, breath, gh);
+    else if (this.mode === 'walk') {
       const dist = this.walk * 7.5;
       drawSide(R, GUY, -gh, 1, { dist: dist + 9, moving: this.moving });
       drawSide(R, GIRL, gh, 1, { dist, moving: this.moving, hairSway: Math.sin(t * 2) * 0.6 });
@@ -388,6 +417,39 @@ export class Couple {
     }
     this.shade(light, wx, pulse);
     return this.canvas;
+  }
+
+  renderApart(t, breath, gh) {
+    const R = this.R, gx = -gh;
+    const gs = -GUY.leg - GUY.torso; // his shoulder height
+    if (this.mode === 'walk') drawSide(R, GUY, gx, 1, { dist: this.walk * 7.5 + 9, moving: this.moving });
+    else if (this.mode === 'side') drawSide(R, GUY, gx, 1, { happy: this.happy });
+    else if (this.mode === 'front') {
+      const w = Math.sin(t * 14);
+      const P = {
+        cheer: { lhand: [gx - 14 + w, gs - 20], rhand: [gx + 14 - w, gs - 20], bend: [1, -1], happy: true, mouth: 1 },
+        dab: { lhand: [gx - 21, gs - 13], rhand: [gx - 13, gs - 16], bend: [-1, 1], tilt: -1.4, headY: 1.8, happy: true },
+        wave: { rhand: [gx + 11 + Math.sin(t * 9) * 2, gs - 10], mouth: 1 },
+        surprised: { lhand: [gx - 12, gs + 9], rhand: [gx + 12, gs + 9], mouth: 1 },
+      }[this.pose] || {};
+      drawBack(R, GUY, gx, { breath, front: true, ...P });
+    } else {
+      const pt = this.point;
+      const rh = pt > 0 ? [lerp(gx + GUY.sh + 1.5, gx + GUY.sh + 6, pt), lerp(-GUY.leg + 9, gs - 3 + Math.sin(t * 3) * 0.6, pt)] : null;
+      drawBack(R, GUY, gx, { breath, rhand: rh, weight: Math.sin(t * 0.45) * 0.8 });
+    }
+    if (!this.girlOn) return;
+    const qx = gh + this.girlDX;
+    if (this.girlPose === 'side') {
+      const wv = this.girlWave;
+      const hands = wv > 0 ? [[qx - lerp(4, 10, wv) + Math.sin(t * 10) * 1.5 * wv, lerp(-GIRL.leg + 4, -GIRL.leg - GIRL.torso - 11, wv)], null] : null;
+      drawSide(R, GIRL, qx, -1, { hands, happy: this.girlHappy, hairSway: Math.sin(t * 0.9) * 0.8 });
+    } else {
+      drawBack(R, GIRL, qx, {
+        breath: (Math.sin(t * 1.6 + 0.8) + 1) * 0.5, weight: Math.sin(t * 0.38 + 2) * 0.8,
+        hairSway: Math.sin(t * 0.9) * 0.8, flutter: Math.sin(t * 1.3) * 0.5,
+      });
+    }
   }
 
   // Lighting. They stand in a dark hall with the tank behind them, so the

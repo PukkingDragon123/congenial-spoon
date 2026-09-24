@@ -84,6 +84,13 @@ const G = {
   '*': ['', '..#..', '#.#.#', '.###.', '#.#.#', '..#..'],
   '♥': ['', '.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'],
   '♡': ['', '.##.##.', '#..#..#', '#.....#', '.#...#.', '..#.#..', '...#...'],
+  '★': ['', '..#..', '..#..', '#####', '.###.', '.#.#.', '#...#'],
+  '✦': ['', '..#..', '..#..', '.###.', '#####', '.###.', '..#..', '..#..'],
+  '×': ['', '', '#...#', '.#.#.', '..#..', '.#.#.', '#...#'],
+  '<': ['', '...#', '..#.', '.#..', '#...', '.#..', '..#.', '...#'],
+  '>': ['', '#...', '.#..', '..#.', '...#', '..#.', '.#..', '#...'],
+  '%': ['##..#', '##.#.', '...#.', '..#..', '.#...', '.#.##', '#..##'],
+  '#': ['', '.#.#.', '#####', '.#.#.', '.#.#.', '#####', '.#.#.'],
 };
 // Common typographic lookalikes
 const ALIAS = { '’': "'", '‘': "'", '“': '"', '”': '"', '–': '-', '—': '-', '❤': '♥', '♥️': '♥' };
@@ -92,6 +99,7 @@ export const LINE_H = 11;
 const glyphs = new Map();
 
 const EMOJI = /\p{Extended_Pictographic}/u;
+const PIXEL_FIRST = new Set(['★', '✦']); // drawn as pixel glyphs, not emoji
 
 // Emoji keep their colours: drawn small with the system emoji font, then
 // snapped to hard pixels so they sit in the pixel text.
@@ -125,7 +133,7 @@ function buildEmoji(ch) {
 }
 
 function buildGlyph(ch) {
-  if (EMOJI.test(ch)) { const e = buildEmoji(ch); if (e) return e; }
+  if (EMOJI.test(ch) && !PIXEL_FIRST.has(ch)) { const e = buildEmoji(ch); if (e) return e; }
   const rows = G[ch];
   if (rows) {
     const w = Math.max(...rows.map((r) => r.length), 1);

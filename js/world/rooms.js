@@ -256,7 +256,7 @@ class Room {
     // the couple + reflection
     const img = this.couple.render(this.coupleLight, this.coupleX, this.pulse);
     const [cx, cy] = this.toScreen(this.coupleX, this.coupleY, 0);
-    const X = Math.round(cx - this.couple.R.ox), Y = Math.round(cy - this.couple.R.oy);
+    const X = Math.round(cx - this.couple.R.ox), Y = Math.round(cy - this.couple.R.oy - (this.couple.hop || 0));
     // a soft shadow where they stand
     ctx.fillStyle = 'rgba(0,4,18,0.38)';
     ctx.beginPath(); ctx.ellipse(Math.round(cx), Math.round(cy) + 1, 22, 2.5, 0, 0, TAU); ctx.fill();

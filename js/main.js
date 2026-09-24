@@ -93,6 +93,7 @@ async function boot() {
   };
   requestAnimationFrame(loaderLoop);
   story = new Story(aq, post, { debug: params.get('scene'), rooms });
+  story.worldCanvas = world; // photo mode prints from the rendered tank
   story.sound.sim = params.get('sim') === '1';
   const song = story.sound.load(); // decode in parallel with the art
   await rooms.jelly.build((p) => { loadP = p * 0.6; });

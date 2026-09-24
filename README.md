@@ -17,13 +17,26 @@ the music: fish bounce and squash on the beat, waves ripple through the
 schools, crabs wave their claws, and the light breathes with the song.
 
 1. **Title** (before the music): "Very Cool Aquarium Game". Tap to dive in and start the song.
-2. **Jellyfish hall** (0:05): they stroll in under drifting jellies, not holding hands yet; she points at the jellies and he looks at her instead. Tap any creature to make it react.
-3. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with anemones, clownfish families and schools of fish. A little heart pops when he glances over at her.
+2. **Jellyfish hall** (0:05): he wanders in on his own under drifting jellies, pointing them out to nobody. Tap any creature to make it react.
+3. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with anemones, clownfish families and schools of fish. He runs into her here: a "!" with anime focus lines, she turns and waves, he jumps around cheering and hits a dab (impact flash and all), she laughs, and they watch the reef together. A little heart pops when he glances over at her.
 4. **The walk** (0:42): along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
 5. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
 6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
 7. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
 8. **Finale**: a whale shark glides in carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
+
+### Photo mode
+
+Tap the little camera (bottom right) to raise the viewfinder, then tap to
+snap. The shot prints out of the camera, develops, and is scored: rarer
+creatures are worth more (common ★ up to legendary ★★★★), a first catch
+scores triple, and a centred subject gets a bonus. Every species goes into
+the postcard album (the pink book); tap a card to see it as a postcard.
+Points buy camera upgrades in the album's *camera* tab: a wider lens, better
+film (sepia, faded, warm, then vivid colour, each worth more), and a bigger
+roll that reloads faster. Albums and points are kept in the browser. The
+legendaries are the whale shark, the bean pup, the tree friend, and the
+two of them together.
 
 Subtitles type in over a soft backing, one line at a time, and fade away in a few bubbles.
 Every line starts where a sung phrase starts in the track (found by

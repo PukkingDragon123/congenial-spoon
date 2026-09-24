@@ -226,6 +226,22 @@ export class SoundEngine {
         [72, 76, 79, 84, 88, 91, 96].forEach((m, i) => this.note(m, t + i * 0.07, 0.4, 2.4));
         this.noise(t, 1.0, 400, 2800, 0.24, 0.7);
         break;
+      case 'ding':
+        this.note(93, t, 0.5, 0.5); this.note(100, t + 0.08, 0.45, 0.9);
+        break;
+      case 'boing':
+        [60, 67, 72].forEach((m, i) => this.note(m + 12, t + i * 0.05, 0.3, 0.3));
+        break;
+      case 'shutter':
+        this.noise(t, 0.04, 5200, 3000, 0.55, 3);
+        this.noise(t + 0.09, 0.05, 3000, 1400, 0.45, 3);
+        break;
+      case 'print':
+        for (let i = 0; i < 14; i++) this.noise(t + 0.15 + i * 0.07, 0.06, 900, 500, 0.12, 4);
+        break;
+      case 'coin':
+        this.note(88, t, 0.35, 0.3); this.note(95, t + 0.07, 0.35, 0.7);
+        break;
       case 'escape':
         this.bubble(t, 0.9); this.bubble(t + 0.05, 0.9); this.bubble(t + 0.1, 0.7);
         break;
