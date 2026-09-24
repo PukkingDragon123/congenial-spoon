@@ -1676,19 +1676,12 @@ export class Story {
       const lit = Math.abs(cx - x0 - sweep) < 10 * sc;
       drawText(ctx, ch, cx, y + dy, { scale: sc, color: lit ? '#ffffff' : '#d8f0ff', outline: '#0a1a44', shadow: '#ff5a9a', alpha: T.a });
     });
-    // a wavy underline, the subtitle, and a few fish swimming past
+    // a wavy underline and the subtitle
     const tw = textWidth(str) * sc, uy = y + 9 * sc;
     ctx.globalAlpha = T.a * 0.8;
     for (let i = 0; i < tw; i++) { ctx.fillStyle = i % 8 < 4 ? '#6ad8ff' : '#ff8ab4'; ctx.fillRect(x0 + i, Math.round(uy + Math.sin(i * 0.25 + t * 3) * 1.5), 1, 1); }
     ctx.globalAlpha = 1;
     if (CONFIG.subtitle) drawText(ctx, CONFIG.subtitle, W / 2, uy + 6, { align: 'center', color: '#fff4b0', outline: '#0a1a44', alpha: T.a * 0.9 });
-    for (let i = 0; i < 4; i++) {
-      const sp = 18 + i * 7, dir = i % 2 ? 1 : -1, fxp = ((t * sp + i * 97) % (W + 40)) - 20, fx = dir > 0 ? fxp : W - fxp;
-      const fy = Math.round(y - 22 - i * 9 + Math.sin(t * 2 + i) * 3), col = ['#ff8a3a', '#ffd24a', '#6ad8ff', '#ff8ab4'][i];
-      ctx.globalAlpha = T.a * 0.85;
-      ctx.fillStyle = col; ctx.fillRect(Math.round(fx), fy, 5, 3); ctx.fillRect(Math.round(fx) - dir * 2 - (dir > 0 ? 0 : -3), fy - 1, 2, 5);
-      ctx.fillStyle = '#1a1020'; ctx.fillRect(Math.round(fx) + (dir > 0 ? 4 : 0), fy, 1, 1);
-    }
     ctx.globalAlpha = 1;
   }
 
