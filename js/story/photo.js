@@ -8,6 +8,7 @@
 import { TAU, clamp, lerp, ease, R } from '../util.js';
 import { makeCanvas } from '../util.js';
 import { drawText, textWidth } from '../font.js';
+import { burstStars } from '../world/fx.js';
 import {
   CAM_W, CAM_H, MODELS, PAINTS, PAINT_PRICE, STICKERS, CHARMS, PENS, MARKER_PRICE,
   defaultCam, renderCamera, drawCharm, drawStickerIcon, drawCharmIcon,
@@ -70,6 +71,9 @@ export class PhotoMode {
     this.reload = 0;
     this.prints = [];        // queued prints; the first one animates
     this.flash = 0;
+    this.snapT = 9;          // time since the shutter fired
+    this.raiseT = 9;         // time since the camera came up
+    this.lock = null;        // the best subject in the frame right now
     this.shake = 0;
     this.albumBounce = 0;
     this.t = 0;
@@ -155,6 +159,7 @@ export class PhotoMode {
     if (this.album) { this.albumTap(x, y); return true; }
     if (this.hit(this.camRect(), x, y)) {
       this.on = !this.on;
+      if (this.on) this.raiseT = 0;
       this.charmV += 3;
       this.aim = [this.W / 2, this.H * 0.45];
       this.story.sound.sfx(this.on ? 'ding' : 'pop');
@@ -179,7 +184,13 @@ export class PhotoMode {
     const [fx, fy, fw, fh] = this.frameRect();
     s.sound.sfx('shutter');
     this.flash = 1;
+    this.snapT = 0;
     this.charmV += 5;
+    // a cute "click!" and a pop of stars at the frame's corner, and a wink of
+    // flash from her camera in the scene
+    const cx0 = fx + fw, cy0 = fy;
+    burstStars(s.fx, cx0 - 4, cy0 + 4, 8, { speed: 60, size: 4, col: '#fff6c0' });
+    if (s.headAt) { const [hx, hy] = s.headAt('girl')(); for (let i = 0; i < 10; i++) { const a = R() * TAU, sp = 20 + R() * 30; s.fx.add({ kind: 'spark', x: hx, y: hy + 8, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, drag: 3, age: 0, life: 0.4 + R() * 0.3, size: 1 + (R() * 2 | 0), col: '#ffffff' }); } }
     // what's in the frame?
     const st = s.stage;
     const found = new Map();
@@ -198,7 +209,8 @@ export class PhotoMode {
       if (sx >= fx && sx <= fx + fw && sy >= fy && sy <= fy + fh && c.react) c.react(c.x + (R() - 0.5) * 6, c.y + 8, 0.4);
     }
     const cp = s.aq.couple, gh = cp.gap / 2;
-    const [ux, uy] = st.toScreen(st.coupleX - (cp.apart ? gh : 0), st.coupleY - 40, 0);
+    // you're her: on her own she's "just me", together they're "us"
+    const [ux, uy] = st.toScreen(st.coupleX + (cp.apart ? gh + cp.girlDX : 0), st.coupleY - 40, 0);
     const together = !cp.apart && cp.girlOn !== false && s.songT > 33;
     see(together ? 'us' : 'me', ux, uy);
     // score it
@@ -287,6 +299,8 @@ export class PhotoMode {
     const cap = ROLL_CAP[this.levels.roll];
     if (this.film < cap) { this.reload += dt; if (this.reload >= RELOAD[this.levels.roll]) { this.reload = 0; this.film++; } } else this.reload = 0;
     this.flash = Math.max(0, this.flash - dt * 4);
+    this.snapT += dt; this.raiseT += dt;
+    this.lock = this.on && !this.album ? this.findSubject() : null;
     this.shake = Math.max(0, this.shake - dt);
     this.albumBounce = Math.max(0, this.albumBounce - dt * 2.5);
     if (this.toast && (this.toast.t += dt) > 2.8) this.toast = null;
@@ -307,6 +321,25 @@ export class PhotoMode {
         if (this.prints.length) this.story.sound.sfx('print');
       }
     }
+  }
+
+  // The rarest creature in the frame, nearest the middle: the finder locks
+  // onto it with a little focus box and its name.
+  findSubject() {
+    const st = this.story.stage;
+    const [fx, fy, fw, fh] = this.frameRect();
+    let best = null;
+    for (const c of st.creatures) {
+      const key = keyOf(c);
+      if (!key) continue;
+      const [sx, sy] = st.toScreen(c.x, c.y - (c.hitDY ?? 0), c.z);
+      if (sx < fx + 4 || sx > fx + fw - 4 || sy < fy + 4 || sy > fy + fh - 4) continue;
+      const d = Math.hypot((sx - fx - fw / 2) / fw, (sy - fy - fh / 2) / fh);
+      const score = SPECIES[key][1] * 2 - d * 3;
+      if (!best || score > best.score) best = { key, sx, sy, r: Math.max(6, Math.min(22, (c.len || c.size || 16) * 0.45 * (1 - (c.z || 0) * 0.4))), score, d };
+    }
+    if (best && this.lock && this.lock.key === best.key) best.t = this.lock.t + this.story.dt; else if (best) best.t = 0;
+    return best;
   }
 
   // --------------------------------------------------------------- draw --
@@ -343,10 +376,17 @@ export class PhotoMode {
   drawHud(ctx) {
     const [cx, cy, cw, ch] = this.camRect(), [bx, by] = this.bookRect();
     const img = this.camImage(), k = this.iconScale();
-    const lift = this.on ? -2 : 0;
+    const lift = (this.on ? -2 : 0) + (this.snapT < 0.25 ? Math.round(Math.sin((this.snapT / 0.25) * Math.PI) * 3) : 0);
     if (this.on) { ctx.fillStyle = '#ffe38a'; ctx.globalAlpha = 0.5 + Math.sin(this.t * 6) * 0.2; ctx.fillRect(cx - 2, cy - 2 + lift, cw + 4, ch + 4); ctx.globalAlpha = 1; }
     ctx.drawImage(k === 1 ? img : this.camHalf, cx, cy + lift);
     drawCharm(ctx, this.cam.charm, cx + img.lug[0] * k, cy + lift + img.lug[1] * k, this.charmA, 1);
+    // the flash lamp fires
+    if (this.snapT < 0.3) {
+      const f = 1 - this.snapT / 0.3, fxl = cx + cw * 0.78, fyl = cy + lift + ch * 0.22;
+      ctx.globalAlpha = f; ctx.fillStyle = '#ffffff';
+      ctx.fillRect(Math.round(fxl - 1), Math.round(fyl - 6 * f), 2, Math.round(12 * f)); ctx.fillRect(Math.round(fxl - 6 * f), Math.round(fyl - 1), Math.round(12 * f), 2);
+      ctx.globalAlpha = 1;
+    }
     drawBook(ctx, bx, by - Math.round(Math.sin(this.albumBounce * Math.PI) * 3));
     const pts = '✦' + Math.round(this.shown);
     drawText(ctx, pts, bx - 3, by + 4, { align: 'right', color: '#ffe38a', outline: '#3a2200' });
@@ -362,25 +402,72 @@ export class PhotoMode {
   drawViewfinder(ctx) {
     const W = this.W, H = this.H;
     const [fx, fy, fw, fh] = this.frameRect();
+    // the finder pops up with a little bounce, and punches in on each shot
+    const up = ease.outBack(clamp(this.raiseT / 0.3));
+    const punch = this.snapT < 0.25 ? Math.sin((this.snapT / 0.25) * Math.PI) * 3 : 0;
+    const grow = Math.round((1 - up) * 14 - punch);
+    const x0 = fx - grow, y0 = fy - grow, x1 = fx + fw + grow, y1 = fy + fh + grow;
     // warm dim outside the frame, like looking through an old finder
-    ctx.fillStyle = 'rgba(20,10,2,0.66)';
+    ctx.fillStyle = `rgba(20,10,2,${0.66 * clamp(this.raiseT / 0.2)})`;
     ctx.fillRect(0, 0, W, fy); ctx.fillRect(0, fy + fh, W, H - fy - fh);
     ctx.fillRect(0, fy, fx, fh); ctx.fillRect(fx + fw, fy, W - fx - fw, fh);
-    // corner brackets
-    ctx.fillStyle = '#fff4dc';
-    const L = 7;
-    for (const [x, y, sx, sy] of [[fx, fy, 1, 1], [fx + fw - 1, fy, -1, 1], [fx, fy + fh - 1, 1, -1], [fx + fw - 1, fy + fh - 1, -1, -1]]) {
-      ctx.fillRect(sx > 0 ? x : x - L + 1, y, L, 1);
-      ctx.fillRect(x, sy > 0 ? y : y - L + 1, 1, L);
+    // the shutter: two blades snap shut and open again
+    if (this.snapT < 0.22) {
+      const k = this.snapT < 0.07 ? this.snapT / 0.07 : 1 - (this.snapT - 0.07) / 0.15;
+      const bh = Math.round((fh / 2) * clamp(k));
+      ctx.fillStyle = '#0a0608';
+      ctx.fillRect(fx, fy, fw, bh); ctx.fillRect(fx, fy + fh - bh, fw, bh);
+      ctx.fillStyle = '#3a2a2a';
+      if (bh > 1) { ctx.fillRect(fx, fy + bh - 1, fw, 1); ctx.fillRect(fx, fy + fh - bh, fw, 1); }
     }
-    // rangefinder circle and crosshair
+    // rounded corner brackets that breathe
+    const br = Math.round(Math.sin(this.t * 3) * 1);
+    const L = 8;
+    for (const [x, y, sx, sy] of [[x0 - br, y0 - br, 1, 1], [x1 - 1 + br, y0 - br, -1, 1], [x0 - br, y1 - 1 + br, 1, -1], [x1 - 1 + br, y1 - 1 + br, -1, -1]]) {
+      for (const [ox, oy, col] of [[1, 1, '#2a1408'], [0, 0, '#fff4dc']]) {
+        ctx.fillStyle = col;
+        ctx.fillRect((sx > 0 ? x + 2 : x - L + 1) + ox, y + oy, L - 2, 2);
+        ctx.fillRect(x + ox, (sy > 0 ? y + 2 : y - L + 1) + oy, 2, L - 2);
+        ctx.fillRect(x + sx + ox, y + sy + oy, 2, 2);
+      }
+    }
+    // centre reticle: a turning dotted ring with a tiny heart in it
     const cx = Math.round(fx + fw / 2), cy = Math.round(fy + fh / 2);
+    ctx.fillStyle = '#fff4dc';
     for (let i = 0; i < 24; i += 2) { const a = (i / 24) * TAU + this.t * 0.4; ctx.fillRect(Math.round(cx + Math.cos(a) * 9), Math.round(cy + Math.sin(a) * 9), 1, 1); }
-    ctx.fillRect(cx - 3, cy, 2, 1); ctx.fillRect(cx + 2, cy, 2, 1); ctx.fillRect(cx, cy - 3, 1, 2); ctx.fillRect(cx, cy + 2, 1, 2);
+    ctx.fillStyle = '#ff8ab0';
+    for (const [hx, hy] of [[-1, -1], [1, -1], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [-1, 1], [0, 1], [1, 1], [0, 2]]) ctx.fillRect(cx + hx, cy + hy - 1, 1, 1);
+    // focus lock on the best subject: a pink box that snaps in around it
+    const L0 = this.lock;
+    if (L0) {
+      const k = ease.outBack(clamp(L0.t / 0.25));
+      const r = Math.round(L0.r * (1.8 - 0.8 * k)), lx = Math.round(L0.sx), ly = Math.round(L0.sy);
+      const good = L0.d < 0.22;
+      const col = good ? '#8affc0' : '#ff8ab0';
+      ctx.fillStyle = col;
+      const c = Math.max(3, Math.round(r * 0.45));
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const X = lx + sx * r, Y = ly + sy * r;
+        ctx.fillRect(sx < 0 ? X : X - c + 1, Y, c, 1);
+        ctx.fillRect(X, sy < 0 ? Y : Y - c + 1, 1, c);
+      }
+      const [name, rar] = SPECIES[L0.key];
+      const label = (this.book[L0.key] ? '' : 'new! ') + name;
+      const ty = Math.max(fy + 12, ly - r - 10);
+      if (L0.t > 0.12) {
+        drawText(ctx, label, lx, ty, { align: 'center', color: '#ffffff', outline: '#2a1030' });
+        drawText(ctx, '★'.repeat(rar), lx, ty + r * 2 + 12 > fy + fh - 4 ? ty - 8 : ly + r + 3, { align: 'center', color: RARITY_COL[rar], outline: '#10142a' });
+      }
+    }
     // a blinking red dot and the film type
     if (Math.sin(this.t * 5) > 0) { ctx.fillStyle = '#ff4a4a'; ctx.fillRect(fx + fw - 6, fy + 3, 3, 3); }
     drawText(ctx, fit(`${this.model().name} · ${FILMS[this.levels.film]}`, fw - 12), fx + 3, fy + 3, { color: '#fff4dc', outline: '#2a1a08' });
     if (!this.film) drawText(ctx, 'reloading...', cx, fy + fh - 11, { align: 'center', color: '#ffb0a0', outline: '#2a0a08' });
+    // "click!"
+    if (this.snapT < 0.7) {
+      const k = this.snapT / 0.7, sc = W > 300 ? 2 : 1;
+      drawText(ctx, 'click!', fx + fw - 4, Math.round(fy - 6 - k * 10), { align: 'right', scale: sc, color: '#fff6c0', outline: '#5a2a10', alpha: 1 - k * k });
+    }
   }
 
   // a print: slides out of the camera, comes forward to develop, shows what
@@ -399,15 +486,32 @@ export class PhotoMode {
     else if (t < 3.6) { x = midX; y = midY + Math.sin((t - 1.6) * 2) * 1.5; sc = s; }
     else { const k = ease.inCubic((t - 3.6) / 0.6); x = lerp(midX, bx + 7, k); y = lerp(midY, by + 7, k); sc = lerp(s, 0.15, k); a = 1 - k * 0.3; }
     const dev = clamp(1 - t / 2.8); // still developing
+    // it swings as it lands, settles with a wobble, and spins into the album
+    let rot = 0;
+    if (t < 1) rot = Math.sin(t * 9) * 0.05 * (1 - t);
+    else if (t < 1.6) rot = lerp(0.3, 0, ease.outCubic((t - 1) / 0.6));
+    else if (t < 3.6) rot = Math.sin((t - 1.6) * 7) * 0.08 * Math.exp(-(t - 1.6) * 2.2) - 0.02;
+    else rot = ease.inCubic((t - 3.6) / 0.6) * -1.2;
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.translate(Math.round(x), Math.round(y));
+    ctx.translate(Math.round(x + (pw * sc) / 2), Math.round(y + (ph * sc) / 2));
+    ctx.rotate(rot);
     ctx.scale(sc, sc);
+    ctx.translate(-pw / 2, -ph / 2);
     // the card
     ctx.fillStyle = '#2a1a10'; ctx.fillRect(-1, 0, pw + 2, ph); ctx.fillRect(0, -1, pw, ph + 2);
     ctx.fillStyle = '#fbf6ea'; ctx.fillRect(0, 0, pw, ph);
     ctx.drawImage(img, 3, 3);
     if (dev > 0) { ctx.globalAlpha = a * dev; ctx.fillStyle = '#3a2a1e'; ctx.fillRect(3, 3, img.width, img.height); ctx.globalAlpha = a; }
+    // a glint sweeps across once it's developed
+    if (t > 2.6 && t < 3.2) {
+      const gx = lerp(-12, img.width + 12, (t - 2.6) / 0.6);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(3, 3, img.width, img.height); ctx.clip();
+      ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(3 + gx, 3); ctx.lineTo(3 + gx + 6, 3); ctx.lineTo(3 + gx - 6 + 6, 3 + img.height); ctx.lineTo(3 + gx - 6, 3 + img.height); ctx.fill();
+      ctx.restore();
+    }
     const name = p.main ? SPECIES[p.main][0] : 'just water';
     if (t > 1.2) drawText(ctx, fit(name, pw - 6), pw / 2, img.height + 6, { align: 'center', color: '#3a2a4a' });
     ctx.restore();
@@ -422,12 +526,17 @@ export class PhotoMode {
       }
       drawText(ctx, `+${p.pts} ✦`, W / 2, midY + ph * s + 4 - Math.round(k * 3), { align: 'center', scale: W > 200 ? 2 : 1, color: '#ffe38a', outline: '#3a2200', shadow: '#ff9a3a', alpha: k });
       if (p.fresh.length) {
-        const bob = Math.round(Math.sin(t * 10) * 1);
-        const nx = Math.round(midX + pw * s - 10), ny = Math.round(midY - 4 + bob);
-        ctx.fillStyle = '#ff3a6a'; ctx.fillRect(nx - 2, ny - 2, 26, 11);
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(nx - 1, ny - 1, 24, 9);
-        ctx.fillStyle = '#ff3a6a'; ctx.fillRect(nx, ny, 22, 7);
-        drawText(ctx, 'NEW!', nx + 11, ny, { align: 'center', color: '#ffffff' });
+        // NEW! slams on like a stamp
+        const sk = clamp((t - 1.8) / 0.18), ss = 1 + (1 - ease.outBack(sk)) * 1.6;
+        const nx = Math.round(midX + pw * s - 10), ny = Math.round(midY - 4 + Math.sin(t * 10));
+        if (sk >= 1 && !p.stamped) { p.stamped = true; burstStars(this.story.fx, nx + 11, ny + 3, 8, { speed: 50, size: 4 }); this.story.sound.sfx('pop'); }
+        ctx.save();
+        ctx.translate(nx + 11, ny + 3); ctx.rotate(0.18 - (1 - sk) * 0.4); ctx.scale(ss, ss);
+        ctx.fillStyle = '#ff3a6a'; ctx.fillRect(-13, -5, 26, 11);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(-12, -4, 24, 9);
+        ctx.fillStyle = '#ff3a6a'; ctx.fillRect(-11, -3, 22, 7);
+        drawText(ctx, 'NEW!', 0, -3, { align: 'center', color: '#ffffff' });
+        ctx.restore();
       }
     }
   }

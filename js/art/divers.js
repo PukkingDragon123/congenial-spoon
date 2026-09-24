@@ -1,6 +1,6 @@
 // Two little friends, sculpted and lit like the fish: a tall tree fellow
 // with leafy ball hands who waves from the reef, and Mameshiba, a round
-// green bean pup paddling about in a snorkel mask.
+// green bean pup paddling about in a little scuba suit.
 import { ramp, ridge, fbm, hex } from '../util.js';
 import { sculpt, dome, tube } from './sculpt.js';
 
@@ -106,12 +106,24 @@ export function treeSprite(frame) {
 // ear a little; a blink on frame 3.
 const BEAN = ramp(['#3c5a0e', '#5a7c16', '#7a9e1e', '#98ba28', '#b2d232', '#c6e240', '#d8ee66', '#ecf8a6'], 8);
 const EAR = ramp(['#1c4a0c', '#2c6612', '#3e8418', '#56a022', '#72ba2e'], 5);
+// Scuba gear: a navy wetsuit with a cyan stripe over the back half, a yellow
+// air tank strapped on top, a yellow flipper, and a dive mask over the eyes.
+const SUIT = ramp(['#070a1a', '#0e1430', '#182248', '#243460', '#34487a', '#4a6294'], 6);
+const STRIPE = ramp(['#0a5a70', '#149ab0', '#3ad0e0', '#9af2fa'], 4);
+const TANK = ramp(['#6a3a04', '#a86410', '#d8961c', '#f4c030', '#ffe070', '#fff4b8'], 6);
+const RUBBER = ramp(['#0a1a22', '#12303c', '#1e4a58', '#2e6676'], 4);
 function mameshiba(frame) {
   const W = 44, H = 32, cy = 17;
   const flop = [0, 0.5, 0, -0.5][frame];
+  const kick = [0, 1, 0, -1][frame];
   const field = (x, y) => {
     let h = -1, m = 0;
     const put = (hh, mm) => { if (hh > h) { h = hh; m = mm; } };
+    // the air tank riding on its back, with a valve at the front
+    put(up(tube(x, y, 7.5, cy - 10.4, 17.5, cy - 11.4, 2.5, 2.5), 8), 7);
+    put(up(tube(x, y, 18, cy - 11.6, 20.2, cy - 12.8, 1, 0.8), 8.8), 8);
+    // a flipper off the tail, kicking
+    put(up(dome(x - 3.2, y - (cy + 6 + kick), 2.8, 4.2, 2.2), 1), 9);
     // the bean: long and round, with a gentle dip along its tummy
     const dy = y - cy;
     const face = Math.max(0, (x - 24) / 14) * 1.2;   // the face end is a little fuller
@@ -120,10 +132,16 @@ function mameshiba(frame) {
     // the little front ear, peeking out at the top of the face
     put(up(dome(x - 37.6, y - (cy - 7.5), 2.4, 3.4, 2.6), 6), 2);
     if (h <= 0) return null;
-    // the big floppy ear lying on the back of the head
-    const ex = (x - (12 + flop * 0.5)) / 3.4, ey = (y - (cy - 5 + flop)) / 5.4;
-    if (ex * ex + ey * ey < 1 && m === 1) return [h + 1.2 * Math.sqrt(1 - ex * ex - ey * ey), 2];
+    // the suit's hood keeps the big floppy ear, as a soft bump
+    const ex = (x - (13 + flop * 0.5)) / 3.4, ey = (y - (cy - 5 + flop)) / 5.2;
+    if (ex * ex + ey * ey < 1 && m === 1) return [h + 1.2 * Math.sqrt(1 - ex * ex - ey * ey), 5];
     if (m !== 1) return [h, m];
+    // the wetsuit hugs everything behind the face, ending in a rounded cuff,
+    // with a cyan stripe down the side and a strap round the tank
+    const edge = 22 - ((y - cy) / 10) ** 2 * 4;
+    if (Math.abs(x - 12.5) < 0.9 && y < cy - 4) return [h + 0.4, 8];
+    if (x < edge - 1) return [h, Math.abs(y - (cy + 3 + (x - 12) * 0.06)) < 0.9 ? 6 : 5];
+    if (x < edge) return [h + 0.7, 6];
     // face
     const nx = x - 31, ny = y - (cy + 1.2);
     if (ny > -0.8 && ny < 1.2 && Math.abs(nx) < 1.6 - ny * 0.6) return [h, 3];                         // nose
@@ -132,7 +150,9 @@ function mameshiba(frame) {
   };
   const c = sculpt(W, H, field, {
     1: { pal: BEAN, gloss: 0.45, dither: 0.35 }, 2: { pal: EAR, gloss: 0.3, dither: 0.35 }, 3: { pal: INK, flat: true }, 4: { pal: WHITE, flat: true },
-  }, { outline: hex('#16240a') });
+    5: { pal: SUIT, gloss: 0.7, dither: 0.3 }, 6: { pal: STRIPE, gloss: 0.5, dither: 0.3 }, 7: { pal: TANK, gloss: 0.9, dither: 0.3 },
+    8: { pal: RUBBER, gloss: 0.5, dither: 0.3 }, 9: { pal: TANK, gloss: 0.5, dither: 0.3, bias: -0.5 },
+  }, { outline: hex('#0a1020') });
   // round shiny eyes, placed by hand so they stay perfectly round
   const g = c.getContext('2d');
   for (const ex of [25, 34]) {
@@ -142,6 +162,20 @@ function mameshiba(frame) {
     g.fillRect(ex + 1, ey, 2, 1); g.fillRect(ex, ey + 1, 4, 2); g.fillRect(ex + 1, ey + 3, 2, 1);
     g.fillStyle = '#ffffff'; g.fillRect(ex + 1, ey + 1, 1, 1);
   }
+  // the dive mask: a rubber rim round both eyes, tinted glass, a glint
+  const mx = 23, my = cy - 8, mw = 17, mh = 8;
+  g.fillStyle = 'rgba(150,235,255,0.32)'; g.fillRect(mx + 1, my + 1, mw - 2, mh - 2);
+  g.fillStyle = '#12303c';
+  g.fillRect(mx + 1, my, mw - 2, 1); g.fillRect(mx + 1, my + mh - 1, mw - 2, 1);
+  g.fillRect(mx, my + 1, 1, mh - 2); g.fillRect(mx + mw - 1, my + 1, 1, mh - 2);
+  g.fillRect(mx + 7, my + mh - 2, 2, 1);                       // over the nose bridge
+  g.fillStyle = '#2e6676'; g.fillRect(mx + 2, my, mw - 4, 1);
+  g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(mx + 11, my + 2, 2, 1); g.fillRect(mx + 12, my + 3, 1, 1);
+  // the regulator hose from the valve round to its mouth
+  g.fillStyle = '#1a2a38';
+  for (const [hx, hy] of [[20, cy - 12], [21, cy - 11], [21, cy - 10], [21, cy - 9], [22, cy], [22, cy + 1], [23, cy + 2], [24, cy + 3], [25, cy + 4], [26, cy + 4], [27, cy + 4], [28, cy + 4]]) g.fillRect(hx, hy, 1, 1);
+  g.fillStyle = '#2a3a4a'; g.fillRect(29, cy + 3, 3, 3);
+  g.fillStyle = '#9ab0c0'; g.fillRect(30, cy + 3, 1, 1);
   c.ox = 22; c.oy = cy; c.mouth = [31, cy + 3];
   return c;
 }

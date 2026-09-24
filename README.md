@@ -12,21 +12,22 @@ is the song in `audio/`.
 
 ## The story (the length of the song, about 3:45)
 
-It starts as a little photo game and only turns into a confession at the
-hook. Once the song is on, every beat is pinned to a moment in the track, and
+It starts as a little photo game (you play her) and only turns into a
+confession at the hook. There's no dialogue and no subtitles: it's told in
+pictures. Once the song is on, every beat is pinned to a moment in the track, and
 the whole tank moves with the music: fish bounce and squash on the beat, waves
 ripple through the schools, crabs wave their claws, and the light breathes
 with the song.
 
-1. **Title**: "Very Cool Aquarium Game". Tap to dive in.
-2. **The tour** (before the music): he walks into the jellyfish hall on his own, and a Mameshiba paddles up to the glass. It does the tours here. In a dialogue box at the top of the screen it shows you the camera: hold it up, snap a jelly, watch the print develop, then the album and the points. It goes at your pace, with just the sound of the water. When you head for the reef, the song starts.
-3. **Jellyfish hall** (0:00): he wanders along the glass pointing out jellies to nobody, while the bean drops a tip or two. Tap any creature to make it react.
-4. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a fat seal dressed as Cupid sitting on a rock in the middle (wings, sash, bow and a heart-tipped arrow), anemones, clownfish families and schools of fish. He runs into her here, and they talk: "wait... {to}?", "oh hey! you're here too?". He jumps around, they shake hands, she asks about the camera, and he takes her to see the big tank.
-5. **The walk** (0:42): along the great Buddha tank as the camera follows, chatting on the way, arriving at the middle of the window on the hook.
+1. **Title**: "Very Cool Aquarium Game". Tap to dive in; the game's original music box starts.
+2. **Photo quest** (before the song): she walks into the jellyfish hall on her own with a camera while the music box loops. A quest card asks for three photos: a moon jelly, a sea nettle and a giant jelly. An arrow points at the camera; raise it and she lifts hers to her eye. The photo that completes the list stamps QUEST CLEAR! and starts "Always".
+3. **Jellyfish hall** (0:00): she wanders along the glass pointing out jellies. Tap any creature to make it react. A Mameshiba in a little scuba suit (hood with its floppy ear, air tank, mask, flipper) paddles around here and in the other tanks.
+4. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a fat seal dressed as Cupid sitting on a rock in the middle, anemones, clownfish families and schools of fish. He's already there at the glass. She walks in past him, he spots her ("!" with anime focus lines) and can't keep still, jumping around, then comes over and they shake hands, and they watch the reef together.
+5. **The walk** (0:42): along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
 6. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
 7. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
 8. **The words** (2:19): the minnows spell `I ♥ YOU`, the room dims to a soft spotlight and the question appears. The "no" button runs away.
-9. **Finale**: when she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates. Dolphins and seahorses swim a heart around the couple, and all the fish come to the middle of the window to spell *I*, then *LOVE*, then *YOU*, over and over: the letters light up as they settle, and between words the whole crowd breaks off and circles round before it regroups. A whale shark glides past carrying a heart of minnows, the crabs line up to dance, and the minnows come home to frame the Buddha.
+9. **Finale**: when she says yes the tank turns bright summer, sunbeams pour in and every creature celebrates. Dolphins and seahorses swim a heart around the couple, and all the fish come to the middle of the window to spell *I*, then *LOVE*, then *YOU*, over and over: the letters light up as they settle, and between words the whole crowd breaks off and circles round before it regroups. A whale shark glides past, the crabs line up to dance, and the minnows come home to frame the Buddha.
 
 ### Photo mode
 
@@ -44,9 +45,8 @@ warm, then vivid colour) and roll. Your camera shows in the corner as you play. 
 legendaries are the whale shark, the Mameshiba, the tree friend, and the
 two of them together.
 
-Before the hook the characters talk in the dialogue box (the lines are in
-`js/story/story.js`). From the hook on, subtitles type in over a soft
-backing, one line at a time, and fade away in a few bubbles.
+The story has no subtitles by default; `lyrics` in `js/config.js` can bring
+them back (they type in over a soft backing and fade away in a few bubbles).
 Every line starts where a sung phrase starts in the track (found by
 measuring the song's vocal band). They are original lines, in
 `js/config.js` under `lyrics`: swap in your own words there.
@@ -120,8 +120,9 @@ is no build step.
 - **Sound** (`js/audio.js`): plays the song and runs a live analyser on it,
   giving the scene a loudness level and a beat pulse. The story reads its
   clock from the track, so it stays in sync. Small effects (bubbles, chimes)
-  are still synthesised. The first tap wakes the audio with a soft wash of
-  water; the song itself starts when the tour ends. The speaker icon (top
+  are still synthesised. The first tap starts the game's music box
+  (synthesised, looping, over a soft wash of water); the song itself starts
+  on the photo that completes the quest. The speaker icon (top
   right) mutes it.
 - **Galleries** (`js/world/rooms.js`): the jellyfish hall and the coral reef
   share the main tank's camera, couple and effects, so the story drives any

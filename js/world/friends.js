@@ -23,19 +23,20 @@ function prof(pts, u) {
   }
   return pts[pts.length - 1][1];
 }
-const TOP = [[0, 1.4], [0.12, 2.8], [0.25, 5.4], [0.4, 9.4], [0.55, 11.4], [0.68, 11], [0.78, 9.6], [0.85, 7.4], [0.885, 4.6], [0.9, 3.2], [1, 1.9]];
-const BOT = [[0, 1.3], [0.12, 2.5], [0.25, 4.6], [0.4, 8.2], [0.55, 9.8], [0.68, 9], [0.78, 7], [0.86, 4.6], [0.92, 2.8], [1, 1.6]];
+// long and slim, with a narrow tail stock and a long beak
+const TOP = [[0, 1.1], [0.12, 1.9], [0.25, 3.4], [0.4, 5.6], [0.55, 6.8], [0.68, 6.7], [0.78, 6.0], [0.85, 4.7], [0.885, 3.1], [0.9, 2.3], [1, 1.4]];
+const BOT = [[0, 1.0], [0.12, 1.7], [0.25, 3.0], [0.4, 4.9], [0.55, 5.8], [0.68, 5.5], [0.78, 4.4], [0.86, 3.0], [0.92, 2.0], [1, 1.1]];
 
-// A big bottlenose dolphin facing right: a rounded melon over a short beak
+// A long, slim bottlenose dolphin facing right: a rounded melon over a short beak
 // with a smile, a swept-back dorsal fin, a pectoral flipper, dark back fading
 // through the flank to a pale belly, and flukes that beat up and down while
 // the body flexes. frame 0..5.
-function dolphinSprite(frame) {
+export function dolphinSprite(frame) {
   const k = 'd' + frame;
   if (cache.has(k)) return cache.get(k);
-  const W = 88, H = 48, cy = 24, X0 = 9, L = 74;
+  const W = 118, H = 40, cy = 20, X0 = 11, L = 100;
   const beat = Math.sin((frame / DOLPHIN_FRAMES) * Math.PI * 2);
-  const mid = (u) => cy + beat * 3.4 * Math.pow(1 - u, 2.2) - beat * 0.6 * u;
+  const mid = (u) => cy + beat * 3.8 * Math.pow(1 - u, 2.2) - beat * 0.6 * u;
   const finBase = mid(0.57) - prof(TOP, 0.57);
   const fa = -beat * 0.55, ca = Math.cos(fa), sa = Math.sin(fa);
   const field = (x, y) => {
@@ -53,21 +54,21 @@ function dolphinSprite(frame) {
     }
     // swept-back dorsal fin
     const v = finBase - y;
-    if (v > -1 && v < 11) {
-      const x0 = X0 + 0.5 * L, x1 = X0 + 0.64 * L;
-      const lead = x1 - v * 0.75 - v * v * 0.02, trail = x0 + 2 * (v / 11) - 4 * (v / 11) ** 2;
-      if (x > trail && x < lead) put(3 + (11 - v) * 0.12, 1);
+    if (v > -1 && v < 9) {
+      const x0 = X0 + 0.52 * L, x1 = X0 + 0.62 * L;
+      const lead = x1 - v * 0.95 - v * v * 0.03, trail = x0 + 2 * (v / 9) - 4 * (v / 9) ** 2;
+      if (x > trail && x < lead) put(2.6 + (9 - v) * 0.12, 1);
     }
     // pectoral flipper, angled back and down
-    put(up(tube(x, y, X0 + 0.74 * L, mid(0.74) + 5, X0 + 0.64 * L, mid(0.64) + 12, 2.3, 0.8, 1), 5), 1);
+    put(up(tube(x, y, X0 + 0.75 * L, mid(0.75) + 3.4, X0 + 0.66 * L, mid(0.66) + 9, 1.8, 0.7, 1), 4), 1);
     // flukes, tilting with the beat
     const lx0 = x - X0, ly0 = y - mid(0);
     const lx = lx0 * ca + ly0 * sa, ly = -lx0 * sa + ly0 * ca;
-    if (lx > -9 && lx < 1.5 && Math.abs(ly) < 1 + -lx * 0.9 && !(lx < -5.8 && Math.abs(ly) < (-lx - 5.8) * 1.4)) put(2.2, 1);
+    if (lx > -10 && lx < 1.5 && Math.abs(ly) < 0.8 + -lx * 0.85 && !(lx < -6.4 && Math.abs(ly) < (-lx - 6.4) * 1.4)) put(2.0, 1);
     if (h <= 0) return null;
     // eye, blowhole and the smile along the beak
-    const ue = 0.835, ex = X0 + ue * L, ey = mid(ue) - 1.4;
-    if (((x - ex) / 1.4) ** 2 + ((y - ey) / 1.1) ** 2 < 1) return [h, Math.hypot(x - ex + 0.4, y - ey + 0.4) < 0.5 ? 6 : 5];
+    const ue = 0.845, ex = X0 + ue * L, ey = mid(ue) - 1.1;
+    if (((x - ex) / 1.3) ** 2 + ((y - ey) / 1.0) ** 2 < 1) return [h, Math.hypot(x - ex + 0.4, y - ey + 0.4) < 0.5 ? 6 : 5];
     if (u > 0.755 && u < 0.775 && y < mid(u) - prof(TOP, u) + 1.3) return [h, 5];
     if (u > 0.855 && u < 0.99) {
       const ym = mid(u) + 0.9 - Math.max(0, 0.9 - u) * 14;
@@ -79,7 +80,7 @@ function dolphinSprite(frame) {
     1: { pal: BACK, gloss: 0.8 }, 2: { pal: FLANK, gloss: 0.7 }, 3: { pal: BELLY, gloss: 0.5, bias: -0.4 },
     5: { pal: INK, flat: true }, 6: { pal: WHITE, flat: true },
   });
-  c.ox = 44; c.oy = cy;
+  c.ox = 59; c.oy = cy;
   cache.set(k, c);
   return c;
 }
@@ -141,7 +142,7 @@ class HeartSwimmer {
     this.kind = kind;
     this.cx = o.cx; this.cy = o.cy; this.z = o.z; this.s = o.s;
     this.u = o.u; this.speed = o.speed ?? 0.09;
-    this.len = kind === 'dolphin' ? 80 : 18;
+    this.len = kind === 'dolphin' ? 100 : 18;
     const [hx, hy] = heartPoint(this.u * TAU);
     this.x = o.fromX ?? this.cx + hx * this.s; this.y = o.fromY ?? this.cy + hy * this.s;
     this.enter = 0; this.t = Math.random() * 5; this.face = 1; this.ang = 0; this.hopT = 0;

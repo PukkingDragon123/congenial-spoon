@@ -57,25 +57,9 @@ export const CONFIG = {
   //   [ time, text, band ]   band: 'high' (default, open water up top) | 'low'
   // Each line starts where a sung phrase starts in the track (found by
   // measuring the vocal band of the song), so the words breathe with it.
-  // (Before the hook the characters talk instead: see the dialogue in
-  // js/story/story.js.)
+  // (Empty: the story is told without subtitles. Add lines here to bring
+  // them back.)
   lyrics: [
-    // the hook
-    [58.0, 'I really like you'],
-    [64.0, 'I have for a while now 👀'],
-    [72.0, 'always'],
-    [80.0, "I hope that's okay"],
-    [86.0, '{to}'],
-    // verse two
-    [94.0, "there's one more thing 👀"],
-    [101.0, 'I wrote it down'],
-    // the big chorus
-    [139.0, 'always'],
-    [153.0, 'I mean it'],
-    [171.0, "it's you"],
-    // outro
-    [185.0, 'thank you for being you'],
-    [199.0, 'always'],
   ],
 };
 

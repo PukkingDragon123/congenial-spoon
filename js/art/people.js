@@ -164,9 +164,15 @@ function drawBack(R, C, ox, p) {
     ], MAT.top);
   }
   // arms
+  const cam = p.cam || 0, camY = shY - C.neck - C.headRy * 0.4 + (p.headY || 0);
   for (const s of [-1, 1]) {
     const sx = ox + s * (C.sh - (C.girl ? 1.2 : 1.8)) + bx * 0.5, sy = shY + (C.girl ? 2.4 : 3);
-    const tgt = s < 0 ? p.lhand : p.rhand;
+    let tgt = s < 0 ? p.lhand : p.rhand;
+    // holding a camera up to her eye: both hands come up either side of it
+    if (cam > 0 && !(s < 0 && p.lhand)) {
+      const rx = sx + s * 0.8, ry = sy + C.ua + C.fa, cx = ox + headX + s * 5.2;
+      tgt = [lerp(rx, cx, cam), lerp(ry, camY + 1, cam)];
+    }
     // at rest the arm hangs straight down at the side, not folded in
     const tx = tgt ? tgt[0] : sx + s * 0.8 + wt * 0.3, ty = tgt ? tgt[1] : sy + C.ua + C.fa;
     const [ex, ey, wx, wy] = ik(sx, sy, tx, ty, C.ua, C.fa, p.bend ? p.bend[s < 0 ? 0 : 1] : s > 0 ? 1 : -1);
@@ -200,6 +206,8 @@ function drawBack(R, C, ox, p) {
     R.ellipse(hx + 2, headY - 0.9, 3.0, 2.2, MAT.hair);
   }
   R.capsule(hx - 2.8, headY - 3.2, hx + 0.4, headY - 4.2, 0.5, 0.5, MAT.shine);
+  // the camera's ends peek out either side of her head
+  if (cam > 0.6) R.capsule(hx - 6.4, camY, hx + 6.4, camY, 2.3, 2.3, MAT.top);
   if (C.girl && !p.front) {
     const hs = p.hairSway || 0;
     R.poly([
@@ -348,6 +356,13 @@ export class Couple {
     this.shake = 0;       // shaking hands, 0..1
     this.pose = 'cheer';  // his front-view pose: cheer | wave | surprised
     this.hop = 0;         // lift off the floor, applied by the stage
+    // apart, she can be on her own (she's the one you play): her pose then
+    // also has 'walk', with its own stride, and she can raise a camera
+    this.guyOn = true;
+    this.guyDX = 0;       // how much further right he stands than usual
+    this.girlWalk = 0;
+    this.girlMoving = 0;
+    this.girlCam = 0;     // camera up to her eye, 0..1
   }
 
   update(dt) { this.t += dt; }
@@ -376,7 +391,8 @@ export class Couple {
       const wg = Math.sin(t * 0.45) * 0.8 * (1 - h), wq = Math.sin(t * 0.38 + 2) * 0.8 * (1 - h);
       drawBack(R, GUY, gx, { breath, tilt: 0.35 * ln + 0.3 * gl, rhand: guyR, headX: ln * 1.2 + gl * 1.6, sway: ln * 0.6, weight: wg });
       drawBack(R, GIRL, qx, {
-        breath: (Math.sin(t * 1.6 + 0.8) + 1) * 0.5, tilt: -1.4 * ln, lhand: girlL, rhand: girlR, headX: -ln * 3.2 + pt * 0.8, headY: ln * 1.6 - pt * 0.6, sway: -ln * 1.2, weight: wq,
+        cam: this.girlCam * (1 - ln),
+        breath: (Math.sin(t * 1.6 + 0.8) + 1) * 0.5, tilt: -1.4 * ln, lhand: girlL, rhand: this.girlCam > 0.05 ? null : girlR, headX: -ln * 3.2 + pt * 0.8, headY: ln * 1.6 - pt * 0.6, sway: -ln * 1.2, weight: wq,
         hairSway: Math.sin(t * 0.9) * 0.8, flutter: Math.sin(t * 1.3) * 0.5,
       });
     } else if (this.mode === 'face' || this.mode === 'hug') {
@@ -396,12 +412,12 @@ export class Couple {
   }
 
   renderApart(t, breath, gh) {
-    const R = this.R, gx = -gh, qx = gh + this.girlDX;
+    const R = this.R, gx = -gh + this.guyDX, qx = gh + this.girlDX;
     const gs = -2.4 - GUY.leg - GUY.torso; // his shoulder height
     // shaking hands: their near hands meet halfway, pumping up and down
     const sk = this.shake, mid = (gx + qx) / 2, pump = Math.sin(t * 16) * 1.6 * sk;
     const shakeAt = (dx) => [mid + dx, -GUY.leg - 4 + pump];
-    if (this.mode === 'walk') drawSide(R, GUY, gx, 1, { dist: this.walk * 7.5 + 9, moving: this.moving });
+    if (!this.guyOn) { /* she's on her own */ } else if (this.mode === 'walk') drawSide(R, GUY, gx, 1, { dist: this.walk * 7.5 + 9, moving: this.moving });
     else if (this.mode === 'side') drawSide(R, GUY, gx, 1, { hands: sk > 0 ? [shakeAt(-0.6), null] : null });
     else if (this.mode === 'front') {
       const w = Math.sin(t * 14);
@@ -417,14 +433,19 @@ export class Couple {
       drawBack(R, GUY, gx, { breath, rhand: rh, weight: Math.sin(t * 0.45) * 0.8 });
     }
     if (!this.girlOn) return;
-    if (this.girlPose === 'side') {
+    if (this.girlPose === 'walk') {
+      drawSide(R, GIRL, qx, 1, { dist: this.girlWalk * 7.5, moving: this.girlMoving, hairSway: Math.sin(t * 2) * 0.6 });
+    } else if (this.girlPose === 'side') {
       const wv = this.girlWave;
       let hand = null;
       if (sk > 0) hand = shakeAt(0.6);
       else if (wv > 0) hand = [qx - lerp(4, 9, wv) + Math.sin(t * 10) * 1.5 * wv, lerp(-GIRL.leg + 2, -GIRL.leg - GIRL.torso - 12, wv)];
       drawSide(R, GIRL, qx, -1, { hands: hand ? [hand, null] : null, hairSway: Math.sin(t * 0.9) * 0.8 });
     } else {
+      const pt = this.guyOn ? 0 : this.point, gsh = -2.4 - GIRL.leg - GIRL.torso;
+      const rh = pt > 0 ? [lerp(qx + GIRL.sh + 1.5, qx + GIRL.sh + 5, pt), lerp(-GIRL.leg + 6, gsh - 4 + Math.sin(t * 3) * 0.6, pt)] : null;
       drawBack(R, GIRL, qx, {
+        cam: this.girlCam, rhand: this.girlCam > 0.05 ? null : rh,
         breath: (Math.sin(t * 1.6 + 0.8) + 1) * 0.5, weight: Math.sin(t * 0.38 + 2) * 0.8,
         hairSway: Math.sin(t * 0.9) * 0.8, flutter: Math.sin(t * 1.3) * 0.5,
       });
