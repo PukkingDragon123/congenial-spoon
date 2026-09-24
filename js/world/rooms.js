@@ -670,7 +670,7 @@ export class ReefRoom extends Room {
     this.wallCol = [hex('#0a1838'), hex('#030814')];
     this.floorCol = [hex('#081632'), hex('#02050c')];
     this.reflA = 0.3;
-    this.span = 240;
+    this.span = 380;
     this.near = 292; this.far = 258;
     this.shafts = [];
     this.layers = [];
@@ -698,7 +698,7 @@ export class ReefRoom extends Room {
       const c = genFormation(o);
       this.layers.push({ img: c, x: o.x, z: o.z, sink: o.sink ?? 6 });
     });
-    const hw = Math.max(260, this.W * 0.5 + 60);
+    const hw = Math.max(300, this.W * 0.5 + 100);   // a wider reef than before
     F({ x: CX - hw - 260, z: 0.88, w: 400, h: 150, seed: 61, profile: (x) => 0.95 - 0.55 * x + 0.1 * Math.sin(x * 9), size: [10, 26], decor: 0.5, sink: 4 });
     F({ x: CX + hw * 0.35, z: 0.88, w: 420, h: 160, seed: 62, profile: (x) => 0.4 + 0.55 * x + 0.08 * Math.sin(x * 11), size: [10, 26], decor: 0.5, sink: 4 });
     F({ x: CX - hw * 0.95 - 120, z: 0.5, w: 330, h: 230, seed: 63, profile: (x) => 0.97 - Math.abs(x - 0.35) ** 1.8 * 1.5 + 0.04 * Math.sin(x * 17), size: [14, 40], decor: 0.9, taper: [0.1, 0.14] });
@@ -731,8 +731,9 @@ export class ReefRoom extends Room {
     step(() => {
       const self = this;
       const statue = (img, x, z, sink) => this.decor.push({ z, draw(ctx) { const [sx, sy] = self.toScreen(x, self.floorY(z) + sink, z); ctx.drawImage(img, Math.round(sx - img.width / 2), Math.round(sy - img.height)); } });
-      statue(genBunny(), CX - 205 * k, 0.24, 6);
-      statue(genFrog(), CX + 200 * k, 0.2, 4);
+      // the bunny sits back by the big left-hand rock, the frog out on the right
+      statue(genBunny(), CX - hw * 0.5, 0.47, 8);
+      statue(genFrog(), CX + hw * 0.55, 0.22, 4);
     });
     // a second, nearer coral garden along the front edges, and starfish and
     // urchins scattered over the sand
@@ -748,8 +749,8 @@ export class ReefRoom extends Room {
       }
       this.layers.push({ img: P.canvas(), x: X0, z: 0.1, sink: 4 });
       const self = this;
-      for (let i = 0; i < 14; i++) {
-        const z = 0.04 + r() * 0.3, x = CX + (r() - 0.5) * 560 * k, kind = r() < 0.6 ? 'star' : 'urchin';
+      for (let i = 0; i < 18; i++) {
+        const z = 0.04 + r() * 0.3, x = CX + (r() - 0.5) * 800 * k, kind = r() < 0.6 ? 'star' : 'urchin';
         const col = ['#ff6a3a', '#ff4a8a', '#ffb03a', '#c86aff'][(r() * 4) | 0], rot = r() * TAU;
         this.decor.push({ z, draw(ctx) { const [sx, sy] = self.toScreen(x, self.floorY(z) + 2, z); drawSandThing(ctx, Math.round(sx), Math.round(sy), kind, col, rot, 1 - z); } });
       }

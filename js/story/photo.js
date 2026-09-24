@@ -175,6 +175,21 @@ export class PhotoMode {
   iconScale() { return this.W >= 560 ? 1 : 0.5; }
   camRect() { const k = this.iconScale(), w = CAM_W * k, h = CAM_H * k; return [this.W - w - 12, this.H - h - 4, w, h]; }
   coinRect() { const [bx, by] = this.bookRect(), w = textWidth('✦' + Math.round(this.shown)); return [bx - 3 - w, by + 3, w, 9]; }
+  // the big round capture button, bottom middle, while the camera is up
+  shutterRect() { const r = this.W < 300 ? 13 : 16; return [Math.round(this.W / 2 - r), this.H - r * 2 - 8, r * 2, r * 2]; }
+  drawShutter(ctx) {
+    const [x, y, w] = this.shutterRect(), r = w / 2, cx = x + r, cy = y + r;
+    const pt = this.pressT ?? 9, press = pt < 0.18 ? Math.sin((pt / 0.18) * Math.PI) : 0, busy = this.developing() || !this.film;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(cx, cy + 2, r + 1, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#2a2436'; ctx.beginPath(); ctx.arc(cx, cy, r - 2, 0, TAU); ctx.fill();
+    const ir = (r - 4) * (1 - press * 0.18);
+    ctx.fillStyle = busy ? '#8a8a96' : '#ff4a6a'; ctx.beginPath(); ctx.arc(cx, cy, ir, 0, TAU); ctx.fill();
+    ctx.fillStyle = busy ? '#b0b0ba' : '#ff9ab0'; ctx.beginPath(); ctx.arc(cx - ir * 0.3, cy - ir * 0.3, ir * 0.35, 0, TAU); ctx.fill();
+    // a slow pulsing ring so you notice it
+    ctx.strokeStyle = '#fff4b0'; ctx.lineWidth = 1; ctx.globalAlpha = busy ? 0 : 0.35 + Math.sin(this.t * 4) * 0.25;
+    ctx.beginPath(); ctx.arc(cx, cy, r + 3 + Math.sin(this.t * 4), 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+  }
   bookRect() { const [cx] = this.camRect(); return [cx - 19, this.H - 17, 15, 14]; }
   model() { return MODELS[this.cam.model] || MODELS.instant; }
   camImage() {
@@ -225,10 +240,11 @@ export class PhotoMode {
       if (this.album && this.album.drawing) this.doodle(x, y);
       else if (this.album && !this.album.card && this.album.tab === 'gallery') this.gallery.move(x, y);
       else if (this.album && !this.album.card && this.album.tab === 'notebook') this.notebook.move(x, y);
-      else if (this.on) this.aim = [x, y];
+      else if (this.on && this.dragAim) this.aim = [x, y];  // aim follows a drag, not a hover
       return !!this.album;
     }
     if (type === 'up') {
+      this.dragAim = false;
       if (this.album && this.album.drawing) { this.album.drawing = false; this.album.last = null; this.saveArt(); }
       else if (this.album && this.album.tab === 'gallery') this.gallery.up(x, y);
       else if (this.album && this.album.tab === 'notebook') this.notebook.up(x, y);
@@ -250,7 +266,8 @@ export class PhotoMode {
       this.story.sound.sfx('pop');
       return true;
     }
-    if (this.on) { this.aim = [x, y]; this.snap(); return true; }
+    if (this.on && this.hit(this.shutterRect(), x, y)) { this.pressT = 0; this.snap(); return true; }
+    if (this.on) { this.aim = [x, y]; this.dragAim = true; this.story.sound.sfx('type'); return true; }
     return false;
   }
 
@@ -438,6 +455,7 @@ export class PhotoMode {
     this.shown += (this.points - this.shown) * Math.min(1, dt * 6);
     if (Math.abs(this.points - this.shown) < 0.5) this.shown = this.points;
     this.busyT = Math.max(0, (this.busyT || 0) - dt * 2);
+    if (this.pressT != null) this.pressT += dt;
     const p = this.prints[0];
     if (p) {
       p.t += dt;
@@ -485,7 +503,7 @@ export class PhotoMode {
   draw(ctx) {
     if (!this.available() && !this.prints.length) return;
     const W = this.W, H = this.H;
-    if (this.on && !this.album) this.drawViewfinder(ctx);
+    if (this.on && !this.album) { this.drawViewfinder(ctx); this.drawShutter(ctx); }
     if (this.flash > 0) {
       const [fx, fy, fw, fh] = this.frameRect();
       ctx.globalAlpha = this.flash * 0.9;

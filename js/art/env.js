@@ -493,7 +493,7 @@ const PATINA = ramp(['#0e120a', '#1c2212', '#2c3218', '#3e4420', '#525828', '#68
 export function genBunny() {
   const W = 128, Ht = 122;
   const buf = new Buf(W, Ht);
-  const P = PATINA, N = P.length - 1;
+  const P = STONE, N = P.length - 1;   // carved stone, like the tank's rocks
   const L = [-0.55, -0.62, 0.56];                      // light from the top left
   const idx = new Int8Array(W * Ht).fill(-1);          // ramp index per pixel
   const put = (x, y, i) => { x |= 0; y |= 0; if (x >= 0 && y >= 0 && x < W && y < Ht) idx[y * W + x] = clamp(Math.round(i), 0, N); };
@@ -552,7 +552,7 @@ export function genBunny() {
     if (Math.abs(y - lid) < 1.1 && Math.abs(x) < 8.5) put(ex + x, ey + y, y < lid ? N : N - 2);  // the heavy lid
     if (Math.abs(y - (lid - 2.2)) < 0.6 && Math.abs(x) < 7) put(ex + x, ey + y, 3);             // crease above it
   }
-  put(ex - 3, ey - 1, N - 1); put(ex - 2, ey - 1, N - 2);
+  put(ex - 3, ey - 1, N); put(ex - 2, ey - 1, N); put(ex - 3, ey, N - 1); put(ex + 2, ey + 1, N - 3);
   // tiny front paws folded on the tummy, toes to the left
   blob(72, 90, 17, 6.5, 1.3, 0.28);
   for (let i = 0; i < 3; i++) { put(57, 86 + i * 2, 2); put(58, 86 + i * 2, 2); }

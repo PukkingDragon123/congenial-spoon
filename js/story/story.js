@@ -395,7 +395,7 @@ export class Story {
       if (Q.items.filter((it) => it.done).length > had) D.say('bean', cheers[ci++ % cheers.length], { life: 1.4 });
     };
     await D.say('bean', '5 pics: 3 jellies, me, and you. tap the camera to hold it up', { until: () => P.on || snaps > 0 });
-    D.say('bean', 'tap stuff to snap it', { life: 2 });
+    D.say('bean', 'tap to aim, then hit the big button to snap', { life: 2.6 });
     await this.until(() => Q.done);
     P.onSnap = null;
     // let the stamp and the print have their moment
@@ -426,7 +426,7 @@ export class Story {
       "ok go look around. someone's about to show up btw",
       "humble too. anyway, someone's about to show up. trust",
     ]);
-    if (this.sound.intro) this.sound.beginSong(VOCALS_AT);  // and here come the vocals
+    if (this.sound.intro) this.sound.beginSong(0);  // and here comes the song, from the top
   }
 
   // The Mameshiba's tour of the camera and the diary, one thing at a time,
