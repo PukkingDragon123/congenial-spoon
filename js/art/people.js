@@ -70,8 +70,8 @@ function ik(sx, sy, tx, ty, a, b, bend) {
 }
 
 // Proportions: about six and a half heads tall, legs half the height.
-export const GUY = { headRx: 5.0, headRy: 5.7, neck: 2.8, sh: 8.4, torso: 22, leg: 36, foot: 4.4, ua: 12.8, fa: 12.2, girl: false };
-export const GIRL = { headRx: 4.8, headRy: 5.4, neck: 2.8, sh: 7.4, torso: 19.5, leg: 32, foot: 3.8, ua: 11.2, fa: 10.6, girl: true };
+export const GUY = { headRx: 5.6, headRy: 6.2, neck: 2.4, sh: 7.6, torso: 19, leg: 30, foot: 4.2, ua: 11.2, fa: 10.6, girl: false };
+export const GIRL = { headRx: 5.4, headRy: 6.0, neck: 2.4, sh: 6.8, torso: 17, leg: 27, foot: 3.6, ua: 10, fa: 9.4, girl: true };
 
 // ----------------------------------------------------------------- gait --
 // One leg over the 8 frames, starting at its heel strike:

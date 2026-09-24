@@ -247,7 +247,7 @@ export class Story {
     return () => {
       const st = this.stage, c = this.aq.couple, gh = c.gap / 2;
       const x = st.coupleX + (who === 'guy' ? -gh + (c.apart ? c.guyDX : 0) : gh + (c.apart ? c.girlDX : 0));
-      let [sx, sy] = st.toScreen(x, st.coupleY - (who === 'guy' ? 76 - (c.kneel || 0) * 18 : 70) - (who === 'guy' ? c.hop : 0), 0);
+      let [sx, sy] = st.toScreen(x, st.coupleY - (who === 'guy' ? 67 - (c.kneel || 0) * 16 : 61) - (who === 'guy' ? c.hop : 0), 0);
       // through the close-up, when there is one
       const Z = this.post.p.zoom;
       const ZT = this.post.p.zoomTo;
@@ -366,29 +366,25 @@ export class Story {
       await D.say('bean', answers[i]);
       return i;
     };
-    await D.say('bean', 'oh! a visitor! hi hi!');
-    await chat("I'm Mameshiba. Part bean, part dog, all facts.", ['a talking bean??', 'cute scuba suit!'], [
-      'A talking bean with a degree in jellyfish, thank you very much.',
-      'Thank you!! Beans sink, so safety first.',
+    await D.say('bean', 'oh hey! hi!');
+    await chat("i'm mameshiba. bean, but make it dog.", ['wait you can talk??', 'love the goggles'], [
+      'yeah. i also know a lot about jellyfish. like, a lot.',
+      "thanks, beans sink. gotta be safe.",
     ]);
-    await chat('Did you know jellyfish are older than dinosaurs? Older than TREES?', ['older than trees??', 'they look good for their age'], [
-      'Yep! Jellies: over 500 million years. Trees: about 385 million. Babies.',
-      "No brain, no heart, no bones. No stress. That's the secret.",
+    await chat('fun fact: jellyfish are older than trees.', ['no way', 'ok nerd'], [
+      '500 million years vs 385. trees are babies.',
+      'nerd with a camera job for you actually.',
     ]);
-    await chat("I'm making an encyclopedia of everyone who lives here. Will you take the photos?", ["let's do it!", "what's in it for me?"], [
-      'Yay!! A real photographer!',
-      'Points! Puzzle pieces! A fun fact with every photo! And my eternal respect.',
-    ]);
-    await D.say('bean', 'Every photo of an animal unlocks a jigsaw piece and a fun fact. Finish a jigsaw and you win its keychain!');
+    await D.say('bean', "i'm making an animal book. take some pics for me? every pic unlocks a puzzle piece and a fact.");
     this.photoReady = true;
     const Q = (this.quest = new Quest(this, 'PHOTO QUEST', 'jellyfish hall', [
       ['jelly', 'a moon jelly'], ['nettle', 'a sea nettle'], ['bigjelly', 'a giant jelly'],
-      ['bean', 'me! (the bean)'], ['me', 'a selfie of you'],
+      ['bean', 'the bean (hi)'], ['me', 'a selfie'],
     ], 30));
     this.sound.sfx('chime');
     let snaps = 0;
     Q.point = () => { if (P.on || snaps || P.album) return null; const [x, y, w] = P.camRect(); return [x + w / 2, y - 3]; };
-    const cheers = ['Yes!! One down!', 'Ooh, great shot!', 'A natural!', 'Wait, is that ME? My good side!', 'Look at you! Cover star!'];
+    const cheers = ['nice!', 'ooh clean shot', 'ok pro', 'is that me?? my good side', 'look at you lol'];
     let ci = 0;
     P.onSnap = (info) => {
       snaps++;
@@ -396,8 +392,8 @@ export class Story {
       if (Q.snapped(info.keys)) { P.points += Q.bonus; P.save(); return; }
       if (Q.items.filter((it) => it.done).length > had) D.say('bean', cheers[ci++ % cheers.length], { life: 1.4 });
     };
-    await D.say('bean', 'Five photos for page one: three jellies, me, and you! Tap your camera to hold it up!', { until: () => P.on || snaps > 0 });
-    D.say('bean', 'Now tap a jelly to snap it. The card says which ones!', { life: 2.6 });
+    await D.say('bean', '5 pics: 3 jellies, me, and you. tap the camera to hold it up', { until: () => P.on || snaps > 0 });
+    D.say('bean', 'tap stuff to snap it', { life: 2 });
     await this.until(() => Q.done);
     P.onSnap = null;
     // let the stamp and the print have their moment
@@ -406,9 +402,9 @@ export class Story {
     if (this.quest === Q) this.quest = null;
     if (!P.album) P.on = false;
     c.point = 0;
-    await chat("QUEST CLEAR! You're officially my favourite human.", ['what now?', 'can I keep snapping?'], [
-      'The clownfish reef is next door. Go say hi!',
-      'Always! Your album is by the camera. Now go, go, the reef is next door!',
+    await chat('done! you\'re kinda good at this', ['what now?', 'can i keep going?'], [
+      'reef is next door. someone\'s waiting there btw',
+      'always. but check the reef first. trust',
     ]);
     if (this.sound.intro) this.sound.beginSong(VOCALS_AT);  // and here come the vocals
     if (bean) bean.go = null;
@@ -501,16 +497,14 @@ export class Story {
     const him = this.headAt('guy'), her = this.headAt('girl');
     // what they say to each other, pinned to the song
     for (const [t, who, line, life] of [
-      [27.6, 'me', 'Wait... is that you?', 1.0],
-      [29.0, 'her', "No, I'm a very tall clownfish.", 1.1],
-      [30.4, 'me', 'See, THAT. Nobody else talks like that.', 1.1],
-      [32.0, 'her', 'Why are you jumping?', 0.9],
-      [33.3, 'me', 'The floor is bouncy. Obviously.', 1.0],
-      [34.9, 'her', 'Okay, what are you listening to?', 1.0],
-      [36.4, 'me', 'Nothing good. Your playlists ruined everyone else\'s for me.', 1.1],
-      [38.0, 'me', 'Top 1 music taste. GOAT. I don\'t make the rules.', 1.0],
-      [39.3, 'her', 'Flattery works on me. Keep going.', 0.9],
-      [40.4, 'me', "Come see the big tank. I'll keep going.", 1.4],
+      [27.6, 'me', 'oh hey', 0.9],
+      [29.0, 'her', 'why are you here', 0.9],
+      [30.6, 'me', 'the fish invited me', 1.0],
+      [33.0, 'her', 'why are you jumping', 0.9],
+      [34.6, 'me', 'idk. happy i guess', 1.0],
+      [37.0, 'me', 'also your playlist is still on repeat. you have insane taste', 1.2],
+      [39.4, 'her', 'i know', 0.8],
+      [40.6, 'me', 'come see the big tank', 1.3],
     ]) this.atSong(t).then(() => D.say(who, line, { life }));
     const hop = (h, d) => this.tween(d, (k) => { c.hop = Math.sin(k * Math.PI) * h; });
     // a slow pan along the reef; a narrow screen stays on the two of them
@@ -592,11 +586,11 @@ export class Story {
     this.grade(3, { tint: [0.84, 0.94, 1.14], sat: 1.0, vig: 0.66, sun: 0, dim: 0.08 });   // deep, cool blue before the hook
     const D = this.dialog;
     for (const [t, who, line, life] of [
-      [44.6, 'me', "You know you're kind of the coolest person I know?", 1.1],
-      [47.0, 'her', 'KIND of??', 0.9],
-      [48.6, 'me', 'Fine. Fully. The humour, the weird little quirks, all of it.', 1.2],
-      [51.2, 'her', "You're being weird.", 0.9],
-      [52.8, 'me', 'Yeah. I get like that around you.', 1.1],
+      [44.6, 'me', "you're lowkey the coolest person i know", 1.1],
+      [47.0, 'her', 'lowkey??', 0.8],
+      [48.6, 'me', 'ok highkey. you\'re funny and weird in the best way', 1.2],
+      [51.4, 'her', "you're being weird", 0.9],
+      [53.0, 'me', 'yeah that happens around you', 1.1],
     ]) this.atSong(t).then(() => D.say(who, line, { life }));
     await this.walkTo(CX, 56.6);
   }
@@ -1178,22 +1172,19 @@ export class Story {
       await D.say('her', replies[i], { life: 0.55, cps: 80 });
       await D.say('me', answers[i]);
     };
-    await D.say('me', "Hi. It's me. The real me, not the pixel one.");
-    await D.say('me', 'Quick confession about the confession...');
-    await chat('Do you know how long this took to make?', ['a weekend?', 'tell me'], [
-      'A WEEKEND?? I wish. Try way too many late nights.',
-      'Way too many late nights. My brain is basically a moon jelly now.',
+    await D.say('me', "ok hi. it's me for real, not the pixel guy");
+    await chat('guess how long this took', ['a weekend?', 'how long'], [
+      'lol no. way too many late nights',
+      'way too many late nights. my brain is a jellyfish now',
     ]);
-    await D.say('me', 'Every fish is drawn with code. The dolphin was skinny, then chubby, then skinny again.');
-    await D.say('me', 'The tree guy got remade like five times. He is fine. He is a professional.');
-    await chat('So here\'s the truth: this was never really an aquarium game.', ['wait, what', 'I knew it'], [
-      'It was a very elaborate excuse to ask you that one question.',
-      'Okay detective. Yes. The fish, the bean, the camera... all a cover story.',
+    await D.say('me', 'the dolphin got redrawn like 4 times. the tree guy too. they\'re fine');
+    await chat("real talk, this was never an aquarium game", ['wait what', 'i knew it'], [
+      'it was just a really long way to ask you that',
+      'ok detective. yeah. the fish were a cover story',
     ]);
-    await D.say('me', "So thank you for saying yes. Or for clicking yes. I'm counting it.");
-    await chat("Anyway, the aquarium's all yours now. Walk around, fill the notebook. There's a prize.", ['okay!', 'is the prize you?'], [
-      'Go get it! The bean says hi.',
-      '...Maybe. Keep playing and find out.',
+    await chat("anyway it's yours now. walk around, finish the notebook. there's a prize", ['ok!', 'is the prize you'], [
+      'go get it. the bean says hi',
+      '...maybe. keep playing',
     ]);
   }
   walkKey(dir, down) {
