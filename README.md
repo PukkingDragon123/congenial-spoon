@@ -45,11 +45,14 @@ customised camera.
 ### Photo mode
 
 Tap the little camera (bottom right) to raise the viewfinder, then tap to
-snap. The shot prints out of the camera and takes 8 seconds to develop,
-and the Mameshiba looks after it while you wait: it wipes the print with a
-little cloth, grabs the corner and shakes it, then swims off with a
-"ta-da!". Tapping the print helps it along, and the *developer* upgrade in
-the camera workshop gets it down to 6, 4.5 and then 3 seconds. Then it's
+snap. The shot pops out of the top of the camera, down in the corner, and
+takes 8 seconds to develop while a tiny chibi Mameshiba (goggles pushed up)
+looks after it: it hops in, polishes the print with a cloth, hangs on to the
+corner and shakes it, and does a happy hop when it's done. You can't take
+another photo until it's finished (the viewfinder says "developing..."), so
+it works like a cooldown. Tapping the print helps it along, and the
+*developer* upgrade in the camera workshop gets it down to 6, 4.5 and
+then 3 seconds. Then the print flies to the middle of the screen and is
 scored: rarer creatures are worth more (common ★ up to legendary ★★★★), a
 first catch scores triple, and a centred subject gets a bonus. The little
 book next to the camera opens the album, with three tabs: *gallery*,

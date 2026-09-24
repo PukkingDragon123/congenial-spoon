@@ -9,7 +9,6 @@ import { TAU, clamp, lerp, ease, R } from '../util.js';
 import { makeCanvas } from '../util.js';
 import { drawText, textWidth, wrap, LINE_H } from '../font.js';
 import { burstStars } from '../world/fx.js';
-import { diverSprite, DIVER_FRAMES } from '../art/divers.js';
 import { Gallery } from './gallery.js';
 import { Book } from './book.js';
 import { FACTS, PIECES, SETS, setOf, jigsaw, keychainIcon, drawBanner, done as puzzleDone, setDone, clampPieces } from './encyclopedia.js';
@@ -58,6 +57,34 @@ const keyOf = (c) => {
   if (c.kind === 'jelly') return c.hue === 'nettle' ? 'nettle' : c.len >= 40 ? 'bigjelly' : 'jelly';
   return SPECIES[c.kind] ? c.kind : null;
 };
+
+// A tiny chibi Mameshiba with its dive goggles pushed up, 12x11 pixels. Two eyes states
+// (open, blink) and two feet frames for paddling.
+const CHIBI = [
+  '..kk....kk..',
+  '.kGgkkkkgGk.',
+  'kgbbbggbbbgk',
+  'kgbwbkkbwbgk',
+  'kgkkkggkkkgk',
+  'kggeggggeggk',
+  'kggeggggeggk',
+  'kgpggkkggpgk',
+  'kglggggggggk',
+  '.kgggggggGk.',
+  '..kGk..kGk..',
+];
+const CHIBI_COL = { k: '#1c3014', g: '#8fd44e', G: '#5e9a2c', l: '#c8f28a', b: '#5ac8f8', w: '#ffffff', e: '#0e1420', p: '#ff8aa8' };
+const chibiCache = {};
+function chibiBean(blink, feet) {
+  const id = blink * 2 + feet;
+  if (chibiCache[id]) return chibiCache[id];
+  const rows = CHIBI.slice();
+  if (blink) { rows[5] = 'kggggggggggk'; rows[6] = 'kgkkggggkkgk'; }
+  if (feet) rows[10] = '...kGk.kGk..';
+  const c = makeCanvas(12, 11);
+  rows.forEach((r, y) => [...r].forEach((ch, x) => { if (CHIBI_COL[ch]) { c.ctx.fillStyle = CHIBI_COL[ch]; c.ctx.fillRect(x, y, 1, 1); } }));
+  return (chibiCache[id] = c);
+}
 
 export class PhotoMode {
   constructor(story) {
@@ -186,9 +213,9 @@ export class PhotoMode {
   pointer(type, x, y) {
     // tap the print: help it develop (a shake), or send it off once done
     const pr = this.prints[0];
-    if (type === 'down' && pr && !this.album && this.printRect && this.hit(this.printRect, x, y) && pr.t > 1.6) {
+    if (type === 'down' && pr && !this.album && this.printRect && this.hit(this.printRect, x, y) && pr.t > 1) {
       if (pr.t < pr.rt) { pr.t = Math.min(pr.rt, pr.t + 0.6); pr.jolt = 1; this.story.sound.sfx('pop'); }
-      else if (pr.t < pr.hold) pr.t = pr.hold;
+      else if (pr.t >= pr.rt + 0.6 && pr.t < pr.hold) pr.t = pr.hold;
       return true;
     }
     if (!this.available()) return false;
@@ -226,8 +253,11 @@ export class PhotoMode {
   }
 
   // --------------------------------------------------------------- snap --
+  developing() { return this.prints.some((q) => q.t < q.rt); }
   snap() {
     const s = this.story;
+    // one print at a time: the bean is still busy with the last one
+    if (this.developing()) { this.shake = 0.4; this.busyT = 1; s.sound.sfx('escape'); return; }
     if (this.film <= 0) { this.shake = 0.4; s.sound.sfx('escape'); return; }
     this.film--;
     this.shots++;
@@ -302,7 +332,7 @@ export class PhotoMode {
     // the print develops (slowly, unless the Developer is upgraded) while the
     // bean wipes it and shakes it, then shows what you got
     const devT = DEV_TIME[this.levels.dev | 0] || 8, rt = 1.6 + devT;
-    this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0, fact, devT, rt, hold: rt + (fact ? 4.2 : 2.2) });
+    this.prints.push({ img, pts, main: main ? main.key : null, fresh, t: 0, fact, devT, rt, hold: rt + 0.6 + (fact ? 4.2 : 2.2) });
     if (this.onSnap) this.onSnap({ keys: list.map((f) => f.key), main: main ? main.key : null, pts });
     if (this.prints.length === 1) s.sound.sfx('print');
     this.save();
@@ -394,13 +424,14 @@ export class PhotoMode {
     this.charmA += this.charmV * dt;
     this.shown += (this.points - this.shown) * Math.min(1, dt * 6);
     if (Math.abs(this.points - this.shown) < 0.5) this.shown = this.points;
+    this.busyT = Math.max(0, (this.busyT || 0) - dt * 2);
     const p = this.prints[0];
     if (p) {
       p.t += dt;
       if (p.t > 1.6 && p.t < p.rt && Math.floor((p.t - 1.6) / 0.5) !== Math.floor((p.t - 1.6 - dt) / 0.5) && ((p.t - 1.6) % 3.4) > 2.2) this.story.sound.sfx('type'); // shake shake
       if (!p.doneSfx && p.t >= p.rt) { p.doneSfx = true; this.story.sound.sfx('chime'); }
       p.jolt = Math.max(0, (p.jolt || 0) - dt * 3);
-      if (p.fact && !p.factSfx && p.t > p.rt + 0.3) { p.factSfx = true; this.story.sound.sfx(p.fact.prize ? 'yes' : 'sparkle'); if (p.fact.prize) this.camDirty = true; }
+      if (p.fact && !p.factSfx && p.t > p.rt + 0.9) { p.factSfx = true; this.story.sound.sfx(p.fact.prize ? 'yes' : 'sparkle'); if (p.fact.prize) this.camDirty = true; }
       if (p.t >= p.hold + 0.6) {
         this.prints.shift();
         this.points += p.pts;
@@ -552,6 +583,7 @@ export class PhotoMode {
     if (Math.sin(this.t * 5) > 0) { ctx.fillStyle = '#ff4a4a'; ctx.fillRect(fx + fw - 6, fy + 3, 3, 3); }
     drawText(ctx, fit(`${this.model().name} · ${FILMS[this.levels.film]}`, fw - 12), fx + 3, fy + 3, { color: '#fff4dc', outline: '#2a1a08' });
     if (!this.film) drawText(ctx, 'reloading...', cx, fy + fh - 11, { align: 'center', color: '#ffb0a0', outline: '#2a0a08' });
+    else if (this.developing()) drawText(ctx, 'developing...', cx, fy + fh - 11, { align: 'center', color: (this.busyT || 0) > 0 && Math.sin(this.t * 30) > 0 ? '#ff8a8a' : '#fff4b0', outline: '#2a1a08' });
     // "click!"
     if (this.snapT < 0.7) {
       const k = this.snapT / 0.7, sc = W > 300 ? 2 : 1;
@@ -559,28 +591,33 @@ export class PhotoMode {
     }
   }
 
-  // a print: slides out of the camera, comes forward to develop, shows what
-  // you got, then flies into the album
+  // a print: slides out of the camera and sits on top of it while the bean
+  // cleans and shakes it, then comes forward to show what you got and
+  // flies into the album
   drawPrint(ctx, p) {
     const W = this.W, H = this.H;
     const img = p.img, pw = img.width + 6, ph = img.height + 16;
     const s = Math.max(1, Math.min(2, Math.floor(Math.min((W - 20) / pw, (H * 0.62) / ph))));
     const [cx, cy, cw] = this.camRect(), [bx, by] = this.bookRect();
-    const t = p.t;
-    let x, y, sc = 1, a = 1;
-    const outX = cx + cw / 2 - pw / 2, outY0 = cy + 6, outY1 = cy - ph + 2;
+    const t = p.t, show = p.rt + 0.6;
+    const cs = Math.min(1, clamp(W * 0.16, 56, 100) / pw); // small, up in the corner
+    let x, y, sc = cs, a = 1;
+    const outX = Math.min(W - pw * cs - 8, cx + cw / 2 - (pw * cs) / 2), outY0 = cy + 6, outY1 = cy - ph * cs - 2;
     const midX = W / 2 - (pw * s) / 2, midY = H * 0.42 - (ph * s) / 2;
     if (t < 1) { x = outX; y = lerp(outY0, outY1, ease.outCubic(t)); }
-    else if (t < 1.6) { const k = ease.inOutCubic((t - 1) / 0.6); x = lerp(outX, midX, k); y = lerp(outY1, midY, k); sc = lerp(1, s, k); }
-    else if (t < p.hold) { x = midX; y = midY + Math.sin((t - 1.6) * 2) * 1.5; sc = s; }
+    else if (t < p.rt) { x = outX; y = outY1 + Math.round(Math.sin((t - 1) * 2) * 1); }
+    else if (t < show) { const k = ease.inOutCubic((t - p.rt) / 0.6); x = lerp(outX, midX, k); y = lerp(outY1, midY, k); sc = lerp(cs, s, k); }
+    else if (t < p.hold) { x = midX; y = midY + Math.sin((t - show) * 2) * 1.5; sc = s; }
     else { const k = ease.inCubic((t - p.hold) / 0.6); x = lerp(midX, bx + 7, k); y = lerp(midY, by + 7, k); sc = lerp(s, 0.15, k); a = 1 - k * 0.3; }
     const developing = t >= 1.6 && t < p.rt, cyc = (t - 1.6) % 3.4, shaking = developing && cyc > 2.2;
     const dev = t < 1.6 ? 1 : Math.pow(clamp(1 - (t - 1.6) / p.devT), 1.4); // still developing
-    // it swings as it lands, settles with a wobble, and spins into the album
+    // it swings as it comes out, jiggles while it's shaken, swoops forward and
+    // spins into the album
     let rot = 0;
     if (t < 1) rot = Math.sin(t * 9) * 0.05 * (1 - t);
-    else if (t < 1.6) rot = lerp(0.3, 0, ease.outCubic((t - 1) / 0.6));
-    else if (t < p.hold) rot = Math.sin((t - 1.6) * 7) * 0.08 * Math.exp(-(t - 1.6) * 2.2) - 0.02 + (shaking ? Math.sin(t * 38) * 0.07 : 0) + (p.jolt || 0) * Math.sin(t * 50) * 0.1;
+    else if (t < p.rt) rot = -0.04 + (shaking ? Math.sin(t * 38) * 0.08 : 0) + (p.jolt || 0) * Math.sin(t * 50) * 0.1;
+    else if (t < show) rot = lerp(-0.04, 0.3, Math.sin(((t - p.rt) / 0.6) * Math.PI));
+    else if (t < p.hold) rot = Math.sin((t - show) * 7) * 0.08 * Math.exp(-(t - show) * 2.2) - 0.02;
     else rot = ease.inCubic((t - p.hold) / 0.6) * -1.2;
     ctx.save();
     ctx.globalAlpha = a;
@@ -594,8 +631,8 @@ export class PhotoMode {
     ctx.drawImage(img, 3, 3);
     if (dev > 0) { ctx.globalAlpha = a * dev; ctx.fillStyle = '#3a2a1e'; ctx.fillRect(3, 3, img.width, img.height); ctx.globalAlpha = a; }
     // a glint sweeps across once it's developed
-    if (t > p.rt && t < p.rt + 0.6) {
-      const gx = lerp(-12, img.width + 12, (t - p.rt) / 0.6);
+    if (t > show && t < show + 0.6) {
+      const gx = lerp(-12, img.width + 12, (t - show) / 0.6);
       ctx.save();
       ctx.beginPath(); ctx.rect(3, 3, img.width, img.height); ctx.clip();
       ctx.globalAlpha = a * 0.55; ctx.fillStyle = '#ffffff';
@@ -606,21 +643,21 @@ export class PhotoMode {
     if (t > 1.2) drawText(ctx, fit(name, pw - 6), pw / 2, img.height + 6, { align: 'center', color: '#3a2a4a' });
     ctx.restore();
     ctx.globalAlpha = 1;
-    this.printRect = t > 1.6 && t < p.hold ? [midX, midY, pw * s, ph * s] : null;
-    if (t > 1.6 && t < p.rt + 0.6) this.drawDeveloping(ctx, p, midX, midY, pw * s, ph * s);
+    this.printRect = t > 1 && t < p.rt ? [outX, outY1, pw * cs, ph * cs] : t >= show && t < p.hold ? [midX, midY, pw * s, ph * s] : null;
+    if (t > 1 && t < show) this.drawDeveloping(ctx, p, outX, outY1, pw * cs, ph * cs);
     // results once it has developed
-    if (t > p.rt && t < p.hold + 0.2) {
-      const k = clamp((t - p.rt) / 0.25);
+    if (t > show && t < p.hold + 0.2) {
+      const k = clamp((t - show) / 0.25);
       const top = midY - 12;
       if (p.main) {
         const r = SPECIES[p.main][1];
         drawText(ctx, '★'.repeat(r) + ' ' + RARITY_NAME[r], W / 2, top, { align: 'center', color: RARITY_COL[r], outline: '#10142a', alpha: k });
       }
       drawText(ctx, `+${p.pts} ✦`, W / 2, midY + ph * s + 4 - Math.round(k * 3), { align: 'center', scale: W > 200 ? 2 : 1, color: '#ffe38a', outline: '#3a2200', shadow: '#ff9a3a', alpha: k });
-      if (p.fact && t > p.rt + 0.3) this.drawFact(ctx, p, Math.round(midY + ph * s + 22), clamp((t - p.rt - 0.3) / 0.3) * clamp((p.hold + 0.2 - t) / 0.3));
+      if (p.fact && t > show + 0.3) this.drawFact(ctx, p, Math.round(midY + ph * s + 22), clamp((t - show - 0.3) / 0.3) * clamp((p.hold + 0.2 - t) / 0.3));
       if (p.fresh.length) {
         // NEW! slams on like a stamp
-        const sk = clamp((t - p.rt) / 0.18), ss = 1 + (1 - ease.outBack(sk)) * 1.6;
+        const sk = clamp((t - show) / 0.18), ss = 1 + (1 - ease.outBack(sk)) * 1.6;
         const nx = Math.round(midX + pw * s - 10), ny = Math.round(midY - 4 + Math.sin(t * 10));
         if (sk >= 1 && !p.stamped) { p.stamped = true; burstStars(this.story.fx, nx + 11, ny + 3, 8, { speed: 50, size: 4 }); this.story.sound.sfx('pop'); }
         ctx.save();
@@ -634,59 +671,70 @@ export class PhotoMode {
     }
   }
 
-  // While a print develops the bean looks after it: it wipes the photo with a
-  // little cloth, then grabs the corner and shakes it (like you do with an
-  // instant photo), round and round until it's done, then swims off. A bar
-  // underneath shows how far along it is; tapping the print helps.
+  // While a print develops a tiny chibi bean looks after it, up in the
+  // corner on top of the camera: it hops in, polishes the print with a cloth,
+  // grabs the corner and shakes it, round and round until it's done, then
+  // does a happy hop as the print flies off. A thin bar shows how far along
+  // it is; tapping the print helps.
   drawDeveloping(ctx, p, x, y, w, h) {
-    const t = p.t, dt = t - 1.6, cyc = dt % 3.4, done = t >= p.rt;
-    const k = clamp(dt / p.devT);
-    const img = diverSprite('bean', Math.floor(t * 8) % DIVER_FRAMES);
-    let bx, by, face = -1, label = null;
+    const t = p.t, dt = t - 1.6, cyc = ((dt % 3.4) + 3.4) % 3.4, done = t >= p.rt;
+    const k = clamp(dt / p.devT), px = this.W >= 560 ? 3 : this.W >= 180 ? 2 : 1, bw = 12 * px, bh = 11 * px;
+    const blink = t % 2.6 < 0.12, step = Math.floor(t * 8) % 2;
+    let bx, by, face = 1, pose = 'idle', label = null, alpha = 1;
     if (done) {
-      // ta-da: a hop and away up and out
+      // yay! a hop with a heart, then it pops away
       const q = clamp((t - p.rt) / 0.6);
-      bx = x + w + 6 + q * 30; by = y + 10 - q * 60 - Math.sin(q * Math.PI) * 10; face = 1;
-      label = q < 0.7 ? 'ta-da!' : null;
-      ctx.globalAlpha = 1 - q * q;
+      bx = x - bw - 2; by = y + h - bh - Math.sin(q * Math.PI) * 10 * px;
+      pose = 'yay'; label = 'yay!'; alpha = 1 - q * q;
+    } else if (t < 1.6) {
+      // hops in from the side
+      const q = ease.outCubic(clamp((t - 1) / 0.6));
+      bx = lerp(this.W + 4, x - bw - 2, q); by = y + h - bh - Math.abs(Math.sin(q * Math.PI * 2)) * 6 * px; face = -1;
     } else if (cyc < 2.2) {
-      // wipe wipe: the cloth goes round the photo, the bean right behind it
-      const cx = x + w / 2 + Math.sin(cyc * 5) * w * 0.3, cy = y + h * 0.42 + Math.cos(cyc * 2.6) * h * 0.18;
-      const cr = Math.sin(cyc * 10) * 0.3;
-      ctx.save();
-      ctx.translate(Math.round(cx), Math.round(cy)); ctx.rotate(cr);
-      ctx.fillStyle = '#1a2a48'; ctx.fillRect(-6, -5, 12, 10);
-      ctx.fillStyle = '#e8f4ff'; ctx.fillRect(-5, -4, 10, 8);
-      ctx.fillStyle = '#8ac8f0'; for (let i = -5; i < 5; i += 2) ctx.fillRect(i, -4, 1, 8);
-      ctx.restore();
-      if (Math.floor(t * 6) % 3 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(cx - 9), Math.round(cy - 7), 1, 3); ctx.fillRect(Math.round(cx - 10), Math.round(cy - 6), 3, 1); }
-      face = Math.cos(cyc * 5) > 0 ? -1 : 1;
-      bx = cx + (face < 0 ? 14 : -14); by = cy - 6;
-      label = '*wipe wipe*';
+      // wipe wipe: floats across the print, cloth first
+      const sx = Math.sin(cyc * 4.5);
+      face = Math.cos(cyc * 4.5) > 0 ? 1 : -1;
+      bx = x + w / 2 - bw / 2 + sx * (w / 2 - bw / 2 + 2); by = y + h * 0.35 + Math.round(Math.cos(cyc * 9) * 2 * px);
+      pose = 'wipe'; label = 'wipe wipe';
     } else {
-      // shake shake: holding the corner, jiggling with the print
-      bx = x + w + 2 + Math.sin(t * 38) * 2; by = y - 2 + Math.cos(t * 38) * 2;
-      label = '*shake shake*';
-      ctx.strokeStyle = '#fff4dc'; ctx.globalAlpha = 0.7;
-      for (const sd of [-1, 1]) { const lx = sd < 0 ? x - 5 : x + w + 3; for (let j = 0; j < 3; j++) ctx.fillRect(lx + sd * (j % 2), y + h * 0.3 + j * 5, 1, 3); }
-      ctx.globalAlpha = 1;
+      // shake shake: hanging on to the corner, jiggling with it
+      const j = Math.sin(t * 38) * px;
+      bx = x - bw + 3 * px + j; by = y - 3 * px - Math.abs(j);
+      pose = 'shake'; label = 'shake shake';
+      ctx.fillStyle = '#fff4dc';
+      for (const sd of [-1, 1]) { const lx = sd < 0 ? x - 3 : x + w + 2; for (let i = 0; i < 3; i++) ctx.fillRect(Math.round(lx + sd * (i % 2)), Math.round(y + h * 0.35 + i * 4), 1, 2); }
     }
+    bx = Math.round(bx); by = Math.round(by + (pose === 'idle' || pose === 'shake' ? 0 : Math.round(Math.sin(t * 6)) * px));
+    ctx.globalAlpha = alpha;
+    const spr = chibiBean(blink ? 1 : 0, pose === 'wipe' || t < 1.6 ? step : 0);
     ctx.save();
-    ctx.translate(Math.round(bx), Math.round(by));
-    ctx.scale(face, 1);
-    ctx.drawImage(img, -img.ox, -img.oy);
+    ctx.translate(bx + bw / 2, by);
+    ctx.scale(face * px, px);
+    ctx.drawImage(spr, -6, 0);
+    // arms and props, in sprite pixels
+    const P = (c, ax, ay, aw = 1, ah = 1) => { ctx.fillStyle = c; ctx.fillRect(ax, ay, aw, ah); };
+    if (pose === 'wipe') {
+      const up = Math.floor(t * 10) % 2;
+      P('#1c3014', 6, 6 + up, 2, 1); P('#8fd44e', 6, 7 + up, 1, 1);
+      P('#1c3014', 7, 4 + up, 5, 5); P('#eef8ff', 8, 5 + up, 3, 3); P('#9ad4f4', 9, 5 + up, 1, 3); // the cloth
+      if (Math.floor(t * 6) % 3 === 0) { P('#ffffff', 12, 2, 1, 3); P('#ffffff', 11, 3, 3, 1); } // squeaky clean
+    } else if (pose === 'shake') {
+      P('#1c3014', 5, 3, 2, 1); P('#1c3014', 6, 2, 1, 1); P('#8fd44e', 5, 4, 1, 1); // both little arms up, holding on
+      P('#1c3014', -7, 3, 2, 1); P('#8fd44e', -6, 4, 1, 1);
+    } else if (pose === 'yay') {
+      P('#1c3014', 6, 1, 1, 3); P('#1c3014', -7, 1, 1, 3); // arms up
+      P('#ff5a8a', -1, -5, 1, 1); P('#ff5a8a', 1, -5, 1, 1); P('#ff5a8a', -2, -4, 5, 1); P('#ff5a8a', -1, -3, 3, 1); P('#ff5a8a', 0, -2, 1, 1); // heart
+    }
     ctx.restore();
-    if (label) drawText(ctx, label, Math.round(bx), Math.round(by - 24), { align: 'center', color: '#fff4dc', outline: '#1a1020' });
+    if (label && this.W >= 240) drawText(ctx, label, bx + bw / 2, by - 10 - (pose === 'yay' ? 6 : 0), { align: 'center', color: '#fff4dc', outline: '#1a1020', alpha: alpha * 0.9 });
     ctx.globalAlpha = 1;
-    if (!done) {
-      // how far along, and a nudge to help
-      const bw = Math.min(w, 90), px = Math.round(x + (w - bw) / 2), py = Math.round(y + h + 6);
-      ctx.fillStyle = '#1a1020'; ctx.fillRect(px - 1, py - 1, bw + 2, 6);
-      ctx.fillStyle = '#4a3a2a'; ctx.fillRect(px, py, bw, 4);
-      ctx.fillStyle = '#ffd24a'; ctx.fillRect(px, py, Math.round(bw * k), 4);
-      ctx.fillStyle = '#fff4b0'; ctx.fillRect(px, py, Math.round(bw * k), 1);
-      drawText(ctx, 'developing' + '.'.repeat(1 + (Math.floor(t * 3) % 3)), x + w / 2, py + 8, { align: 'center', color: '#fff4dc', outline: '#1a1020' });
-      if (dt > 1.2) drawText(ctx, 'tap to help!', x + w / 2, py + 18, { align: 'center', color: '#ffb0d0', outline: '#1a1020', alpha: 0.6 + Math.sin(t * 5) * 0.3 });
+    if (!done && t >= 1.6) {
+      // how far along, in a thin bar over the print
+      const bx2 = Math.round(x), by2 = Math.round(y - 5), bw2 = Math.round(w);
+      ctx.fillStyle = '#1a1020'; ctx.fillRect(bx2 - 1, by2 - 1, bw2 + 2, 4);
+      ctx.fillStyle = '#4a3a2a'; ctx.fillRect(bx2, by2, bw2, 2);
+      ctx.fillStyle = '#ffd24a'; ctx.fillRect(bx2, by2, Math.round(bw2 * k), 2);
+      if (dt > 1.5 && Math.sin(t * 5) > -0.3) drawText(ctx, 'tap!', Math.round(x + w / 2), Math.round(y + h * 0.45), { align: 'center', color: '#ffb0d0', outline: '#1a1020', alpha: 0.7 });
     }
   }
 
