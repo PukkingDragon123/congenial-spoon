@@ -8,6 +8,14 @@ const up = (hh, off) => (hh > 0 ? hh + off : -1);
 const cache = new Map();
 const SEA = ramp(['#3a1406', '#6a2a0c', '#9a4412', '#c8621c', '#e8862c', '#f8aa44', '#ffcc70', '#ffe8a8'], 8);
 const SEAFIN = ramp(['#9a5a24', '#d89a52', '#f6cc86', '#fff0cc'], 4);
+// seahorses come in a few colours
+const SEA_HUES = {
+  orange: [SEA, SEAFIN],
+  pink: [ramp(['#3a0620', '#6a1040', '#9a2466', '#c8408c', '#e866aa', '#f890c4', '#ffb8da', '#ffe0f0'], 8), ramp(['#9a2a66', '#e070a8', '#ffb8d8', '#fff0f8'], 4)],
+  teal: [ramp(['#042a2a', '#0a4a4c', '#12706e', '#1c9a92', '#30c0b0', '#5ae0c8', '#98f4dc', '#d4fff0'], 8), ramp(['#16706a', '#48c0aa', '#a0f0dc', '#ecfff8'], 4)],
+  yellow: [ramp(['#3a2a04', '#6a4e08', '#9a7410', '#c89c1a', '#e8c030', '#f8dc50', '#fff08a', '#fffbd0'], 8), ramp(['#9a7a1a', '#e0c04a', '#fff09a', '#fffcec'], 4)],
+  purple: [ramp(['#1c0a3a', '#34146a', '#50249a', '#7038c8', '#9458e6', '#b684f6', '#d6b4ff', '#f0e4ff'], 8), ramp(['#5a2a9a', '#9a6ae0', '#d4b8ff', '#f6f0ff'], 4)],
+};
 const BACK = ramp(['#0a1022', '#121c34', '#1c2a48', '#28395c', '#354a70', '#465e86', '#5a749c', '#728cb2'], 8);
 const FLANK = ramp(['#26344e', '#364a68', '#4a6284', '#627ea2', '#809cc0', '#a2bcd8'], 6);
 const BELLY = ramp(['#7e8aa0', '#a0acc0', '#c2ccdc', '#dee4ee', '#f4f6fa', '#ffffff'], 6);
@@ -115,8 +123,9 @@ export function dolphinSprite(frame) {
 // A seahorse facing right: curled tail, ridged belly rings, a crown of
 // little spikes, a long snout, and a see-through back fin that flutters.
 // SK scales it (small in the tank, bigger for the encyclopedia picture).
-export function seahorseSprite(frame, SK = 0.6) {
-  const k = 's' + frame + '|' + SK;
+export function seahorseSprite(frame, SK = 0.42, hue = 'orange') {
+  const k = 's' + frame + '|' + SK + '|' + hue;
+  const [BODY, FIN] = SEA_HUES[hue] || SEA_HUES.orange;
   if (cache.has(k)) return cache.get(k);
   const W = Math.round(32 * SK), H = Math.round(48 * SK);   // small, but carrying the same detail
   const P = [[16, 11, 5.4], [14.5, 16.5, 3.8], [16.8, 22, 5.8], [17.4, 28, 5.9], [15, 33.5, 4.3], [12.4, 38, 3.2], [11, 42, 2.5], [8.4, 45, 2.1], [5, 44.4, 1.8], [3.4, 41.2, 1.5], [4.8, 38.4, 1.2], [7.4, 38.6, 1]];
@@ -156,8 +165,8 @@ export function seahorseSprite(frame, SK = 0.6) {
   };
   const field = (x, y) => { const v = field0(x / SK, y / SK); return v ? [v[0] * SK, v[1]] : null; };
   const c = sculpt(W, H, field, {
-    1: { pal: SEA, gloss: 0.6, dither: 0.5 }, 3: { pal: SEAFIN, gloss: 0.2 }, 4: { pal: SEAFIN, bias: -1 }, 5: { pal: INK, flat: true },
-    6: { pal: WHITE, flat: true }, 7: { pal: BLUSH, flat: true }, 8: { pal: SEA, bias: 2.5 },
+    1: { pal: BODY, gloss: 0.6, dither: 0.5 }, 3: { pal: FIN, gloss: 0.2 }, 4: { pal: FIN, bias: -1 }, 5: { pal: INK, flat: true },
+    6: { pal: WHITE, flat: true }, 7: { pal: BLUSH, flat: true }, 8: { pal: BODY, bias: 2.5 },
   });
   c.ox = Math.round(16 * SK); c.oy = Math.round(22 * SK);
   cache.set(k, c);
@@ -168,6 +177,7 @@ export function seahorseSprite(frame, SK = 0.6) {
 class HeartSwimmer {
   constructor(kind, o) {
     this.kind = kind;
+    this.hue = o.hue || 'orange';
     this.cx = o.cx; this.cy = o.cy; this.z = o.z; this.s = o.s;
     this.u = o.u; this.speed = o.speed ?? 0.09;
     this.len = kind === 'dolphin' ? 100 : 18;
@@ -194,7 +204,7 @@ class HeartSwimmer {
   draw(ctx, aq) {
     const [sx, sy] = aq.toScreen(this.x, this.y, this.z);
     const dolphin = this.kind === 'dolphin';
-    const img = dolphin ? dolphinSprite(Math.floor(this.t * 7) % DOLPHIN_FRAMES) : seahorseSprite(Math.floor(this.t * 10) % 4);
+    const img = dolphin ? dolphinSprite(Math.floor(this.t * 7) % DOLPHIN_FRAMES) : seahorseSprite(Math.floor(this.t * 10) % 4, 0.42, this.hue);
     let f = this.face;
     if (Math.abs(f) < 0.2) f = 0.2 * Math.sign(f || 1);
     const a = dolphin ? this.ang * f : Math.sin(this.t * 2) * 0.12;
@@ -210,6 +220,6 @@ class HeartSwimmer {
 
 // Two dolphins and two seahorses spaced around one heart.
 export function heartFriends(cx, cy, z, s, fromX) {
-  return [['dolphin', 0], ['seahorse', 0.25], ['dolphin', 0.5], ['seahorse', 0.75]].map(([k, u], i) =>
-    new HeartSwimmer(k, { cx, cy, z: z + i * 0.005, s, u, fromX: fromX + (i % 2 ? 60 : -60), fromY: cy - 140 }));
+  return [['dolphin', 0], ['seahorse', 0.12, 'pink'], ['seahorse', 0.25, 'teal'], ['seahorse', 0.37, 'yellow'], ['dolphin', 0.5], ['seahorse', 0.62, 'purple'], ['seahorse', 0.75, 'orange'], ['seahorse', 0.87, 'pink']].map(([k, u, hue], i) =>
+    new HeartSwimmer(k, { cx, cy, z: z + i * 0.005, s, u, hue, fromX: fromX + (i % 2 ? 60 : -60), fromY: cy - 140 }));
 }

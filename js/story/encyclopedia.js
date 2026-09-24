@@ -4,7 +4,7 @@
 // finishing every animal from one tank earns that tank's camera banner.
 import { makeCanvas, clamp, bayer } from '../util.js';
 import { renderFish, fishSprite, SPECIES as FISH } from '../art/fish.js';
-import { renderJelly, renderCrab, renderRay, renderTurtle, JELLY_FRAMES, CRAB_FRAMES, RAY_FRAMES, TURTLE_FRAMES } from '../art/creatures.js';
+import { renderJelly, renderComb, renderOctopus, OCTO_FRAMES, renderCrab, renderRay, renderTurtle, JELLY_FRAMES, CRAB_FRAMES, RAY_FRAMES, TURTLE_FRAMES } from '../art/creatures.js';
 import { diverSprite, treeSprite, DIVER_FRAMES, TREE_FRAMES } from '../art/divers.js';
 import { dolphinSprite, seahorseSprite, DOLPHIN_FRAMES } from '../world/friends.js';
 
@@ -15,6 +15,10 @@ export const NOTES = {
   jelly: ['bell up to 40 cm', 'plankton', 'coastal seas worldwide'],
   nettle: ['bell up to 50 cm', 'plankton, fish eggs, other jellies', 'the Pacific coast'],
   bigjelly: ['bell over 2 m', 'fish, plankton, other jellies', 'cold northern seas'],
+  comb: ['a few cm', 'plankton, fish eggs', 'every ocean, even the deep'],
+  crystal: ['bell up to 25 cm', 'other jellies, plankton', 'the Pacific coast of North America'],
+  manowar: ['float about 30 cm, tentacles 10 m+', 'small fish and shrimp', 'the warm open ocean surface'],
+  octopus: ['palm-sized to 5 m across', 'crabs, clams, fish', 'rocky reefs and seafloors'],
   clown: ['about 11 cm', 'algae and tiny plankton', 'Indo-Pacific reefs, in anemones'],
   tang: ['up to 31 cm', 'plankton and algae', 'Indo-Pacific reefs'],
   butterfly: ['most 12-22 cm', 'coral polyps, tiny animals', 'warm reefs worldwide'],
@@ -51,6 +55,30 @@ export const FACTS = {
     'Each tentacle is covered in thousands of tiny stingers.',
     'Leatherback sea turtles eat sea nettles, stings and all.',
     'Jellyfish aren\'t fish at all. Not even a little bit.',
+  ],
+  comb: [
+    'Those rainbow lights are just sunlight bouncing off tiny beating hairs.',
+    'Comb jellies swim by paddling eight rows of little combs.',
+    "They're not true jellyfish, and most of them don't sting.",
+    'Some comb jellies glow blue-green in the dark.',
+  ],
+  crystal: [
+    'Its glow comes from a protein that won a Nobel Prize in 2008.',
+    "That green glowing protein (GFP) is now used in labs all over the world.",
+    "It's almost completely see-through.",
+    'It eats other jellies, including other crystal jellies.',
+  ],
+  manowar: [
+    "A man o' war isn't one animal. It's a colony of tiny ones working together.",
+    'The float is a gas-filled bag that works like a sail. It goes where the wind goes.',
+    'Its tentacles can reach over 10 metres long.',
+    'It can still sting even after it washes up on the beach. Look, don\'t touch.',
+  ],
+  octopus: [
+    'An octopus has three hearts and blue blood.',
+    'Most of its neurons are in its arms, so each arm can kind of think for itself.',
+    'It can change colour and skin texture in under a second.',
+    'Octopuses can squeeze through any gap bigger than their beak.',
   ],
   bigjelly: [
     'The lion\'s mane is the largest known jellyfish.',
@@ -188,8 +216,8 @@ export const FACTS = {
 
 // Finish every animal in a set for its camera banner.
 export const SETS = [
-  { id: 'jelly', name: 'Jelly Hall', keys: ['jelly', 'nettle', 'bigjelly'], cols: ['#a878ff', '#ffd6f4'] },
-  { id: 'reef', name: 'Coral Reef', keys: ['clown', 'tang', 'butterfly', 'crab'], cols: ['#ff7a2a', '#fff6ea'] },
+  { id: 'jelly', name: 'Jelly Hall', keys: ['jelly', 'nettle', 'comb', 'crystal', 'bigjelly', 'manowar'], cols: ['#a878ff', '#ffd6f4'] },
+  { id: 'reef', name: 'Coral Reef', keys: ['clown', 'tang', 'butterfly', 'crab', 'octopus'], cols: ['#ff7a2a', '#fff6ea'] },
   { id: 'deep', name: 'Great Tank', keys: ['trevally', 'minnow', 'snapper', 'batfish', 'giant', 'grouper', 'shark', 'reefshark', 'ray', 'turtle'], cols: ['#2a78f0', '#a8e8ff'] },
   { id: 'legend', name: 'Legends', keys: ['whaleshark', 'bean', 'dolphin', 'seahorse', 'treefriend'], cols: ['#ffc830', '#ff5ac8'] },
   { id: 'us', name: 'Just Us', keys: ['me', 'us'], cols: ['#ff4a82', '#ffc8dc'] },
@@ -208,6 +236,10 @@ function animal(key) {
     case 'jelly': return renderJelly(22, 3, 'pink');
     case 'nettle': return renderJelly(16, 3, 'nettle');
     case 'bigjelly': return renderJelly(30, 3, 'violet');
+    case 'comb': return renderComb(14, 2);
+    case 'crystal': return renderJelly(22, 3, 'crystal');
+    case 'manowar': return renderJelly(16, 3, 'manowar');
+    case 'octopus': return renderOctopus(18, 2);
     case 'crab': return renderCrab(18, 0, 0, 'red');
     case 'ray': return renderRay(40, 2);
     case 'turtle': return renderTurtle(40, 3);
@@ -293,10 +325,10 @@ export const pieceCentre = (i) => [(i % 2 ? 0.75 : 0.25) * PW, (i >= 2 ? 0.75 : 
 
 // Which way an animal's sprite faces as drawn: -1 nose left, 1 nose right,
 // 0 no facing (jellies drift, crabs scuttle, the tree stands).
-export const NOSE = { ray: 1, dolphin: 1, seahorse: 1, bean: 1, jelly: 0, nettle: 0, bigjelly: 0, crab: 0, treefriend: 0, me: 0, us: 0 };
+export const NOSE = { ray: 1, dolphin: 1, seahorse: 1, bean: 1, jelly: 0, nettle: 0, bigjelly: 0, comb: 0, crystal: 0, manowar: 0, octopus: 0, crab: 0, treefriend: 0, me: 0, us: 0 };
 export const noseOf = (key) => NOSE[key] ?? -1;
 // where it lives in a tank scene: 'sand' walks the floor, 'drift' bobs
-export const MOVES = { crab: 'sand', treefriend: 'sand', jelly: 'drift', nettle: 'drift', bigjelly: 'drift' };
+export const MOVES = { crab: 'sand', treefriend: 'sand', jelly: 'drift', nettle: 'drift', bigjelly: 'drift', comb: 'drift', crystal: 'drift', manowar: 'drift', octopus: 'sand' };
 
 // The animal at time t, animated. size: 'icon' (small) or 'big'.
 export function animalFrame(key, t, size = 'big') {
@@ -306,6 +338,10 @@ export function animalFrame(key, t, size = 'big') {
     case 'jelly': return renderJelly(big ? 22 : 12, f(JELLY_FRAMES, 8), 'pink');
     case 'nettle': return renderJelly(big ? 16 : 10, f(JELLY_FRAMES, 8), 'nettle');
     case 'bigjelly': return renderJelly(big ? 30 : 16, f(JELLY_FRAMES, 7), 'violet');
+    case 'comb': return renderComb(big ? 14 : 8, f(8, 10));
+    case 'crystal': return renderJelly(big ? 22 : 12, f(JELLY_FRAMES, 8), 'crystal');
+    case 'manowar': return renderJelly(big ? 16 : 9, f(JELLY_FRAMES, 6), 'manowar');
+    case 'octopus': return renderOctopus(big ? 18 : 9, f(OCTO_FRAMES, 6));
     case 'crab': return renderCrab(big ? 18 : 10, f(CRAB_FRAMES, 10), 0, 'red');
     case 'ray': return renderRay(big ? 40 : 22, f(RAY_FRAMES, 10));
     case 'turtle': return renderTurtle(big ? 40 : 22, f(TURTLE_FRAMES, 8));

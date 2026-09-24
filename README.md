@@ -72,6 +72,25 @@ and every species. The legendaries are the whale shark, the Mameshiba, the
 tree friend, and the two of them together. Everything is kept in the
 browser.
 
+### The record player
+
+After the photo quest a little record player sits in the top-left corner.
+It has three records, *Always* (Daniel Caesar), *Blue Hair* (TV Girl) and
+*Octopus's Garden* (The Beatles), and each one starts locked. A message
+bottle floats in each tank (jelly hall, reef, big tank); tap it and it
+pops open in a burst of bubbles with a record inside. Tap the player to open
+the crate and pick a record: it spins with its cover art on the label, the
+arm swings over, and bubbles and notes drift up. Records play once the
+story is over, so they don't cut off the song that tells it.
+
+### New animals
+
+The jelly hall now has man o' war (a blue float with a pink sail and long
+beaded tentacles), glowing crystal jellies and rainbow comb jellies you can
+photograph. Two octopuses creep around the reef sand and jet up when you tap
+them. The seahorses in the finale are smaller and come in pink, teal,
+yellow, purple and orange.
+
 ### The gallery
 
 Every photo lands in a cardboard **photo box** under a cork board. Drag

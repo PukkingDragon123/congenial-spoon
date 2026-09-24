@@ -28,7 +28,7 @@ export const CONFIG = {
     "I've wanted to tell you something for a while, and every time I tried to say it out loud it came out as a joke. So I made a whole game instead. Very normal behaviour.",
     '',
     "I like your humour. You're the only person who can make me laugh at the worst possible moment.",
-    "I like your little quirks, the things you probably think nobody notices. I notice.",
+    "I like how you make a normal day feel like a good one without even trying.",
     "I like that you're just cool. Not trying to be. You just are.",
     "And your music taste is genuinely top 1. Every song you've shown me lives in my head now, rent free.",
     '',

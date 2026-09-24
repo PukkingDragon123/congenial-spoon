@@ -8,10 +8,47 @@ import { CX, tallExtra, genCaustics, genSand, genFormation } from '../art/env.js
 import { sealCupidSprite } from '../art/divers.js';
 import { Creature, Crab, School, addBuddy, TreeFriend } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
-import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
+import { renderJelly, JELLY_FRAMES, renderOctopus, OCTO_FRAMES } from '../art/creatures.js';
 import { warmLevel, queueVariants } from '../art/fish.js';
 
 const CY = 200;
+
+// An octopus that creeps along the sand, and now and then jets up, arms
+// streaming, and sinks back down. Tap it and it jets off.
+class Octopus {
+  constructor(o) {
+    this.kind = 'octopus';
+    this.x = o.x; this.z = o.z; this.y = 0; this.lift = 0; this.vy = 0;
+    this.dir = R() < 0.5 ? -1 : 1; this.t = R() * 10; this.S = o.S || 14;
+    this.home = o.home || [CX - 300, CX + 300];
+    this.hitDY = this.S * 0.5;
+  }
+  react() { if (this.lift <= 0.5) this.vy = 42; }
+  update(dt, room) {
+    this.t += dt;
+    const fl = room.floorY(this.z) - 4;
+    if (this.lift > 0 || this.vy > 0) {
+      this.lift += this.vy * dt; this.vy -= 22 * dt;
+      if (this.lift <= 0) { this.lift = 0; this.vy = 0; }
+      this.x += this.dir * 10 * dt;
+    } else {
+      this.x += this.dir * 3.5 * dt;
+      if (R() < dt * 0.06) this.vy = 30 + R() * 16;
+      if (R() < dt * 0.1) this.dir *= -1;
+    }
+    if (this.x < this.home[0]) this.dir = 1; else if (this.x > this.home[1]) this.dir = -1;
+    this.y = fl - this.lift;
+  }
+  draw(ctx, room) {
+    const [sx, sy] = room.toScreen(this.x, this.y, this.z);
+    const S = Math.max(6, Math.round(this.S * (1 - this.z * 0.45)));
+    const swim = this.vy > 5 ? 1 : 0;
+    const img = renderOctopus(S, Math.floor(this.t * (swim ? 10 : 5)) % OCTO_FRAMES, swim);
+    ctx.save(); ctx.translate(Math.round(sx), Math.round(sy)); ctx.scale(this.dir, 1);
+    ctx.drawImage(img, -img.ox, -img.oy);
+    ctx.restore();
+  }
+}
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
 class Room {
@@ -339,6 +376,18 @@ export class JellyRoom extends Room {
       j.hue = ['pink', 'violet', 'blue'][i]; j.vx = 0; j.vy = -j.speed;
       this.creatures.push(j);
     }
+    // a few man o' war drifting high up, and glowing crystal jellies
+    for (let i = 0; i < 3; i++) {
+      const j = new Creature('jelly', { x: CX + (i - 1) * this.spread * 0.3 + (r() - 0.5) * 60, y: top + 10 + r() * 60, z: 0.12 + r() * 0.4, len: 20, speed: 0.8 + r() * 0.6, mode: 'rise', anim: 1.2 });
+      j.hue = 'manowar'; j.vx = 0; j.vy = -j.speed;
+      this.creatures.push(j);
+    }
+    for (let i = 0; i < 5; i++) {
+      const z = 0.1 + r() * 0.6;
+      const j = new Creature('jelly', { x: CX + (r() - 0.5) * this.spread, y: top + r() * (bot - top), z, len: z < 0.4 ? 20 : 14, speed: 2 + r() * 2, mode: 'rise', anim: 2 });
+      j.hue = 'crystal'; j.vx = 0; j.vy = -j.speed;
+      this.creatures.push(j);
+    }
     // comb jellies: tiny ovals with rainbow shimmer running down their rows
     this.combs = [];
     for (let i = 0; i < 12; i++) this.combs.push({ x: CX + (r() - 0.5) * this.spread, y: top + r() * (bot - top), z: 0.1 + r() * 0.7, ph: r() * TAU, s: 3 + ((r() * 3) | 0), vx: (r() - 0.5) * 6, vy: -1 - r() * 2 });
@@ -426,7 +475,7 @@ export class JellyRoom extends Room {
   drawCreature(ctx, c) {
     if (c.kind === 'jelly') {
       const [sx, sy] = this.toScreen(c.x, c.y, c.z);
-      const col = { pink: '#ff7ac8', blue: '#6ad8ff', violet: '#a07aff', gold: '#ffc870', nettle: '#ffa860' }[c.hue] || '#6ad8ff';
+      const col = { pink: '#ff7ac8', blue: '#6ad8ff', violet: '#a07aff', gold: '#ffc870', nettle: '#ffa860', manowar: '#8a7aff', crystal: '#6affc0' }[c.hue] || '#6ad8ff';
       const r = Math.round(c.len * 1.1);
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = Math.min(1, (0.32 + 0.3 * this.pulse + (c.lit || 0) * 0.5) * (1 - c.z * 0.5));
@@ -698,6 +747,8 @@ export class ReefRoom extends Room {
       // the tree friend waving from the corner of the reef
       this.creatures.push(new TreeFriend({ x: CX + Math.min(this.W / 2 - 34, 230), z: 0.03 }));
       for (let i = 0; i < 6; i++) this.creatures.push(new Crab({ x: X(400), z: 0.06 + r() * 0.3, size: 10 + r() * 4 }));
+      // two octopuses creeping about the sand
+      for (let i = 0; i < 2; i++) this.creatures.push(new Octopus({ x: CX + (i ? 120 : -150), z: 0.12 + i * 0.2, S: 15, home: [CX - 260 * k, CX + 260 * k] }));
       for (let i = 0; i < 5; i++) this.shafts.push({ x: CX + (i - 2) * 150 + (r() - 0.5) * 60, z: 0.6, w: 30 + r() * 26, f: 0.25 + r() * 0.3, ph: r() * TAU });
       this.makeMotes(80, ['#ffffff', '#e8fcff', '#cfe8ff'], { rise: 1.5, a: 0.5 });
       for (const [id, L] of [['clown', 20], ['clown', 22], ['clown', 24], ['tang', 24], ['tang', 26], ['butterfly', 22], ['butterfly', 20], ['snapper', 20], ['minnow', 10], ['minnow', 11], ['batfish', 32]]) warmLevel(id, L);

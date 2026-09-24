@@ -27,6 +27,7 @@ export const SPECIES = {
   jelly: ['Moon Jelly', 1], clown: ['Clownfish', 1], tang: ['Blue Tang', 1], butterfly: ['Butterfly', 1],
   snapper: ['Snapper', 1], minnow: ['Minnow', 1], trevally: ['Trevally', 1], crab: ['Crab', 1], me: ['Just Me', 1],
   nettle: ['Sea Nettle', 2], batfish: ['Batfish', 2], giant: ['Giant GT', 2], grouper: ['Grouper', 2],
+  comb: ['Comb Jelly', 2], crystal: ['Crystal Jelly', 2], manowar: ['Man o\' War', 3], octopus: ['Octopus', 3],
   bigjelly: ['Giant Jelly', 3], shark: ['Sand Tiger', 3], reefshark: ['Reef Shark', 3], ray: ['Stingray', 3], turtle: ['Sea Turtle', 3],
   whaleshark: ['Whale Shark', 4], bean: ['Mameshiba', 4], dolphin: ['Dolphin', 4], seahorse: ['Seahorse', 3], treefriend: ['Tree Friend', 4], us: ['Us Two', 4],
 };
@@ -54,7 +55,7 @@ const SAVE_KEY = 'vcag-photo-1';
 const MILESTONES = [[3, 15], [6, 30], [10, 60], [15, 100], [ORDER.length, 250]];
 
 const keyOf = (c) => {
-  if (c.kind === 'jelly') return c.hue === 'nettle' ? 'nettle' : c.len >= 40 ? 'bigjelly' : 'jelly';
+  if (c.kind === 'jelly') return c.hue === 'nettle' ? 'nettle' : c.hue === 'manowar' ? 'manowar' : c.hue === 'crystal' ? 'crystal' : c.len >= 40 ? 'bigjelly' : 'jelly';
   return SPECIES[c.kind] ? c.kind : null;
 };
 
@@ -291,6 +292,7 @@ export class PhotoMode {
       see(key, sx, sy);
       if (sx >= fx && sx <= fx + fw && sy >= fy && sy <= fy + fh && c.react) c.react(c.x + (R() - 0.5) * 6, c.y + 8, 0.4);
     }
+    for (const cb of st.combs || []) { const [sx, sy] = st.toScreen(cb.x, cb.y, cb.z); see('comb', sx, sy); }
     const cp = s.aq.couple, gh = cp.gap / 2;
     // you're her: on her own she's "just me", together they're "us"
     const [ux, uy] = st.toScreen(st.coupleX + (cp.apart ? gh + cp.girlDX : 0), st.coupleY - 40, 0);
@@ -461,6 +463,12 @@ export class PhotoMode {
       const d = Math.hypot((sx - fx - fw / 2) / fw, (sy - fy - fh / 2) / fh);
       const score = SPECIES[key][1] * 2 - d * 3;
       if (!best || score > best.score) best = { key, sx, sy, r: Math.max(6, Math.min(22, (c.len || c.size || 16) * 0.45 * (1 - (c.z || 0) * 0.4))), score, d };
+    }
+    for (const cb of st.combs || []) {
+      const [sx, sy] = st.toScreen(cb.x, cb.y, cb.z);
+      if (sx < fx + 4 || sx > fx + fw - 4 || sy < fy + 4 || sy > fy + fh - 4) continue;
+      const d = Math.hypot((sx - fx - fw / 2) / fw, (sy - fy - fh / 2) / fh), score = SPECIES.comb[1] * 2 - d * 3;
+      if (!best || score > best.score) best = { key: 'comb', sx, sy, r: 6, score, d };
     }
     if (best && this.lock && this.lock.key === best.key) best.t = this.lock.t + this.story.dt; else if (best) best.t = 0;
     return best;

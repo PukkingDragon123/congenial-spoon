@@ -263,8 +263,11 @@ const JELLY_PALS = {
   violet: { rim: [238, 220, 255], body: [184, 146, 248], deep: [120, 80, 206], gon: [222, 176, 255], arm: [198, 164, 250] },
   gold: { rim: [255, 246, 214], body: [252, 204, 136], deep: [214, 134, 74], gon: [255, 224, 156], arm: [250, 212, 154] },
   nettle: { rim: [255, 236, 200], body: [244, 170, 96], deep: [196, 96, 50], gon: [255, 200, 130], arm: [255, 214, 170], long: true },
+  // crystal jelly: nearly clear, with a ring of glowing green round the rim
+  crystal: { rim: [150, 255, 200], body: [214, 238, 250], deep: [110, 230, 190], gon: [190, 250, 255], arm: [200, 240, 255] },
 };
 export function renderJelly(size, frame, hue = 'pink') {
+  if (hue === 'manowar') return cached('mow|' + size + '|' + frame, () => manOWar(size, frame));
   return cached('jelly|' + size + '|' + frame + '|' + hue, () => {
     const ph = (frame / JELLY_FRAMES) * TAU;
     const pulse = Math.pow(Math.max(0, Math.sin(ph)), 1.5);
@@ -323,6 +326,141 @@ export function renderJelly(size, frame, hue = 'pink') {
     }
     const c = buf.toCanvas();
     c.ox = Math.round(cx); c.oy = top + Math.round(bh * 0.6);
+    return c;
+  });
+}
+
+// Portuguese man o' war: a glossy blue-violet float with a pink crest like a
+// little sail, a fringe of dark blue polyps under it, and long beaded blue
+// tentacles trailing way down.
+function manOWar(size, frame) {
+  const ph = (frame / JELLY_FRAMES) * TAU;
+  const W = Math.ceil(size * 1.7), H = Math.ceil(size * 4.4);
+  const cx = W / 2, fy = Math.round(size * 0.42);
+  const rx = size * 0.62, ry = size * 0.22;
+  const buf = new Buf(W, H);
+  const tilt = Math.sin(ph) * 0.06;
+  // long beaded tentacles first, so the float sits over them
+  for (let k = 0; k < 7; k++) {
+    const x0 = cx + (k / 6 - 0.5) * rx * 1.1, len = size * (2.6 + hash2(k, 3, 1) * 1.2);
+    for (let i = 0; i < len; i++) {
+      const t = i / len;
+      const x = x0 + Math.sin(ph - t * 4 + k) * t * size * 0.22;
+      const bead = i % 4 === 0;
+      buf.blend(Math.floor(x), Math.floor(fy + ry * 0.6 + i), bead ? [150, 190, 255] : [70, 110, 240], (bead ? 230 : 160) * (1 - t * 0.8));
+    }
+  }
+  // polyps: short curly blobs hanging under the float
+  for (let k = 0; k < 9; k++) {
+    const x0 = cx + (k / 8 - 0.5) * rx * 1.3, l = size * (0.25 + hash2(k, 7, 2) * 0.25);
+    for (let i = 0; i < l; i++) {
+      const x = x0 + Math.sin(ph * 2 + i * 0.6 + k) * 1.2;
+      buf.set(Math.floor(x), Math.floor(fy + ry * 0.5 + i), i > l - 2 ? [150, 110, 255] : [50, 70, 190], 235);
+      buf.set(Math.floor(x) + 1, Math.floor(fy + ry * 0.5 + i), [40, 56, 160], 200);
+    }
+  }
+  // the float
+  for (let py = 0; py < fy + ry + 2; py++) for (let px = 0; px < W; px++) {
+    const x = (px + 0.5 - cx) / rx, y0 = (py + 0.5 - fy) / ry - x * tilt * 4;
+    const crest = 0.9 * Math.max(0, 1 - Math.pow(Math.abs(x + 0.1) / 0.75, 2)) * (1 + 0.15 * Math.sin(x * 9 + ph));
+    const inFloat = x * x + y0 * y0 <= 1;
+    const inCrest = !inFloat && y0 < 0 && y0 > -1 - crest && Math.abs(x) < 0.85;
+    if (!inFloat && !inCrest) continue;
+    let col;
+    if (inCrest) { col = mixRGB([255, 140, 220], [200, 120, 255], clamp(-y0 - 1, 0, 1)); if (-y0 > 0.98 + crest - 0.18) col = [255, 200, 240]; }
+    else {
+      const l = clamp(0.5 - y0 * 0.5 - x * 0.2, 0, 1);
+      col = mixRGB([90, 110, 240], [200, 160, 255], l);
+      if (x * x + y0 * y0 > 0.8) col = mixRGB(col, [60, 70, 200], 0.6);
+      if (Math.hypot(x + 0.35, y0 + 0.35) < 0.18) col = [240, 236, 255];
+    }
+    buf.set(px, py, col, inCrest ? 200 : 225);
+  }
+  const c = buf.toCanvas();
+  c.ox = Math.round(cx); c.oy = fy;
+  return c;
+}
+
+// A comb jelly: a tiny clear oval with eight rows of combs, and a rainbow
+// running down the rows.
+export function renderComb(size, frame) {
+  return cached('comb|' + size + '|' + frame, () => {
+    const W = Math.ceil(size * 1.4) + 2, H = Math.ceil(size * 1.9) + 2, cx = W / 2, cy = H / 2;
+    const rx = size * 0.55, ry = size * 0.85;
+    const buf = new Buf(W, H);
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      const x = (px + 0.5 - cx) / rx, y = (py + 0.5 - cy) / ry, r = x * x + y * y;
+      if (r > 1) continue;
+      buf.set(px, py, r > 0.75 ? [220, 240, 255] : [180, 220, 250], r > 0.75 ? 170 : 70);
+    }
+    for (let k = 0; k < 4; k++) {
+      const u = (k / 3 - 0.5) * 1.3;
+      for (let i = 0; i < ry * 1.6; i++) {
+        const y = -0.8 + i / (ry * 1.6) * 1.6, x = u * Math.sqrt(Math.max(0, 1 - y * y));
+        const hue = ((i * 40 + frame * 45 + k * 60) % 360) / 360;
+        const rgb = [0, 1, 2].map((n) => Math.round(255 * clamp(Math.abs(((hue * 6 + [0, 4, 2][n]) % 6) - 3) - 1, 0, 1) * 0.8 + 50));
+        buf.set(Math.floor(cx + x * rx), Math.floor(cy + y * ry), rgb, 240);
+      }
+    }
+    const c = buf.toCanvas();
+    c.ox = Math.round(cx); c.oy = Math.round(cy);
+    return c;
+  });
+}
+
+// An octopus: a round mantle leaning back, big eyes, and eight arms that
+// curl and ripple, with pale suckers down the undersides.
+export const OCTO_FRAMES = 8;
+const OCTO = ramp(['#3a0a10', '#6e1a1a', '#a8321e', '#d8522a', '#f27a3a', '#ffa860', '#ffd09a'], 7);
+export function renderOctopus(S, frame, swim = 0) {
+  return cached('octo|' + S + '|' + frame + '|' + swim, () => {
+    const ph = (frame / OCTO_FRAMES) * TAU;
+    const W = Math.ceil(S * 2.8), H = Math.ceil(S * 2.4), cx = W / 2;
+    const buf = new Buf(W, H);
+    const hy = S * 0.95; // where the arms meet
+    const disc = (x, y, r, l) => {
+      for (let py = Math.floor(y - r); py <= y + r; py++) for (let px = Math.floor(x - r); px <= x + r; px++) {
+        const d = Math.hypot(px + 0.5 - x, py + 0.5 - y);
+        if (d > r) continue;
+        const sh = l + (1 - d / r) * 1.5 - (py - (y - r)) / (2 * r + 1) * 1.2;
+        buf.set(px, py, OCTO[clamp(Math.round(sh), 0, 6)]);
+      }
+    };
+    // arms: back four darker, front four lighter
+    for (const pass of [0, 1]) for (let k = pass; k < 8; k += 2) {
+      const side = k < 4 ? -1 : 1, spread = ((k % 4) + 0.5) / 4;
+      let x = cx + (k - 3.5) * S * 0.07, y = hy;
+      let a = Math.PI / 2 + side * (0.25 + spread * 1.1) * (swim ? 0.35 : 1);
+      const len = S * (swim ? 1.5 : 1.25) * (0.85 + hash2(k, 2, 5) * 0.3);
+      const n = Math.ceil(len);
+      for (let i = 0; i < n; i++) {
+        const t = i / n;
+        a += (Math.sin(ph + k * 1.3 - t * 5) * 0.09 + side * (swim ? 0 : t * t * 0.28)) ;
+        x += Math.cos(a); y += Math.sin(a) * (swim ? 1 : 0.55);
+        const r = (1 - t) * S * 0.13 + 0.6;
+        disc(x, y, r, pass ? 3.2 : 2);
+        if (pass && i % 3 === 1 && r > 1.2) buf.set(Math.floor(x - side * r * 0.5), Math.floor(y + r * 0.6), [255, 206, 190]);
+      }
+    }
+    // mantle
+    const mx = cx - S * 0.05, my = hy - S * 0.5, mrx = S * 0.46, mry = S * 0.58;
+    for (let py = Math.floor(my - mry); py <= hy + 1; py++) for (let px = Math.floor(mx - mrx - 2); px <= mx + mrx + 2; px++) {
+      const x = (px + 0.5 - mx) / mrx, y = (py + 0.5 - my) / mry;
+      if (x * x + y * y > 1) continue;
+      let l = 4 - y * 1.6 - x * 1.1 + bayer(px, py) * 0.8;
+      if (((px * 7 + py * 13) % 11) === 0) l -= 1.2; // bumpy skin
+      buf.set(px, py, OCTO[clamp(Math.round(l), 0, 6)]);
+    }
+    // eyes
+    for (const sd of [-1, 1]) {
+      const ex = Math.round(cx + sd * S * 0.24), ey = Math.round(hy - S * 0.1);
+      buf.set(ex - 1, ey, [255, 240, 200]); buf.set(ex, ey, [255, 240, 200]); buf.set(ex + 1, ey, [255, 240, 200]);
+      buf.set(ex - 1, ey + 1, [255, 240, 200]); buf.set(ex, ey + 1, [20, 10, 10]); buf.set(ex + 1, ey + 1, [255, 240, 200]);
+      buf.set(ex, ey - 1, OCTO[1]);
+    }
+    edgePass(buf, [255, 200, 150]);
+    const c = buf.toCanvas();
+    c.ox = Math.round(cx); c.oy = Math.round(hy);
     return c;
   });
 }

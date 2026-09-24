@@ -11,6 +11,7 @@ import { SoundEngine } from '../audio.js';
 import { AnimeFX } from './anime.js';
 import { heartFriends } from '../world/friends.js';
 import { PhotoMode } from './photo.js';
+import { Vinyl } from './vinyl.js';
 import { Quest } from './quest.js';
 import { Dialog } from './dialog.js';
 
@@ -73,6 +74,7 @@ export class Story {
     post.p.dim = 0.4;
     this.debug = opts.debug;
     this.photo = new PhotoMode(this);
+    this.vinyl = new Vinyl(this);
     this.quest = null;
     this.dialog = new Dialog(this);
     this.guyAt = null;       // apart: where he stands in the world
@@ -402,7 +404,12 @@ export class Story {
     if (this.quest === Q) this.quest = null;
     if (!P.album) P.on = false;
     c.point = 0;
-    await chat('done! you\'re kinda good at this', ['what now?', 'can i keep going?'], [
+    await D.say('bean', "done! ok quick tour before you go");
+    await D.say('bean', 'that little book by your camera is your diary. gallery, notebook, and camera stuff');
+    await D.say('bean', 'every pic gets you coins. rare animals pay more, a first time pays triple, and centre it for a bonus');
+    await D.say('bean', 'spend them in the camera tab. better lens, better film, faster developing');
+    await D.say('bean', "oh and if you see a bottle floating around, tap it. there's a record inside");
+    await chat("that's it. you're kinda good at this btw", ['what now?', 'can i keep going?'], [
       'reef is next door. someone\'s waiting there btw',
       'always. but check the reef first. trust',
     ]);
@@ -588,9 +595,9 @@ export class Story {
     for (const [t, who, line, life] of [
       [44.6, 'me', "you're lowkey the coolest person i know", 1.1],
       [47.0, 'her', 'lowkey??', 0.8],
-      [48.6, 'me', 'ok highkey. you\'re funny and weird in the best way', 1.2],
-      [51.4, 'her', "you're being weird", 0.9],
-      [53.0, 'me', 'yeah that happens around you', 1.1],
+      [48.6, 'me', "ok highkey. you're just really fun to be around", 1.2],
+      [51.4, 'her', 'ok stop', 0.8],
+      [53.0, 'me', 'nah i mean it', 1.1],
     ]) this.atSong(t).then(() => D.say(who, line, { life }));
     await this.walkTo(CX, 56.6);
   }
@@ -1417,6 +1424,7 @@ export class Story {
     st.cam.x += jx; st.cam.y += jy;
     this.anime.update(dt);
     this.photo.update(dt);
+    this.vinyl.update(dt);
     if (this.quest) this.quest.update(dt);
     if (this.roam) this.updateRoam(dt);
     this.dialog.update(dt);
@@ -1519,13 +1527,14 @@ export class Story {
       }
     }
     if (this.photo.album && this.photo.pointer(type, x, y)) return; // the album sits over everything
-    if (type === 'down' && this.speakerHover()) { this.speakerOn = !this.speakerOn; this.sound.setEnabled(this.speakerOn); return; }
+    if (type === 'down' && this.speakerHover()) { this.speakerOn = !this.speakerOn; this.sound.setEnabled(this.speakerOn); this.vinyl.setMuted(!this.speakerOn); return; }
     if ((type === 'down' || type === 'key') && this.dialog.tap(type === 'key' ? null : x, y)) return;
     // a song from the gift opens in Spotify
     if (type === 'down' && (this.letter || this.giftOpen) && this.giftRects) {
       const g = this.giftRects.find(({ r }) => x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]);
       if (g) { this.sound.sfx('pop'); try { window.open(g.url, '_blank', 'noopener'); } catch (e) { /* blocked */ } return; }
     }
+    if (!this.photo.album && this.vinyl.pointer(type, x, y)) return;
     if (this.photo.pointer(type, x, y)) return;
     if (type === 'move') {
       const no = this.buttons.find((b) => b.id === 'no');
@@ -1869,6 +1878,7 @@ export class Story {
     }
     if (this.showSpeaker) { const [x, y] = this.speakerRect(); drawSpeaker(ctx, x + 2, y + 2, this.speakerOn, this.speakerHover()); }
     this.drawRoam(ctx);
+    this.vinyl.draw(ctx);
     this.photo.draw(ctx);
     if (!this.photo.album) {
       // over the viewfinder, under the album; on a narrow screen the quest

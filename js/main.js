@@ -84,6 +84,7 @@ document.addEventListener('visibilitychange', () => {
   const snd = story && story.sound;
   if (!snd || !snd.ctx) return;
   const el = snd.source || snd.el;
+  if (story.vinyl && story.vinyl.playing) { if (document.hidden) snd.ctx.suspend(); else snd.ctx.resume(); return; }
   if (document.hidden) { snd.ctx.suspend(); if (el && snd.playing) el.pause(); }
   else { snd.ctx.resume(); if (el && snd.playing) el.play().catch(() => {}); }
 });
