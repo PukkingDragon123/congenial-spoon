@@ -383,11 +383,12 @@ export class Story {
     this.photoReady = true;
     const Q = (this.quest = new Quest(this, 'PHOTO QUEST', 'jellyfish hall', [
       ['jelly', 'a moon jelly'], ['nettle', 'a sea nettle'], ['bigjelly', 'a giant jelly'],
+      ['bean', 'me! (the bean)'], ['me', 'a selfie of you'],
     ], 30));
     this.sound.sfx('chime');
     let snaps = 0;
     Q.point = () => { if (P.on || snaps || P.album) return null; const [x, y, w] = P.camRect(); return [x + w / 2, y - 3]; };
-    const cheers = ['Yes!! One down!', 'Ooh, great shot!', 'A natural!'];
+    const cheers = ['Yes!! One down!', 'Ooh, great shot!', 'A natural!', 'Wait, is that ME? My good side!', 'Look at you! Cover star!'];
     let ci = 0;
     P.onSnap = (info) => {
       snaps++;
@@ -395,7 +396,7 @@ export class Story {
       if (Q.snapped(info.keys)) { P.points += Q.bonus; P.save(); return; }
       if (Q.items.filter((it) => it.done).length > had) D.say('bean', cheers[ci++ % cheers.length], { life: 1.4 });
     };
-    await D.say('bean', 'First, three jellies for page one. Tap your camera to hold it up!', { until: () => P.on || snaps > 0 });
+    await D.say('bean', 'Five photos for page one: three jellies, me, and you! Tap your camera to hold it up!', { until: () => P.on || snaps > 0 });
     D.say('bean', 'Now tap a jelly to snap it. The card says which ones!', { life: 2.6 });
     await this.until(() => Q.done);
     P.onSnap = null;
@@ -1429,7 +1430,7 @@ export class Story {
     if (this.roam) this.updateRoam(dt);
     this.dialog.update(dt);
     // she raises the camera to her eye when you do
-    { const c = aq.couple, up = this.photo.on && !this.photo.album ? 1 : 0; c.girlCam += (up - c.girlCam) * Math.min(1, dt * 9); }
+    { const c = aq.couple, up = this.photo.on && !this.photo.album ? 1 : 0; c.girlCam += (up - c.girlCam) * Math.min(1, dt * 9); c.snapK = Math.max(0, (c.snapK || 0) - dt * 1.1); }
     if (aq.couple.apart && this.meetX != null) aq.couple.girlDX = this.meetX - st.coupleX - aq.couple.gap / 2;
     if (aq.couple.apart && this.guyAt != null) aq.couple.guyDX = this.guyAt - (st.coupleX - aq.couple.gap / 2);
     // the music reaches into the tank

@@ -21,7 +21,7 @@ ripple through the schools, crabs wave their claws, and the light breathes
 with the song.
 
 1. **Title**: "Very Cool Aquarium Game". Tap to dive in; the instrumental of "Always" plays (no loop) through the photo quest, and the full song with the vocals takes over just before the first sung line when the quest is done.
-2. **Mameshiba and the photo quest**: she walks into the jellyfish hall on her own with a camera. A Mameshiba in a scuba suit paddles up and chats in a dialogue box, and you pick her replies (it's a talking bean with a degree in jellyfish; jellies are older than trees). It's making an encyclopedia and asks for help: a quest card wants a moon jelly, a sea nettle and a giant jelly. An arrow points at the camera; raise it and she lifts hers to her eye. The last photo stamps QUEST CLEAR!, one more exchange, and the song carries on as she heads for the reef.
+2. **Mameshiba and the photo quest**: she walks into the jellyfish hall on her own with a camera. A Mameshiba in a scuba suit paddles up and chats in a dialogue box, and you pick her replies (it's a talking bean with a degree in jellyfish; jellies are older than trees). It's making an encyclopedia and asks for help: a quest card wants five photos: a moon jelly, a sea nettle, a giant jelly, the Mameshiba itself and a selfie. An arrow points at the camera; raise it and she lifts hers to her eye. The last photo stamps QUEST CLEAR!, one more exchange, and the song carries on as she heads for the reef.
 3. **Jellyfish hall** (0:00): she wanders along the glass pointing out jellies. Tap any creature to make it react. A Mameshiba in a little scuba suit (hood with its floppy ear, air tank, mask, flipper) paddles around here and in the other tanks.
 4. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a fat seal dressed as Cupid sitting on a rock in the middle, anemones, clownfish families and schools of fish. He's already there at the glass. She walks in past him, he spots her ("!" with anime focus lines) and can't keep still, jumping around, then comes over and they shake hands, and they watch the reef together.
 5. **The walk** (0:42): along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
@@ -45,7 +45,8 @@ customised camera.
 ### Photo mode
 
 Tap the little camera (bottom right) to raise the viewfinder, then tap to
-snap. The shot pops out of the top of the camera, down in the corner, and
+snap. The flash goes off with a pop of light and rays, and she strikes a
+little pose each time (a peace sign, a lean, a head tilt, an arm up). The shot pops out of the top of the camera, down in the corner, and
 takes 8 seconds to develop while a tiny chibi Mameshiba (goggles pushed up)
 looks after it: it hops in, polishes the print with a cloth, hangs on to the
 corner and shakes it, and does a happy hop when it's done. You can't take
@@ -56,7 +57,8 @@ then 3 seconds. Then the print flies to the middle of the screen and is
 scored: rarer creatures are worth more (common ★ up to legendary ★★★★), a
 first catch scores triple, and a centred subject gets a bonus. The little
 book next to the camera opens the album, with three tabs: *gallery*,
-*notebook* and *camera* (the workshop).
+*notebook* and *camera* (the workshop). The album has a summer-at-the-sea look: waves along the
+top, sand and shells along the bottom.
 
 Points are spent in the camera workshop, which shows your camera
 up close: switch model (instant, disposable, toy cam, rangefinder, SLR, each

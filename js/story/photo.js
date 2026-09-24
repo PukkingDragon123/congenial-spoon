@@ -264,7 +264,10 @@ export class PhotoMode {
     const [fx, fy, fw, fh] = this.frameRect();
     s.sound.sfx('shutter');
     this.flash = 1;
+    this.flashT = 0;
     this.snapT = 0;
+    // she strikes a little pose for it
+    { const cp = s.aq && s.aq.couple; if (cp) { cp.snapPose = (cp.snapPose || 0) + 1 + ((R() * 2) | 0); cp.snapK = 1.8; } }
     this.charmV += 5;
     // a cute "click!" and a pop of stars at the frame's corner, and a wink of
     // flash from her camera in the scene
@@ -414,6 +417,7 @@ export class PhotoMode {
     const cap = ROLL_CAP[this.levels.roll];
     if (this.film < cap) { this.reload += dt; if (this.reload >= RELOAD[this.levels.roll]) { this.reload = 0; this.film++; } } else this.reload = 0;
     this.flash = Math.max(0, this.flash - dt * 4);
+    if (this.flashT != null) this.flashT += dt;
     this.snapT += dt; this.raiseT += dt;
     this.lock = this.on && !this.album ? this.findSubject() : null;
     this.shake = Math.max(0, this.shake - dt);
@@ -476,6 +480,7 @@ export class PhotoMode {
       ctx.fillRect(0, 0, W, H);
       ctx.globalAlpha = 1;
     }
+    if (this.flashT != null && this.flashT < 0.55) this.drawFlash(ctx);
     if (this.available()) this.drawHud(ctx);
     if (this.prints.length) this.drawPrint(ctx, this.prints[0]);
     if (this.album) this.drawAlbum(ctx);
@@ -589,6 +594,37 @@ export class PhotoMode {
       const k = this.snapT / 0.7, sc = W > 300 ? 2 : 1;
       drawText(ctx, 'click!', fx + fw - 4, Math.round(fy - 6 - k * 10), { align: 'right', scale: sc, color: '#fff6c0', outline: '#5a2a10', alpha: 1 - k * k });
     }
+  }
+
+  // The camera flash: a hard white pop over everything, then a starburst of
+  // light rays and a ring from the lens that spread and fade.
+  drawFlash(ctx) {
+    const W = this.W, H = this.H, t = this.flashT;
+    const [fx, fy, fw, fh] = this.frameRect(), ox = fx + fw / 2, oy = fy + fh / 2;
+    if (t < 0.07) { ctx.globalAlpha = 0.85; ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; return; }
+    const k = (t - 0.07) / 0.48, fade = 1 - k;
+    // soft glow
+    const r0 = Math.max(W, H) * (0.3 + k * 0.5);
+    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, r0);
+    g.addColorStop(0, `rgba(255,252,230,${0.55 * fade})`); g.addColorStop(1, 'rgba(255,252,230,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // rays
+    ctx.fillStyle = '#fffbe0';
+    ctx.globalAlpha = fade * 0.9;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU + 0.2, len = (i % 2 ? 0.5 : 1) * Math.min(W, H) * 0.45;
+      const d0 = fw * 0.35 + k * len * 0.6, d1 = d0 + len * 0.35 * fade + 4;
+      for (let d = d0; d < d1; d += 2) ctx.fillRect(Math.round(ox + Math.cos(a) * d), Math.round(oy + Math.sin(a) * d), i % 2 ? 1 : 2, i % 2 ? 1 : 2);
+    }
+    // ring
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.globalAlpha = fade * 0.7;
+    ctx.beginPath(); ctx.arc(ox, oy, fw * 0.3 + k * Math.max(W, H) * 0.5, 0, TAU); ctx.stroke();
+    // sparkles
+    for (let i = 0; i < 8; i++) {
+      const a = i * 2.4, d = fw * 0.4 + k * (60 + i * 14), x = Math.round(ox + Math.cos(a) * d), y = Math.round(oy + Math.sin(a) * d * 0.7);
+      ctx.fillRect(x - 2, y, 5, 1); ctx.fillRect(x, y - 2, 1, 5);
+    }
+    ctx.globalAlpha = 1;
   }
 
   // a print: slides out of the camera and sits on top of it while the bean
@@ -792,21 +828,27 @@ export class PhotoMode {
 
   drawAlbum(ctx) {
     const W = this.W, H = this.H, A = this.album;
-    ctx.fillStyle = 'rgba(6,4,14,0.7)';
+    ctx.fillStyle = 'rgba(4,28,54,0.72)';
     ctx.fillRect(0, 0, W, H);
     const [px, py, pw, ph] = this.panel();
-    paper(ctx, px, py, pw, ph);
+    paper(ctx, px, py, pw, ph, this.t);
     // tabs, points and close
     const tabs = this.tabRects();
     for (const k of TABS) {
       const [x, y, w, h] = tabs[k], on = A.tab === k;
-      ctx.fillStyle = on ? '#ff8ab4' : '#e4d2ac'; ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = on ? '#c2466e' : '#b89a6a'; ctx.fillRect(x, y + h - 1, w, 1);
-      drawText(ctx, k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#6a4a2a' });
+      ctx.fillStyle = on ? '#ff7a5a' : '#fff8e4'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = on ? '#c24a3a' : '#7ac8d8'; ctx.fillRect(x, y + h - 1, w, 1);
+      drawText(ctx, k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#1e6a84' });
     }
     const [cx, cy] = this.closeRect();
-    drawText(ctx, '×', cx + 1, cy + 1, { color: '#6a4a2a' });
-    if (pw > 150) drawText(ctx, `✦${this.points}`, cx - 6, py + 6, { align: 'right', color: '#c27a10' });
+    drawText(ctx, '×', cx + 1, cy + 1, { color: '#0e5a78' });
+    if (pw > 150) {
+      // a little sun next to your points
+      const sx = cx - 14 - textWidth(`✦${this.points}`), sy = py + 9;
+      ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.arc(sx - 4, sy, 3, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffb02a'; for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + this.t; ctx.fillRect(Math.round(sx - 4 + Math.cos(a) * 5), Math.round(sy + Math.sin(a) * 5), 1, 1); }
+      drawText(ctx, `✦${this.points}`, cx - 6, py + 6, { align: 'right', color: '#e0701a' });
+    }
     if (A.tab === 'gallery') this.gallery.draw(ctx);
     else if (A.tab === 'notebook') this.notebook.draw(ctx);
     else this.drawWorkshop(ctx);
@@ -977,8 +1019,8 @@ export class PhotoMode {
     // sub-tabs
     for (const c of L.chips) {
       const [x, y, w, h] = c.r, on = A.sub === c.k;
-      ctx.fillStyle = on ? '#ff8ab4' : '#e4d2ac'; ctx.fillRect(x, y, w, h);
-      drawText(ctx, c.k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#6a4a2a' });
+      ctx.fillStyle = on ? '#2aa8c8' : '#d4f1f6'; ctx.fillRect(x, y, w, h);
+      drawText(ctx, c.k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#1e6a84' });
     }
     const hint = { sticker: A.sel ? 'tap the camera to stick it on' : 'pick a sticker', draw: C.markers ? 'draw on the camera' : '', paint: `new colours ✦${PAINT_PRICE}`, charm: 'finish a jigsaw for its keychain', banner: 'finish a whole tank in the encyclopedia' }[A.sub];
     for (const it of this.wsItems(L)) {
@@ -1187,14 +1229,31 @@ function fit(str, w) {
   while (s.length > 1 && textWidth(s + '.') > w) s = s.slice(0, -1);
   return s + '.';
 }
-function paper(ctx, x, y, w, h) {
-  ctx.fillStyle = '#5a3a1e'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-  ctx.fillStyle = '#f3e6c8'; ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = 'rgba(160,120,70,0.12)';
-  for (let i = 0; i < w * h / 40; i++) ctx.fillRect(x + ((i * 97) % w), y + ((i * 57 + (i >> 3)) % h), 1, 1);
-  ctx.fillStyle = '#d6bf94';
-  for (let i = 4; i < w - 4; i += 4) { ctx.fillRect(x + i, y + 2, 2, 1); ctx.fillRect(x + i, y + h - 3, 2, 1); }
-  for (let i = 4; i < h - 4; i += 4) { ctx.fillRect(x + 2, y + i, 1, 2); ctx.fillRect(x + w - 3, y + i, 1, 2); }
+// The album's backing: a summer day at the sea. Pale sky-to-sea card with a
+// teal frame, a band of rolling waves along the top behind the tabs, a sandy
+// strip along the bottom with shells and a starfish, and a little sun.
+function paper(ctx, x, y, w, h, t = 0) {
+  ctx.fillStyle = '#0e5a78'; ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+  ctx.fillStyle = '#3ab0c8'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, '#dff6fb'); g.addColorStop(0.55, '#f2fbf8'); g.addColorStop(1, '#fff3d8');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  // waves along the top
+  for (let i = 0; i < w; i++) {
+    const wy = Math.round(3 + Math.sin(i * 0.16 + t * 2) * 1.5 + Math.sin(i * 0.05 - t) * 1);
+    ctx.fillStyle = '#9ee0ee'; ctx.fillRect(x + i, y, 1, wy + 11);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(x + i, y + wy + 11, 1, 1);
+  }
+  ctx.fillStyle = 'rgba(58,176,200,0.35)';
+  for (let i = 0; i < w; i += 9) ctx.fillRect(x + ((i + Math.floor(t * 6)) % w), y + 7 + (i % 3), 3, 1);
+  // sand along the bottom
+  ctx.fillStyle = '#f6dca0'; ctx.fillRect(x, y + h - 4, w, 4);
+  ctx.fillStyle = '#e8c27a'; for (let i = 2; i < w; i += 5) ctx.fillRect(x + i, y + h - 2 - (i % 2), 1, 1);
+  ctx.fillStyle = '#ffffff'; for (let i = 0; i < w; i++) if (Math.sin(i * 0.2 + t * 1.5) > 0.3) ctx.fillRect(x + i, y + h - 5, 1, 1);
+  // shells and a starfish in the corners
+  const shell = (sx, sy) => { ctx.fillStyle = '#ff9a8a'; ctx.fillRect(sx - 2, sy, 5, 2); ctx.fillRect(sx - 1, sy - 1, 3, 1); ctx.fillStyle = '#ffd6c8'; ctx.fillRect(sx, sy - 1, 1, 3); };
+  const star = (sx, sy) => { ctx.fillStyle = '#ff7a3a'; ctx.fillRect(sx - 2, sy, 5, 1); ctx.fillRect(sx, sy - 2, 1, 5); ctx.fillRect(sx - 1, sy + 1, 1, 2); ctx.fillRect(sx + 1, sy + 1, 1, 2); };
+  shell(x + 6, y + h - 4); star(x + 14, y + h - 4); shell(x + w - 8, y + h - 4);
 }
 
 function drawBook(ctx, x, y) {

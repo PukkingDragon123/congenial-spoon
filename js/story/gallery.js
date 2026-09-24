@@ -259,8 +259,8 @@ export class Gallery {
     // tools
     for (const c of L.chips) {
       const [x, y, w, h] = c.r, on = this.tool === c.k;
-      ctx.fillStyle = on ? '#ff8ab4' : '#e4d2ac'; ctx.fillRect(x, y, w, h);
-      drawText(ctx, c.k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#6a4a2a' });
+      ctx.fillStyle = on ? '#2aa8c8' : '#d4f1f6'; ctx.fillRect(x, y, w, h);
+      drawText(ctx, c.k, x + w / 2, y + 2, { align: 'center', color: on ? '#ffffff' : '#1e6a84' });
     }
     { const [x, y, w, h] = L.saveR; ctx.fillStyle = '#ff6a9a'; ctx.fillRect(x, y, w, h); drawText(ctx, 'save postcard', x + w / 2, y + 2, { align: 'center', color: '#ffffff' }); }
     for (const it of this.options(L)) {

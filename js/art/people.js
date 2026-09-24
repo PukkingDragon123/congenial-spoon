@@ -366,6 +366,23 @@ export class Couple {
     this.girlWalk = 0;
     this.girlMoving = 0;
     this.girlCam = 0;     // camera up to her eye, 0..1
+    this.snapPose = 0;    // which little pose she strikes on a snap
+    this.snapK = 0;       // how far into it, 1 at the click, fading out
+  }
+
+  // A cute pose for the moment she takes a photo: a peace sign, a lean one
+  // way or the other, a head tilt or a happy arm up. Blended by snapK.
+  snapOpts(qx) {
+    const k = Math.min(1, this.snapK);
+    if (k <= 0) return {};
+    const gsh = -2.4 - GIRL.leg - GIRL.torso, w = Math.sin(this.t * 16) * 0.6;
+    switch (this.snapPose % 5) {
+      case 0: return { lhand: [qx - GIRL.sh - lerp(1, 5, k), lerp(-GIRL.leg + 6, gsh - 9 + w, k)] }; // peace!
+      case 1: return { sway: -1.6 * k, tilt: -1.2 * k, headX: -2.2 * k, weight: -1.2 * k };
+      case 2: return { sway: 1.6 * k, tilt: 1.2 * k, headX: 2.2 * k, weight: 1.2 * k };
+      case 3: return { tilt: -2 * k, headX: -1.2 * k, headY: 0.8 * k, lhand: [qx - GIRL.sh - 2, lerp(-GIRL.leg + 6, gsh + 2, k)] };
+      default: return { lhand: [qx - GIRL.sh - lerp(1, 8, k) + w, lerp(-GIRL.leg + 6, gsh - 14, k)], headY: -0.8 * k };
+    }
   }
 
   update(dt) { this.t += dt; }
@@ -397,6 +414,7 @@ export class Couple {
         cam: this.girlCam * (1 - ln),
         breath: (Math.sin(t * 1.6 + 0.8) + 1) * 0.5, tilt: -1.4 * ln, lhand: girlL, rhand: this.girlCam > 0.05 ? null : girlR, headX: -ln * 3.2 + pt * 0.8, headY: ln * 1.6 - pt * 0.6, sway: -ln * 1.2, weight: wq,
         hairSway: Math.sin(t * 0.9) * 0.8, flutter: Math.sin(t * 1.3) * 0.5,
+        ...(this.girlCam > 0.3 ? this.snapOpts(qx) : {}),
       });
     } else if (this.mode === 'face' || this.mode === 'hug') {
       // facing each other holding hands; k -> 1 leans in to a forehead kiss on tiptoe
@@ -457,6 +475,7 @@ export class Couple {
         cam: this.girlCam, rhand: this.girlCam > 0.05 ? null : rh,
         breath: (Math.sin(t * 1.6 + 0.8) + 1) * 0.5, weight: Math.sin(t * 0.38 + 2) * 0.8,
         hairSway: Math.sin(t * 0.9) * 0.8, flutter: Math.sin(t * 1.3) * 0.5,
+        ...(this.girlCam > 0.3 ? this.snapOpts(qx) : {}),
       });
     }
   }
