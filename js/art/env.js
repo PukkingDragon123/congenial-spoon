@@ -617,3 +617,162 @@ export function genCeilTile() {
   }
   return b.toCanvas();
 }
+
+// ------------------------------------------------------------------ cupid --
+// A stone cherub on a fluted pedestal, drawing a bow with a heart-tipped
+// arrow, little wings behind, a sash round the hips and curls on his head.
+// Height-field sculpted and lit like the carved head; pale rose marble with
+// coral growing on the pedestal.
+const MARBLE = ramp(['#0b0f26', '#151b3a', '#22294f', '#333a66', '#474e7e', '#5f6596', '#7a7fad', '#989bc2', '#b8b6d6', '#d8d0e8', '#f2eaf6'], 11);
+const ROSE = ramp(['#4a1030', '#7a1c46', '#b02e5c', '#e0507a', '#ff86a4'], 5);
+export function genCupid(k = 1.35) {
+  const W = Math.round(104 * k), Ht = Math.round(156 * k), cx = 52;
+  const g = (x, y, mx, my, sx, sy) => Math.exp(-(((x - mx) / sx) ** 2) - (((y - my) / sy) ** 2));
+  const heights = new Float32Array(W * Ht), part = new Uint8Array(W * Ht), coral = new Float32Array(W * Ht);
+  const tubeH = (x, y, ax, ay, bx, by, ra, rb) => {
+    const vx = bx - ax, vy = by - ay, l2 = vx * vx + vy * vy || 1;
+    const t = clamp(((x - ax) * vx + (y - ay) * vy) / l2);
+    const d = Math.hypot(x - (ax + vx * t), y - (ay + vy * t)), r = ra + (rb - ra) * t;
+    return d < r ? r * Math.sqrt(1 - (d / r) ** 2) : -1;
+  };
+  const add = (v, o) => (v > 0 ? v + o : -1);
+  const curl = (x, y) => {
+    const sp = 3.8, row = Math.round(y / (sp * 0.87)), off = (row % 2) * sp * 0.5;
+    const d = Math.hypot(x - (Math.round((x - off) / sp) * sp + off), y - row * sp * 0.87);
+    return d < 2 ? 2 * (1 - (d / 2) ** 2) : -0.7;
+  };
+  // the bow: an arc of a circle, tips at the top and bottom
+  const BX = cx - 4, BY = 60, bowR = 26, bowA = 0.95;   // circle the bow is an arc of
+  const tipT = [BX - Math.cos(bowA) * bowR, BY - Math.sin(bowA) * bowR];
+  const tipB = [tipT[0], BY + Math.sin(bowA) * bowR];
+  const hand = [cx + 3, 60];                              // the hand drawing the string
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+    // sample the design at 1/k so the bigger statue keeps crisp detail
+    const X = (x + 0.5) / k, Y = (y + 0.5) / k, dx = X - cx;
+    let h = -1, p = 0;
+    const put = (hh, pp) => { if (hh > h) { h = hh; p = pp; } };
+    // wings, behind everything: rounded on top, rows of scalloped feathers,
+    // the long flight feathers fanning out at the bottom
+    for (const s of [-1, 1]) {
+      const ox = (X - (cx + s * 18)) * s, oy = Y - 45;
+      const ca = Math.cos(0.55), sa = Math.sin(0.55);
+      const u = ox * ca + oy * sa, v = -ox * sa + oy * ca;   // u along the wing, v across it
+      const top = -8.5 * Math.sqrt(Math.max(0, 1 - (u / 15) ** 2));
+      const bot = 7 + 2.2 * Math.abs(Math.sin(u * 0.75));
+      if (u > -13 && u < 15 && v > top && v < bot * Math.sqrt(Math.max(0, 1 - (u / 16) ** 2)) + 1) {
+        let wh = 6 - (v - top) * 0.12;
+        const row = ((v - top) + 2.4 * Math.abs(Math.sin(u * 0.75))) / 3.6;
+        if (row % 1 < 0.2 && v > top + 2) wh -= 1.3;
+        put(wh, 0);
+      }
+    }
+    // chubby legs: one standing, one kicked back
+    put(add(tubeH(X, Y, cx - 5, 80, cx - 6, 101, 6, 3.8), 2), 0);
+    put(add(tubeH(X, Y, cx - 6, 101, cx - 3, 104, 3.6, 3), 2), 0);
+    put(tubeH(X, Y, cx + 5, 80, cx + 11, 90, 5.6, 4.2), 0);
+    put(tubeH(X, Y, cx + 11, 90, cx + 16, 96, 4.2, 3), 0);
+    // round belly and chest
+    const tb = Math.hypot(dx / 13.5, (Y - 64) / 17);
+    if (tb < 1) put(13 * Math.sqrt(1 - tb * tb) + 2 - 1.2 * g(X, Y, cx, 70, 1, 1), 0);
+    // sash across the hips, with folds
+    const sd = (Y - (76 + dx * 0.28));
+    if (Math.abs(sd) < 3.4 && Math.abs(dx) < 15) put(h + 1.6 - (((X * 0.8 + Y) % 4) < 1 ? 0.9 : 0), 0);
+    // head with curls
+    const hd = Math.hypot(dx / 12, (Y - 32) / 12.5);
+    if (hd < 1) {
+      let hh = 12 * Math.sqrt(1 - hd * hd) + 4;
+      if (Y < 30 - 0.04 * dx * dx || hd > 0.82) hh += curl(X, Y);
+      else {
+        hh += 2 * g(X, Y, cx - 5, 37, 3.4, 2.6) + 2 * g(X, Y, cx + 5, 37, 3.4, 2.6);   // cheeks
+        hh += 1.3 * g(X, Y, cx, 34.5, 1.4, 1.8);                                       // nose
+        for (const s of [-1, 1]) {                                                     // closed, smiling eyes
+          const ex = X - (cx + s * 4.6);
+          if (Math.abs(ex) < 2.6 && Math.abs(Y - (31.2 + 0.22 * ex * ex)) < 0.55) hh -= 1.8;
+        }
+        if (Math.abs(dx) < 3.2 && Math.abs(Y - (39.5 - 0.1 * dx * dx)) < 0.55) hh -= 1.6;   // smile
+      }
+      put(hh, 0);
+    }
+    put(add(tubeH(X, Y, cx, 44, cx, 50, 4.5, 5), 6), 0); // neck
+    // left arm out to the side holding the bow
+    put(add(tubeH(X, Y, cx - 10, 53, cx - 24, 60, 3.6, 2.8), 9), 0);
+    put(add(tubeH(X, Y, cx - 25, 60, cx - 26, 60, 3.2, 3.2), 10), 0);
+    // right arm drawing the string back to the chest
+    put(add(tubeH(X, Y, cx + 10, 53, cx + 13, 63, 3.6, 3), 9), 0);
+    put(add(tubeH(X, Y, cx + 13, 63, hand[0], hand[1], 3, 2.6), 10), 0);
+    put(add(tubeH(X, Y, hand[0], hand[1], hand[0] - 1, hand[1], 2.8, 2.8), 11), 0);
+    // the bow itself: thick at the grip, tapering to the tips
+    const bd = Math.hypot(X - BX, Y - BY), ba = Math.atan2(Y - BY, -(X - BX));
+    if (Math.abs(ba) < bowA && Math.abs(bd - bowR) < 0.9 + 0.9 * Math.cos(ba * 1.4)) put(13, 0);
+    // bowstring: from each tip back to the drawing hand
+    for (const tip of [tipT, tipB]) put(add(tubeH(X, Y, tip[0], tip[1], hand[0], hand[1], 0.6, 0.6), 12), 0);
+    // the arrow, flying left, with a heart-shaped tip
+    put(add(tubeH(X, Y, hand[0], 60, 11, 60, 0.9, 0.9), 13), 0);
+    const hx = (X - 7) / 5.4, hy = (Y - 60) / 5.4;
+    { const u = -hy * 1.1, v = hx * 1.1 + 0.25; const q = u * u + v * v - 1; if (q * q * q - u * u * v * v * v <= 0) put(14.5, 2); }
+    // fletching near the hand
+    for (const s of [-1, 1]) put(add(tubeH(X, Y, hand[0] - 9, 60, hand[0] - 5, 60 + s * 2.8, 1, 0.5), 13), 2);
+    // pedestal: a capital slab, a fluted column with a heart relief, a base
+    if (Y >= 104 && Y < 110 && Math.abs(dx) < 23 - (Y < 106 ? 0 : 1)) put(12 + (Y < 105 ? -1 : 0), 1);
+    if (Y >= 110 && Y < 144 && Math.abs(dx) < 17) {
+      let ch = 14 * Math.sqrt(1 - (dx / 17.5) ** 2);
+      if (Math.abs(Math.sin(dx * 0.62)) > 0.93) ch -= 1.4;
+      put(ch, 1);
+      const u = (dx) / 6.5, v = -(Y - 126) / 6.5 + 0.25;
+      const q = u * u + v * v - 1;
+      if (q * q * q - u * u * v * v * v <= 0) put(ch + 1.8, 2);
+    }
+    if (Y >= 144 && Math.abs(dx) < 25 - (Y > 150 ? 0 : (150 - Y) * 0.3)) put(15 - (Y < 146 ? 1 : 0), 1);
+    if (h > 0) {
+      h += (fbm(X * 0.25, Y * 0.25, 71, 2) - 0.5) * 1.2;
+      heights[y * W + x] = h * k; part[y * W + x] = p + 1;
+      coral[y * W + x] = p === 1 ? fbm(X * 0.12, Y * 0.12, 73, 3) + (Y > 130 ? 0.12 : 0) : fbm(X * 0.1, Y * 0.1, 79, 2) - 0.25;
+    }
+  }
+  // occlusion from blurred height
+  const blur = new Float32Array(W * Ht), R = 3;
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+    if (!part[y * W + x]) continue;
+    let s = 0, n = 0;
+    for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
+      const xx = x + i, yy = y + j;
+      if (xx < 0 || yy < 0 || xx >= W || yy >= Ht) continue;
+      s += heights[yy * W + xx]; n++;
+    }
+    blur[y * W + x] = s / n;
+  }
+  const buf = new Buf(W, Ht), light = new Buf(W, Ht);
+  const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= Ht ? 0 : heights[y * W + x]);
+  const mk = (x, y) => (x < 0 || y < 0 || x >= W || y >= Ht ? 0 : part[y * W + x]);
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    if (!part[i]) continue;
+    const hx = at(x + 1, y) - at(x - 1, y), hy = at(x, y + 1) - at(x, y - 1);
+    let nx = -hx * 0.45, ny = -hy * 0.45, nz = 1;
+    const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
+    const dif = Math.max(0, nx * LD[0] + ny * LD[1] + nz * LD[2]);
+    const cav = clamp((blur[i] - heights[i]) * 0.22, -0.3, 0.6);
+    let b = 0.14 + dif * 0.8 - cav * 0.55;
+    b *= 1 - 0.28 * (y / Ht);
+    b += (noise2(x * 0.6, y * 0.6, 81) - 0.5) * 0.07;
+    let lvl = b * (MARBLE.length - 1) + (part[i] === 2 ? -1 : 0);
+    if (!mk(x, y - 1) && dif > 0.3) lvl += 1.5;
+    if (!mk(x, y + 1) || !mk(x - 1, y) || !mk(x + 1, y)) lvl -= 1.2;
+    const idx = clamp(Math.round(lvl + (bayer(x, y) - 0.5) * 0.9), 0, MARBLE.length - 1);
+    let col = MARBLE[idx];
+    if (part[i] === 3) col = mixRGB(col, ROSE[clamp(Math.round(dif * 4.5 + (bayer(x, y) - 0.5)), 0, 4)], 0.6);
+    else if (coral[i] > 0.62 && -ny > 0.1) col = mixRGB(col, ROSE[clamp(Math.round(dif * 4 + (bayer(x, y) - 0.5)), 0, 4)], 0.55);
+    buf.set(x, y, col);
+    if (-ny > 0.2 && dif > 0.35) light.set(x, y, [255, 255, 255], Math.round(clamp((-ny - 0.2) * 1.6) * 255));
+  }
+  // dark outline so it holds its shape against the reef
+  const out = new Buf(W, Ht);
+  out.d.set(buf.d);
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < W; x++) {
+    if (part[y * W + x]) continue;
+    if (mk(x + 1, y) || mk(x - 1, y) || mk(x, y + 1) || mk(x, y - 1)) out.set(x, y, [6, 8, 24], 230);
+  }
+  const c = out.toCanvas();
+  c.light = light.toCanvas();
+  return c;
+}

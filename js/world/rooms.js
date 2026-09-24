@@ -4,7 +4,7 @@
 // coordinates, camera, couple and effect hooks, so the story can drive any of
 // them the same way.
 import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm } from '../util.js';
-import { CX, tallExtra, genCaustics, genSand, genFormation } from '../art/env.js';
+import { CX, tallExtra, genCaustics, genSand, genFormation, genCupid } from '../art/env.js';
 import { Creature, Crab, School, addBuddy, TreeFriend } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
 import { renderJelly, JELLY_FRAMES } from '../art/creatures.js';
@@ -648,6 +648,14 @@ export class ReefRoom extends Room {
       }
       this.layers.push({ img: P.canvas(), x: X0, z: 0.32, sink: 6 });
     });
+    // the centrepiece: a stone Cupid on a pedestal, lit rose-pink from behind
+    step(() => {
+      const z = 0.36, self = this;
+      const cu = { img: genCupid(), x: CX + 8, z };
+      this.cupid = cu;
+      this.decor.push({ z, draw(ctx) { self.drawCupid(ctx, cu); } });
+      this.glows.push({ x: cu.x, y: this.floorY(z) - 130, z: z + 0.01, r: 96, col: '#ff7ab4', a: 0.3 });
+    });
     // anemones with clownfish families
     step(() => {
       this.anemones = [
@@ -706,6 +714,21 @@ export class ReefRoom extends Room {
       }
     }
     this.backdrop = b.toCanvas();
+  }
+
+  drawCupid(ctx, cu) {
+    const img = cu.img;
+    const [sx, sy] = this.toScreen(cu.x, this.floorY(cu.z) + 10, cu.z);
+    const x = Math.round(sx - img.width / 2), y = Math.round(sy - img.height);
+    ctx.drawImage(img, x, y);
+    // sunlight rippling over the stone
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.16 + 0.08 * Math.sin(this.t * 1.3) + (this.pulse || 0) * 0.08;
+    ctx.drawImage(img.light, x, y);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    // now and then a little heart-shaped bubble drifts up from the arrow tip
+    if (Math.random() < 0.012) this.fx.add({ kind: 'heart', x: cu.x - img.width / 2 + 9, y: this.floorY(cu.z) + 10 - img.height + 81, z: cu.z - 0.01, vx: -2, vy: -9, age: 0, life: 4, size: 0, ph: Math.random() * 6, wob: 6, wobF: 2, alpha: 0.8 });
   }
 
   drawAnemone(ctx, a) {

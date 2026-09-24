@@ -18,7 +18,7 @@ schools, crabs wave their claws, and the light breathes with the song.
 
 1. **Title** (before the music): "Very Cool Aquarium Game". Tap to dive in and start the song.
 2. **Jellyfish hall** (0:05): he wanders in on his own, pointing out jellies to nobody. Tap any creature to make it react.
-3. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with anemones, clownfish families and schools of fish. He runs into her here: a "!" with anime focus lines, she turns and waves, he jumps around cheering, then walks over and they shake hands ("hi!"), she laughs, and they watch the reef together. A little heart pops when he glances over at her.
+3. **Clownfish reef** (0:24): a tall arched reef window built from the great tank's own boulder formations, with a stone Cupid on a fluted pedestal as its centrepiece (bow drawn, heart-tipped arrow, lit rose-pink from behind), anemones, clownfish families and schools of fish. He runs into her here: a "!" with anime focus lines, she turns and waves, he jumps around cheering, then walks over and they shake hands ("hi!"), she laughs, and they watch the reef together. A little heart pops when he glances over at her.
 4. **The walk** (0:42): along the great Buddha tank as the camera follows, arriving at the middle of the window on the hook.
 5. **The hook** (0:58): the minnows pour into a heart on the chorus downbeat, the couple turn to face each other and take each other's hands, and an arrow points at them: *this could be us 👀*.
 6. **Message in a bottle** (1:31): a bottle sinks to the glass and a letter unrolls over the second verse.
