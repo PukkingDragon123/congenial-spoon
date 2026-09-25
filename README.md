@@ -74,15 +74,16 @@ browser.
 
 ### The record player
 
-After the photo quest a pixel-art record floats and spins in the top-left
-corner, with a pixelated copy of the album cover as its label and the name
-of what's playing (and a little equaliser) next to it.
-It has three records, *Always* (Daniel Caesar), *Blue Hair* (TV Girl) and
-*Octopus's Garden* (The Beatles), and each one starts locked. A message
-bottle floats in each tank (jelly hall, reef, big tank); tap it and it
-pops open in a burst of bubbles with a record inside. Tap the player to open
-the crate and pick a record; bubbles and notes drift up while it plays. Records play once the
-story is over, so they don't cut off the song that tells it.
+A pixel-art record floats and spins in the top-left corner, with a
+pixelated copy of the album cover as its label and the name of what's
+playing (and a little equaliser) next to it. It comes with *Always*
+(Daniel Caesar), which it shows playing during the story and keeps playing
+once the story's song ends. The other two records, *Blue Hair* (TV Girl) and
+*Octopus's Garden* (The Beatles), are in the bottle with the letter: when
+that bottle pops open they fly out of it and land on the player. Tap the
+record to open the crate and pick one; bubbles and notes drift up while it
+plays. Records you pick play once the story is over, so they don't cut off
+the song that tells it.
 
 ### New animals
 

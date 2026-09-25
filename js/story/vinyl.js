@@ -1,7 +1,7 @@
-// The record player in the top-left corner. Three records, each one locked
-// until you find a message bottle floating in one of the tanks and tap it
-// open. Tap the player to open the crate and pick a record; it spins, the
-// arm drops, bubbles and notes drift up while it plays. Only once the story
+// The record in the top-left corner. Always comes with it; the other two
+// records are in the bottle with the letter, and fly out to it when that
+// bottle is opened. Tap the record to open the crate and pick one; it
+// spins and bubbles and notes drift up while it plays. Only once the story
 // is over, so the song that tells it isn't cut off.
 import { TAU, clamp, lerp, R, makeCanvas } from '../util.js';
 import { drawText, textWidth } from '../font.js';
@@ -11,8 +11,6 @@ export const TRACKS = [
   { id: 'bluehair', title: 'Blue Hair', artist: 'TV Girl', src: 'audio/blue-hair.mp3', cover: 'img/cover-blue-hair.jpg', label: '#ff5ac8' },
   { id: 'octopus', title: "Octopus's Garden", artist: 'The Beatles', src: 'audio/octopuss-garden.mp3', cover: 'img/cover-octopuss-garden.jpg', label: '#5ac8ff' },
 ];
-// one bottle hides in each tank; each unlocks the next record
-const BOTTLE_AT = { JellyRoom: 0.62, ReefRoom: 0.28, Aquarium: 0.74 };
 const SAVE_KEY = 'vcag-vinyl-1';
 const DISC = 37; // the record, in pixels across
 
@@ -20,13 +18,14 @@ export class Vinyl {
   constructor(story) {
     this.story = story;
     this.unlocked = ['always'];
-    this.found = [];
+    this.flying = [];   // little records flying from the letter bottle to the player
+    this.note = null;   // a short note under the record
     this.playing = null;
     this.audio = null;
     this.open = false;
     this.spin = 0; this.speed = 0; this.arm = 0;
     this.parts = [];
-    this.pop = [];      // bottle-opening bubble bursts
+    this.pop = [];      // bubble bursts
     this.flash = 0;     // the player glows when a record is unlocked
     this.t = 0;
     this.covers = {};
@@ -36,7 +35,6 @@ export class Vinyl {
       const d = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
       this.unlocked = (d.unlocked || []).filter((id) => TRACKS.some((q) => q.id === id));
       if (!this.unlocked.includes('always')) this.unlocked.unshift('always'); // Always comes with the player
-      this.found = d.found || [];
     } catch (e) { /* no storage */ }
     for (const tr of TRACKS) {
       const img = new Image();
@@ -60,7 +58,7 @@ export class Vinyl {
       if (document.hidden) this.audio.pause(); else this.audio.play().catch(() => {});
     });
   }
-  save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ unlocked: this.unlocked, found: this.found })); } catch (e) { /* full */ } }
+  save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ unlocked: this.unlocked })); } catch (e) { /* full */ } }
 
   get W() { return this.story.W; }
   get H() { return this.story.H; }
@@ -70,23 +68,19 @@ export class Vinyl {
   crateRect() { const [x, y, , h] = this.rect(); return [x, y + h + 6, Math.min(150, this.W - 12), 14 + TRACKS.length * 20 + 12]; }
   rowRect(i) { const [x, y, w] = this.crateRect(); return [x + 3, y + 13 + i * 20, w - 6, 18]; }
 
-  // ---------------------------------------------------------------- bottles --
-  bottle() {
-    const s = this.story, room = s.stage && s.stage.constructor.name;
-    if (!this.visible() || !(room in BOTTLE_AT) || this.found.includes(room) || this.unlocked.length >= TRACKS.length) return null;
-    const x = Math.round(this.W * BOTTLE_AT[room]), y = Math.round(this.H * 0.38 + Math.sin(this.t * 1.3) * 4);
-    return { room, x, y };
-  }
-  openBottle(b) {
-    const snd = this.story.sound;
-    this.found.push(b.room);
-    const next = TRACKS.find((q) => !this.unlocked.includes(q.id));
-    if (next) this.unlocked.push(next.id);
+  // ------------------------------------------------------------- the letter --
+  // The letter's bottle pops open at (x, y): the records inside fly out and
+  // land on the player.
+  fromLetter(x, y) {
+    const [rx, ry, rw] = this.rect(), tx = rx + rw / 2, ty = ry + rw / 2;
+    TRACKS.forEach((tr, i) => {
+      if (this.unlocked.includes(tr.id)) return;
+      this.unlocked.push(tr.id);
+      this.flying.push({ id: tr.id, x0: x, y0: y, tx, ty, t: -i * 0.35 - 0.6 });
+    });
     this.save();
-    for (let i = 0; i < 26; i++) { const a = R() * TAU, sp = 20 + R() * 50; this.pop.push({ x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 20, r: 1 + (R() * 3 | 0), age: 0, life: 0.8 + R() * 0.8 }); }
-    snd.sfx('pop'); snd.sfx('sparkle');
-    this.flash = 1;
-    if (next) this.story.photo.say(`new record: ${next.title}!`);
+    for (let i = 0; i < 20; i++) { const a = R() * TAU, sp = 20 + R() * 40; this.pop.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 20, r: 1 + (R() * 3 | 0), age: 0, life: 0.8 + R() * 0.8 }); }
+    if (this.flying.length) this.note = { text: 'records from the letter!', t: 0 };
   }
 
   // -------------------------------------------------------------- playing --
@@ -115,15 +109,13 @@ export class Vinyl {
   hit(r, x, y) { return x >= r[0] - 1 && x <= r[0] + r[2] + 1 && y >= r[1] - 1 && y <= r[1] + r[3] + 1; }
   pointer(type, x, y) {
     if (type !== 'down') return false;
-    const b = this.bottle();
-    if (b && Math.hypot(x - b.x, y - b.y) < 14) { this.openBottle(b); return true; }
     if (!this.visible()) { this.open = false; return false; }
     if (this.hit(this.rect(), x, y)) { this.open = !this.open; this.story.sound.sfx('pop'); return true; }
     if (!this.open) return false;
     if (this.hit(this.crateRect(), x, y)) {
       TRACKS.forEach((tr, i) => {
         if (!this.hit(this.rowRect(i), x, y)) return;
-        if (!this.unlocked.includes(tr.id)) { this.story.photo.say('find a bottle in the tanks'); this.story.sound.sfx('escape'); return; }
+        if (!this.unlocked.includes(tr.id)) { this.story.photo.say('this one comes with the letter'); this.story.sound.sfx('escape'); return; }
         if (this.playing === tr.id) this.stop(); else this.play(tr.id);
       });
       return true;
@@ -153,15 +145,29 @@ export class Vinyl {
     this.parts = this.parts.filter((p) => p.age < p.life);
     for (const p of this.pop) { p.age += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - dt * 2; p.vy = p.vy * (1 - dt * 2) - 30 * dt; }
     this.pop = this.pop.filter((p) => p.age < p.life);
-    // a trail of bubbles off the bottle
-    const b = this.bottle();
-    if (b && R() < dt * 5) this.pop.push({ x: b.x + (R() - 0.5) * 4, y: b.y - 6, vx: (R() - 0.5) * 4, vy: -12 - R() * 8, r: 1, age: 0, life: 1.4 });
+    // the letter's records on their way over, with a little bubble trail
+    for (const f of this.flying) {
+      f.t += dt / 1.5;
+      if (f.t > 0 && f.t < 1 && R() < dt * 20) { const [fx, fy] = flyPos(f); this.pop.push({ x: fx, y: fy, vx: (R() - 0.5) * 6, vy: -8, r: 1, age: 0, life: 0.7 }); }
+      if (f.t >= 1 && !f.landed) { f.landed = true; this.flash = 1; s.sound.sfx('sparkle'); }
+    }
+    this.flying = this.flying.filter((f) => f.t < 1.1);
+    if (this.note && (this.note.t += dt) > 6 && !s.letter) this.note = null;
   }
 
   // ----------------------------------------------------------------- draw --
   draw(ctx) {
-    this.drawBottle(ctx);
     for (const p of this.pop) drawBubble(ctx, p.x, p.y, p.r, 1 - p.age / p.life);
+    for (const f of this.flying) {
+      if (f.t <= 0 || f.t >= 1) continue;
+      const [fx, fy] = flyPos(f), r = 8;
+      ctx.save(); ctx.translate(Math.round(fx), Math.round(fy)); ctx.rotate(f.t * 20);
+      ctx.fillStyle = '#16161c'; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+      ctx.fillStyle = (TRACKS.find((q) => q.id === f.id) || {}).label || '#ff5ac8'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#34343e'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, 5.5, 0, TAU); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(-5, -4, 3, 1); ctx.fillRect(-4, -5, 1, 1);
+      ctx.restore();
+    }
     if (!this.visible()) return;
     const [x, y, w, h] = this.rect(), t = this.t;
     // bubbles and notes rising off the record
@@ -201,8 +207,9 @@ export class Vinyl {
         }
         // a tiny bouncing equaliser
         for (let i = 0; i < 5; i++) { const hh = 1 + Math.round((Math.sin(t * (7 + i * 1.7) + i) + 1) * 2.5); ctx.fillStyle = ['#ff7a5a', '#ffd24a', '#5ad08a', '#5ac8ff', '#c08aff'][i]; ctx.fillRect(tx + i * 3, ty + 24 - hh, 2, hh); }
-      } else drawText(ctx, this.unlocked.length ? 'tap to play' : `records ${this.unlocked.length}/${TRACKS.length}`, tx, ty + 4, { color: '#fff4dc', outline: '#0a1030', alpha: 0.85 });
+      } else drawText(ctx, 'tap to play', tx, ty + 4, { color: '#fff4dc', outline: '#0a1030', alpha: 0.85 });
     }
+    if (this.note) drawText(ctx, this.note.text, x, y + h + 6 + bob, { color: '#fff4b0', outline: '#3a1a40', alpha: Math.min(1, this.note.t * 3) * (0.75 + Math.sin(t * 5) * 0.25) });
     if (this.open) this.drawCrate(ctx);
   }
 
@@ -244,7 +251,7 @@ export class Vinyl {
     ctx.fillStyle = '#e8f8fb'; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#9ee0ee'; ctx.fillRect(x, y, w, 11);
     drawText(ctx, 'records', x + 4, y + 2, { color: '#0e5a78' });
-    drawText(ctx, `bottles ${this.found.length}/${TRACKS.length}`, x + w - 4, y + 2, { align: 'right', color: '#1e6a84' });
+    drawText(ctx, `${this.unlocked.length}/${TRACKS.length}`, x + w - 4, y + 2, { align: 'right', color: '#1e6a84' });
     TRACKS.forEach((tr, i) => {
       const [rx, ry, rw, rh] = this.rowRect(i), have = this.unlocked.includes(tr.id), on = this.playing === tr.id;
       ctx.fillStyle = on ? '#ffd8c8' : '#ffffff'; ctx.fillRect(rx, ry, rw, rh);
@@ -255,20 +262,15 @@ export class Vinyl {
         drawText(ctx, fitW(tr.title, rw - 34), rx + 21, ry + 1, { color: '#1a2a4a' });
         drawText(ctx, fitW(tr.artist, rw - 34), rx + 21, ry + 9, { color: '#5a7a8a' });
         drawText(ctx, on ? '■' : '▶', rx + rw - 5, ry + 5, { align: 'right', color: on ? '#e0503a' : '#2aa8c8' });
-      } else drawText(ctx, 'find a bottle...', rx + 21, ry + 5, { color: '#4a7080' });
+      } else drawText(ctx, fitW('in the letter bottle...', rw - 24), rx + 21, ry + 5, { color: '#4a7080' });
     });
   }
+}
 
-  drawBottle(ctx) {
-    const b = this.bottle();
-    if (!b) return;
-    // a soft glow so you notice it
-    ctx.globalAlpha = 0.25 + Math.sin(this.t * 3) * 0.1;
-    ctx.fillStyle = '#bff4ff'; ctx.beginPath(); ctx.arc(b.x, b.y, 9, 0, TAU); ctx.fill();
-    ctx.globalAlpha = 1;
-    drawBottleIcon(ctx, b.x, b.y, Math.sin(this.t * 1.7) * 0.35);
-    if (Math.sin(this.t * 2.3) > 0.6) { ctx.fillStyle = '#ffffff'; ctx.fillRect(b.x + 4, b.y - 7, 1, 3); ctx.fillRect(b.x + 3, b.y - 6, 3, 1); }
-  }
+// where a flying record is: an arc from the bottle up to the player
+function flyPos(f) {
+  const k = f.t * f.t * (3 - 2 * f.t);
+  return [lerp(f.x0, f.tx, k), lerp(f.y0, f.ty, k) - Math.sin(f.t * Math.PI) * 40];
 }
 
 function fitW(s, w) { if (textWidth(s) <= w) return s; while (s.length > 1 && textWidth(s + '..') > w) s = s.slice(0, -1); return s + '..'; }

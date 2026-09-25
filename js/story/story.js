@@ -444,7 +444,7 @@ export class Story {
     await D.say('bean', 'gallery is your photo board. notebook has puzzle pieces and facts. camera is where you shop');
     await step('every pic gets you coins. rare ones pay more, first time pays triple, and centre it for a bonus', () => P.coinRect(), 'coins');
     await step('spend them in the camera tab. better lens, better film, faster developing', () => P.bookRect(), 'camera tab');
-    await step("that's your record player. find the bottles floating in each tank and tap them to get records", () => this.vinyl.rect(), 'records');
+    await step("that's your record player. it's playing Always. more records are on the way, trust", () => this.vinyl.rect(), 'records');
     this.focus = null;
     await D.say('bean', "and any postcard or your board has a save button. that one's a souvenir, keep it");
   }
@@ -851,6 +851,7 @@ export class Story {
     this.sound.sfx('pop');
     this.sound.sfx('ripple');
     burstSparks(this.fx, bx, by, 26, { speed: 70 });
+    this.vinyl.fromLetter(bx, by);   // the records in the bottle fly out to the player
     for (let i = 0; i < 30; i++) this.fx.add({ kind: 'bubble', x: bx + (R() - 0.5) * 10, y: by, vx: (R() - 0.5) * 60, vy: -30 - R() * 70, drag: 1.2, ay: -20, age: 0, life: 1.6 + R(), r: 1 + (R() * 4 | 0), wob: 12, wobF: 6, ph: R() * TAU });
     p.rip = [bx / this.W, by / this.H, 0, 1];
     this.tween(2.2, (k) => { p.rip[2] = k * 1.6; p.rip[3] = 1 - k; }, ease.outQuad).then(() => { p.rip[3] = 0; });
@@ -1682,6 +1683,12 @@ export class Story {
     for (let i = 0; i < tw; i++) { ctx.fillStyle = i % 8 < 4 ? '#6ad8ff' : '#ff8ab4'; ctx.fillRect(x0 + i, Math.round(uy + Math.sin(i * 0.25 + t * 3) * 1.5), 1, 1); }
     ctx.globalAlpha = 1;
     if (CONFIG.subtitle) drawText(ctx, CONFIG.subtitle, W / 2, uy + 6, { align: 'center', color: '#fff4b0', outline: '#0a1a44', alpha: T.a * 0.9 });
+    // headphones recommended, down near the bottom
+    { const txt = 'headphones recommended', tw2 = textWidth(txt), hy = Math.min(H - 14, Math.round(H * 0.66) + 18), hx = Math.round(W / 2 - (tw2 + 14) / 2);
+      ctx.globalAlpha = T.a * 0.85;
+      drawHeadphones(ctx, hx, hy - 1, '#9ad8ff', Math.sin(t * 3) > 0.7);
+      ctx.globalAlpha = 1;
+      drawText(ctx, txt, hx + 14, hy, { color: '#cfeaff', outline: '#0a1a44', alpha: T.a * 0.85 }); }
     ctx.globalAlpha = 1;
   }
 
@@ -1949,4 +1956,13 @@ export class Story {
       this.dialog.draw(ctx);
     }
   }
+}
+
+// little pixel headphones for the title screen; bop wiggles a music note
+function drawHeadphones(ctx, x, y, col, bop) {
+  const rows = ['..#####..', '.#.....#.', '#.......#', '#.......#', '##.....##', '##.....##', '##.....##'];
+  ctx.fillStyle = col;
+  rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] === '#') ctx.fillRect(x + i, y + j, 1, 1); });
+  ctx.fillStyle = '#ff8ab4'; ctx.fillRect(x, y + 4, 2, 3); ctx.fillRect(x + 7, y + 4, 2, 3);
+  if (bop) { ctx.fillStyle = '#fff4b0'; ctx.fillRect(x + 10, y - 2, 1, 4); ctx.fillRect(x + 9, y + 1, 1, 1); ctx.fillRect(x + 11, y - 2, 1, 1); }
 }

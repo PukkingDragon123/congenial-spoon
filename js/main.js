@@ -44,7 +44,7 @@ function resize() {
 // ------------------------------------------------------------------ loader --
 let loadP = 0;
 let loadT = 0;
-const LOAD_TIPS = ['tip: tap the pufferfish. he hates it', 'tip: rare animals pay more coins', 'tip: bottles hide records', 'tip: centre your shot for a bonus', 'tip: the notebook is a jigsaw book'];
+const LOAD_TIPS = ['tip: tap the pufferfish. he hates it', 'tip: rare animals pay more coins', 'tip: headphones on for the best bit', 'tip: centre your shot for a bonus', 'tip: the notebook is a jigsaw book'];
 const loadBubbles = [];
 function drawLoader(dt) {
   loadT += dt;
