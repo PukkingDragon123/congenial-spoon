@@ -97,9 +97,7 @@ yellow, purple and orange.
 After the photo quest the Mameshiba takes her next door to the clownfish
 reef and gives the tour there, one thing at a time with a glowing ring
 around what it's talking about: the diary (open it to carry on), coins,
-the camera tab, the record player and souvenirs. The reef now has a big
-round garden-bunny statue (olive patina, carved fur, ears laid back, a
-smug little face), a small stone frog, more anemones and clownfish, a
+the camera tab, the record player and souvenirs. The reef now has a small stone frog, more anemones and clownfish, a
 second coral garden along the front, starfish and urchins on the sand, and
 two bubble columns. The loading screen fills a little tank with water.
 

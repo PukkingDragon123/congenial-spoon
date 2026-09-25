@@ -4,7 +4,7 @@
 // coordinates, camera, couple and effect hooks, so the story can drive any of
 // them the same way.
 import { TAU, clamp, lerp, R, rng, makeCanvas, ramp, bayer, Buf, hex, mixRGB, hash2, fbm } from '../util.js';
-import { CX, tallExtra, genCaustics, genSand, genFormation, toStone, genBunny, genFrog } from '../art/env.js';
+import { CX, tallExtra, genCaustics, genSand, genFormation, toStone, genFrog } from '../art/env.js';
 import { sealCupidSprite } from '../art/divers.js';
 import { Creature, Crab, School, addBuddy, TreeFriend } from './creatures.js';
 import { Particles, bubbleSprite, glowSprite } from './fx.js';
@@ -727,12 +727,11 @@ export class ReefRoom extends Room {
       this.cupid = cu;
       this.decor.push({ z, draw(ctx) { self.drawCupid(ctx, cu); } });
     });
-    // statues: the big round garden bunny on the left, a little frog on the right
+    // statues: a little stone frog on the right
     step(() => {
       const self = this;
       const statue = (img, x, z, sink) => this.decor.push({ z, draw(ctx) { const [sx, sy] = self.toScreen(x, self.floorY(z) + sink, z); ctx.drawImage(img, Math.round(sx - img.width / 2), Math.round(sy - img.height)); } });
-      // the bunny sits back by the big left-hand rock, the frog out on the right
-      statue(genBunny(), CX - hw * 0.5, 0.47, 8);
+      // a little stone frog out on the right
       statue(genFrog(), CX + hw * 0.78, 0.22, 4);
     });
     // a second, nearer coral garden along the front edges, and starfish and
