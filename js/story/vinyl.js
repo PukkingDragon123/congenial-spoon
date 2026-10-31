@@ -5,6 +5,7 @@
 // is over, so the song that tells it isn't cut off.
 import { TAU, clamp, lerp, R, makeCanvas } from '../util.js';
 import { drawText, textWidth } from '../font.js';
+import { wake } from '../audio.js';
 
 export const TRACKS = [
   { id: 'always', title: 'Always', artist: 'Daniel Caesar', src: 'audio/always.mp3', cover: 'img/cover-always.jpg', label: '#3a4aff' },
@@ -13,6 +14,8 @@ export const TRACKS = [
 ];
 const SAVE_KEY = 'vcag-vinyl-1';
 const DISC = 37; // the record, in pixels across
+// a moment of silence, for waking the player inside a tap
+const SILENCE = 'data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
 
 export class Vinyl {
   constructor(story) {
@@ -29,6 +32,7 @@ export class Vinyl {
     this.flash = 0;     // the player glows when a record is unlocked
     this.t = 0;
     this.covers = {};
+    this.urls = {};
     this.pix = {};
     this.disc = makeCanvas(DISC, DISC);
     try {
@@ -84,21 +88,54 @@ export class Vinyl {
   }
 
   // -------------------------------------------------------------- playing --
-  play(id) {
+  // One player element, woken inside the first tap so it may play later on
+  // its own (phones are strict about that). Records are downloaded and played
+  // from a local copy, like the main song, so the host's streaming can't trip
+  // them up.
+  unlock() {
+    if (!this.el) {
+      const el = (this.el = new Audio());
+      el.preload = 'auto'; el.playsInline = true; el.setAttribute('playsinline', ''); el.loop = true;
+      el.src = SILENCE;
+      el.addEventListener('error', () => { if (this.playing && el.src !== SILENCE) { this.failed = this.playing; this.story.photo.say("couldn't load that record"); } });
+    }
+    wake(this.el, true);
+  }
+  async urlFor(tr) {
+    if (tr.id === 'always' && this.story.sound.el && this.story.sound.el.src) return this.story.sound.el.src;  // already downloaded
+    if (this.urls[tr.id]) return this.urls[tr.id];
+    try {
+      const res = await fetch(tr.src);
+      if (!res.ok) throw new Error('fetch ' + res.status);
+      this.urls[tr.id] = URL.createObjectURL(new Blob([await res.blob()], { type: 'audio/mpeg' }));
+    } catch (e) { this.urls[tr.id] = tr.src; }
+    return this.urls[tr.id];
+  }
+  async play(id) {
     const s = this.story, tr = TRACKS.find((q) => q.id === id);
     if (!tr) return;
     if (!s.roam) { s.photo.say('after the story ♪'); s.sound.sfx('escape'); return; }
     this.stop(true);
     const snd = s.sound;
     for (const el of [snd.el, snd.el2, snd.intro]) if (el) try { el.pause(); } catch (e) { /* fine */ }
-    const a = new Audio(tr.src);
-    a.loop = true; a.muted = !snd.enabled; a.volume = 0.9;
-    a.play().catch(() => {});
-    this.audio = a; this.playing = id;
+    if (!this.el) this.unlock();
+    const tok = (this.tok = (this.tok || 0) + 1);
+    this.playing = id; this.loading = true;
     snd.sfx('type');
+    const url = await this.urlFor(tr);
+    if (tok !== this.tok) return;   // something else was picked meanwhile
+    const a = this.el;
+    this.loading = false;
+    try { a.pause(); } catch (e) { /* fine */ }
+    a.src = url; a.loop = true; a.muted = !snd.enabled; a.volume = 0.9;
+    try { a.currentTime = 0; } catch (e) { /* fine */ }
+    this.audio = a;
+    a.play().catch(() => { this.waitTap = true; });   // refused: the next tap starts it
   }
+  retry() { if (this.waitTap && this.audio && this.playing) { this.waitTap = false; this.audio.play().catch(() => { this.waitTap = true; }); } }
   stop(quiet) {
     if (!quiet) this.stopped = true; // you turned it off: don't start it again by itself
+    this.tok = (this.tok || 0) + 1;
     if (this.audio) { try { this.audio.pause(); } catch (e) { /* fine */ } this.audio = null; }
     if (this.playing && !quiet) this.story.sound.sfx('type');
     this.playing = null;

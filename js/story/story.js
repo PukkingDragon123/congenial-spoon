@@ -47,6 +47,8 @@ export class Story {
     this.hint = null;
     this.letter = null;
     this.question = null;
+    this.propose = null;    // the proposal's spotlight, letterbox and orbiting lights
+    this.confetti = [];
     this.buttons = [];
     this.finale = null;
     this.trans = null;
@@ -934,17 +936,22 @@ export class Story {
       this.tween(2.4, (k) => { Z[2] = lerp(1, zmax, k); T[0] = lerp(cx, 0.5, k); T[1] = lerp(cy, 0.6, k); }, ease.inOutCubic);
       this.tween(0.9, (k) => { c.kneel = k; }, ease.inOutSine);
     }
+    // the world falls away: letterbox bars, a spotlight from the surface
+    // and little lights circling the two of them
+    this.propose = { a: 0, bars: 0, beat: 0, nextBeat: 1.4, t: 0 };
+    { const P = this.propose; this.tween(2.2, (k) => { P.a = k; P.bars = k; }, ease.inOutCubic); }
+    this.sound.sfx('whoosh');
     await this.atSong(142.8);
     this.clam = { t: 0, open: 0, a: 0 };
     { const K = this.clam; this.tween(0.6, (k) => { K.a = k; }, ease.outBack); this.sound.sfx('pop'); }
     await this.atSong(144.0);
-    { const K = this.clam; this.tween(0.9, (k) => { K.open = k; }, ease.outBack); this.sound.sfx('chime'); this.wait(0.5).then(() => { this.sound.sfx('sparkle'); K.shine = 1; }); }
+    { const K = this.clam; this.tween(0.9, (k) => { K.open = k; }, ease.outBack); this.sound.sfx('chime'); this.wait(0.5).then(() => { this.sound.sfx('sparkle'); K.shine = 1; const [hx, hy] = this.clamScreen(); burstHearts(this.fx, hx, hy - 6, 10, { speed: 50, spread: 1.6, ay: -14, life: 2.2, size: 0 }); burstSparks(this.fx, hx, hy - 6, 18, { speed: 60 }); }); }
     this.tween(0.6, (k) => { c.gasp = k; }, ease.outBack);
     this.anime.emote(this.headAt('girl'), '!', 1.2, '#ff5aa0');
     // the room goes quiet around them: a soft spotlight, hearts drifting up
     this.grade(2.5, { tint: [1.1, 0.95, 1.08], vig: 0.95, dim: 0.16, sat: 1.12 });
     this.heartRain = 0.5;
-    this.question = { a: 0 };
+    this.question = { a: 0, n: 0 };
     { const Q = this.question; this.tween(1, (k) => { Q.a = k; }, ease.outCubic); }
     await this.atSong(147.0);
     this.noCount = 0;
@@ -1136,6 +1143,8 @@ export class Story {
     p.rip = [bx / this.W, by / this.H, 0, 1];
     this.tween(2.4, (k) => { p.rip[2] = k * 1.8; p.rip[3] = 1 - k; }, ease.outQuad).then(() => { p.rip[3] = 0; });
     burstHearts(this.fx, bx, by, 26, { speed: 110, spread: TAU, ay: -30, life: 2.6 });
+    this.throwConfetti();
+    if (this.propose) { const P = this.propose; P.yes = 1; this.tween(1.6, (k) => { P.a = 1 - k; P.bars = 1 - k; }, ease.inOutCubic).then(() => { if (this.propose === P) this.propose = null; }); }
     burstSparks(this.fx, bx, by, 40, { speed: 120 });
     { const Z = this.post.p.zoom, T = this.post.p.zoomTo, z0 = Z[2], t0 = T.slice(); this.tween(2.2, (k) => { Z[2] = lerp(z0, 1, k); T[0] = lerp(t0[0], Z[0], k); T[1] = lerp(t0[1], Z[1], k); }, ease.inOutCubic); }
     { const c0 = this.aq.couple; this.tween(0.8, (k) => { c0.kneel = 1 - k; c0.gasp = 1 - k; }, ease.inOutSine); }
@@ -1460,6 +1469,15 @@ export class Story {
   update(dt) {
     this.dt = dt;
     this.t += dt;
+    if (this.propose) {
+      const P = this.propose;
+      P.t += dt; P.beat = Math.max(0, P.beat - dt * 3);
+      // a heartbeat while she decides
+      if (this.question && !P.yes && (P.nextBeat -= dt) <= 0) { P.nextBeat = 1.05; P.beat = 1; this.sound.sfx('heartbeat'); }
+    }
+    if (this.question && this.question.n < 999) this.question.n += dt * 16;
+    for (const f of this.confetti) { f.age += dt; f.vy += 60 * dt; f.vx *= 1 - dt * 1.2; f.vy = Math.min(f.vy, 38); f.x += (f.vx + Math.sin(f.age * 3 + f.ph) * 12) * dt; f.y += f.vy * dt; f.rot += f.vr * dt; }
+    this.confetti = this.confetti.filter((f) => f.age < f.life && f.y < this.H + 8);
     for (let i = this.timers.length - 1; i >= 0; i--) {
       const tm = this.timers[i];
       if ((tm.at != null && this.t >= tm.at) || (tm.cond && tm.cond())) { this.timers.splice(i, 1); tm.res(); }
@@ -1782,7 +1800,7 @@ export class Story {
     if (!K || K.a <= 0.01) return;
     K.t += this.dt || 0.016;
     const Z = this.post.p.zoom, z = Z[2];
-    const s = Math.max(1, Math.round(z * (this.W > 300 ? 1.25 : 0.9)));
+    const s = Math.max(1, Math.round(z * (this.W > 300 ? 1.3 : 1.0)));
     // where his hands are, then through the close-up
     let [sx, sy] = aq.toScreen(aq.coupleX - 3, aq.coupleY - 34 - (1 - (aq.couple.kneel || 0)) * 10, 0);
     const ZT = this.post.p.zoomTo;
@@ -1809,6 +1827,11 @@ export class Story {
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = `rgba(255,220,240,${0.12 * g})`;
       ctx.beginPath(); ctx.arc(0, -2, 4, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      // a beam of light rising out of the shell, and a slow star glint
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 26; i++) { ctx.fillStyle = `rgba(255,236,250,${0.16 * g * (1 - i / 26)})`; ctx.fillRect(-2 - Math.floor(i / 9), -8 - i, 5 + Math.floor(i / 9) * 2, 1); }
+      { const gl = 0.5 + Math.sin(K.t * 2.4) * 0.5, L2 = Math.round(3 + gl * 4); ctx.fillStyle = `rgba(255,255,255,${0.7 * g})`; ctx.fillRect(0, -7 - L2, 1, L2 * 2 + 1); ctx.fillRect(-L2, -7, L2 * 2 + 1, 1); }
       ctx.globalCompositeOperation = 'source-over';
       // the ring: a little gold band standing in the shell, a pearl on top
       ctx.fillStyle = '#8a5a10';
@@ -1844,15 +1867,113 @@ export class Story {
 
   drawQuestion(ctx) {
     const Q = this.question;
-    const str = fill(CONFIG.question);
+    const str = fill(CONFIG.question), cs = chars(str);
     const sc = textWidth(str) * 2 < this.W - 20 ? 2 : 1;
+    const barH = this.propose ? Math.round(this.H * 0.1 * this.propose.bars) : 0;
     const wt = this.aq.curves.top(0) - 4;
-    const y = Math.max(8, Math.round(wt / 2 - (7 * sc) / 2) - 2);
-    const t = this.t;
-    drawText(ctx, str, this.W / 2, y, {
-      scale: sc, align: 'center', color: '#ffffff', outline: '#08265e', shadow: '#3aa8ff', alpha: Q.a,
-      wave: (i) => Math.sin(t * 3 - i * 0.45) * 1.6,
+    const y = barH > 8 ? Math.max(3, Math.round(barH / 2 - (7 * sc) / 2)) : Math.max(8, Math.round(wt / 2 - (7 * sc) / 2) - 2);
+    const t = this.t, n = Math.min(cs.length, Math.floor(Q.n));
+    const full = textWidth(str) * sc, x0 = Math.round(this.W / 2 - full / 2);
+    // typed in one letter at a time, each one landing with a little glow
+    cs.slice(0, n).forEach((ch, i) => {
+      const cx = x0 + charX(str, i, sc), age = Q.n - i;
+      const pop = age < 1 ? Math.round((1 - age) * -3) : 0;
+      drawText(ctx, ch, cx, y + pop + Math.round(Math.sin(t * 3 - i * 0.45) * 1.6), { scale: sc, color: age < 1 ? '#fff4b0' : '#ffffff', outline: '#08265e', shadow: '#ff5aa0', alpha: Q.a });
     });
+    if (n < cs.length && Math.sin(t * 12) > 0) { ctx.fillStyle = '#fff4b0'; ctx.fillRect(x0 + charX(str, n, sc), y, sc, 7 * sc); }
+    // a little heart under it that beats with the heartbeat
+    if (n >= cs.length && this.propose) {
+      const b = this.propose.beat, k = 1 + b * 0.35, hy = y + 7 * sc + 6;
+      ctx.save(); ctx.translate(Math.round(this.W / 2), hy); ctx.scale(k, k);
+      ctx.fillStyle = '#ff4a82'; ctx.globalAlpha = Q.a;
+      for (const [r, x1, x2] of [[-3, -3, -1], [-3, 1, 3], [-2, -4, 4], [-1, -4, 4], [0, -3, 3], [1, -2, 2], [2, -1, 1]]) ctx.fillRect(x1, r, x2 - x1 + 1, 1);
+      ctx.fillStyle = '#ffb0c8'; ctx.fillRect(-3, -2, 1, 1);
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+  }
+
+  // world screen point -> where it is on screen through the close-up zoom
+  zoomed(sx, sy) {
+    const Z = this.post.p.zoom, T = this.post.p.zoomTo, z = Z[2];
+    return [T[0] * this.W + (sx - Z[0] * this.W) * z, T[1] * this.H + (sy - Z[1] * this.H) * z];
+  }
+  clamScreen() {
+    const aq = this.aq;
+    const [sx, sy] = aq.toScreen(aq.coupleX - 3, aq.coupleY - 34 - (1 - (aq.couple.kneel || 0)) * 10, 0);
+    return this.zoomed(sx, sy);
+  }
+
+  // The proposal: everything else dims into a soft spotlight falling from the
+  // surface onto the two of them, with little lights circling slowly round.
+  drawPropose(ctx) {
+    const P = this.propose, aq = this.aq, W = this.W, H = this.H, a = P.a, t = this.t;
+    if (a <= 0.01) return;
+    const z = this.post.p.zoom[2];
+    const [cx, cy] = this.zoomed(...aq.toScreen(aq.coupleX, aq.coupleY - 34, 0));
+    const r0 = (34 + P.beat * 3) * z, r1 = r0 * 2.6;
+    // darkness all round, a hole of light where they are
+    const g = ctx.createRadialGradient(cx, cy, r0 * 0.6, cx, cy, r1);
+    g.addColorStop(0, 'rgba(4,8,30,0)'); g.addColorStop(0.45, `rgba(4,8,30,${0.35 * a})`); g.addColorStop(1, `rgba(2,4,18,${0.78 * a})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // the beam coming down from the surface
+    ctx.globalCompositeOperation = 'lighter';
+    const bg = ctx.createLinearGradient(0, 0, 0, cy + r0);
+    bg.addColorStop(0, `rgba(180,220,255,${0.0})`); bg.addColorStop(0.5, `rgba(180,220,255,${0.08 * a})`); bg.addColorStop(1, `rgba(255,220,240,${0.16 * a})`);
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.moveTo(cx - r0 * 0.35, 0); ctx.lineTo(cx + r0 * 0.35, 0); ctx.lineTo(cx + r0 * 1.15, cy + r0 * 0.9); ctx.lineTo(cx - r0 * 1.15, cy + r0 * 0.9); ctx.fill();
+    // dust in the beam
+    for (let i = 0; i < 18; i++) {
+      const u = ((i * 0.618 + t * 0.03) % 1), yy = u * (cy + r0 * 0.8), w = lerp(r0 * 0.35, r0 * 1.1, yy / (cy + r0));
+      const xx = cx + Math.sin(i * 12.9 + t * 0.4) * w * 0.8;
+      ctx.fillStyle = `rgba(255,250,230,${(0.3 + 0.3 * Math.sin(t * 2 + i)) * a})`; ctx.fillRect(Math.round(xx), Math.round(yy), 1, 1);
+    }
+    // little lights circling them, bigger and brighter as they pass in front
+    for (let i = 0; i < 14; i++) {
+      const an = t * 0.5 + (i / 14) * TAU, front = (Math.sin(an) + 1) / 2;
+      const ox = cx + Math.cos(an) * r0 * 1.25, oy = cy + 4 * z + Math.sin(an) * r0 * 0.32 - Math.sin(t * 1.3 + i) * 3;
+      const s2 = front > 0.5 ? 2 : 1;
+      ctx.fillStyle = `rgba(${i % 3 ? '255,200,230' : '200,240,255'},${(0.35 + 0.6 * front) * a})`;
+      ctx.fillRect(Math.round(ox), Math.round(oy), s2, s2);
+      if (front > 0.8) { ctx.fillStyle = `rgba(255,255,255,${0.5 * a})`; ctx.fillRect(Math.round(ox) - 1, Math.round(oy), 1, 1); ctx.fillRect(Math.round(ox) + s2, Math.round(oy), 1, 1); }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // cinema bars across the top and bottom
+  drawBars(ctx) {
+    const h = Math.round(this.H * 0.1 * this.propose.bars);
+    if (h < 1) return;
+    ctx.fillStyle = '#02030a';
+    ctx.fillRect(0, 0, this.W, h); ctx.fillRect(0, this.H - h, this.W, h);
+  }
+
+  // a soft pulsing glow behind the yes button
+  drawYesGlow(ctx) {
+    const yes = this.buttons.find((b) => b.id === 'yes');
+    if (!yes || yes.alpha < 0.05) return;
+    const r = yes.w * 0.75 + Math.sin(this.t * 4) * 2 + (this.propose ? this.propose.beat * 3 : 0);
+    const g = ctx.createRadialGradient(yes.x, yes.y, 1, yes.x, yes.y, r);
+    g.addColorStop(0, `rgba(255,120,170,${0.45 * yes.alpha})`); g.addColorStop(1, 'rgba(255,120,170,0)');
+    ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.fillRect(yes.x - r, yes.y - r, r * 2, r * 2); ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // confetti everywhere when she says yes: from the top and from two
+  // little cannons in the bottom corners
+  throwConfetti() {
+    const cols = ['#ff5a8a', '#ffd24a', '#5ad0ff', '#8affc0', '#c08aff', '#ffffff', '#ff8a3a'];
+    const add = (x, y, vx, vy) => this.confetti.push({ x, y, vx, vy, rot: R() * TAU, vr: (R() - 0.5) * 14, col: cols[(R() * cols.length) | 0], w: 2 + ((R() * 2) | 0), h: 1 + ((R() * 2) | 0), age: 0, life: 6 + R() * 3, ph: R() * TAU, heart: R() < 0.12 });
+    for (let i = 0; i < 90; i++) add(R() * this.W, -10 - R() * 60, (R() - 0.5) * 20, R() * 20);
+    for (const sd of [-1, 1]) for (let i = 0; i < 45; i++) { const a = -Math.PI / 2 + sd * (0.25 + R() * 0.45); const sp = 120 + R() * 110; add(sd < 0 ? 4 : this.W - 4, this.H - 6, Math.cos(a) * sp, Math.sin(a) * sp); }
+  }
+  drawConfetti(ctx) {
+    for (const f of this.confetti) {
+      ctx.globalAlpha = Math.min(1, (f.life - f.age) / 1.2);
+      ctx.fillStyle = f.col;
+      if (f.heart) { const x = Math.round(f.x), y = Math.round(f.y); ctx.fillRect(x - 1, y, 3, 1); ctx.fillRect(x, y + 1, 1, 1); ctx.fillRect(x - 1, y - 1, 1, 1); ctx.fillRect(x + 1, y - 1, 1, 1); continue; }
+      const c = Math.abs(Math.cos(f.rot)), w = Math.max(1, Math.round(f.w * c));
+      ctx.fillRect(Math.round(f.x - w / 2), Math.round(f.y), w, f.h);
+    }
+    ctx.globalAlpha = 1;
   }
 
   // The names, spelled in bubbles in the middle of the screen, with a little
@@ -1932,11 +2053,15 @@ export class Story {
     this.drawThisCouldBeUs(ctx);
     this.drawCredit(ctx);
     if (this.letter) this.drawLetter(ctx);
-    if (this.question) this.drawQuestion(ctx);
+    if (this.propose) this.drawPropose(ctx);
     this.drawClam(ctx);
+    if (this.propose) this.drawBars(ctx);
+    if (this.question) this.drawQuestion(ctx);
+    if (this.buttons.length && this.question) this.drawYesGlow(ctx);
     for (const b of this.buttons) drawBubbleButton(ctx, b, this.t);
     if (this.hint) this.drawHint(ctx);
     this.fx.draw(ctx);
+    if (this.confetti.length) this.drawConfetti(ctx);
     this.anime.draw(ctx, this.W, this.H);
     if (this.trans) this.trans.draw(ctx);
     if (this.replay) {

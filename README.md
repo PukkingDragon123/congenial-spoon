@@ -72,6 +72,24 @@ and every species. The legendaries are the whale shark, the Mameshiba, the
 tree friend, and the two of them together. Everything is kept in the
 browser.
 
+### The proposal
+
+When he kneels, the moment goes cinematic: letterbox bars slide in, the
+rest of the tank dims, a spotlight falls from the surface onto the two of
+them with dust drifting in it, and little lights circle slowly round them.
+The clam opens with a puff of hearts and sparkles and a beam of light rises
+from the pearl ring. The question types itself in, one glowing letter at a
+time, over a heartbeat, with a little heart under it that beats along. The
+yes button glows. On yes the bars and spotlight lift and confetti pours
+down from the top and shoots up from the corners.
+
+### Loading screen
+
+While it loads, a little tank fills up with water (that's the progress), and
+a pufferfish potters about in it. Poke him and he puffs into a spiky ball
+and bounces off the glass, the gravel and the surface, cross, with an anger
+mark and steam. It counts your pokes.
+
 ### The record player
 
 A pixel-art record floats and spins in the top-left corner, with a

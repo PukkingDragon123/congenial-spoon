@@ -186,9 +186,6 @@ export class PhotoMode {
     const ir = (r - 4) * (1 - press * 0.18);
     ctx.fillStyle = busy ? '#8a8a96' : '#ff4a6a'; ctx.beginPath(); ctx.arc(cx, cy, ir, 0, TAU); ctx.fill();
     ctx.fillStyle = busy ? '#b0b0ba' : '#ff9ab0'; ctx.beginPath(); ctx.arc(cx - ir * 0.3, cy - ir * 0.3, ir * 0.35, 0, TAU); ctx.fill();
-    // a slow pulsing ring so you notice it
-    ctx.strokeStyle = '#fff4b0'; ctx.lineWidth = 1; ctx.globalAlpha = busy ? 0 : 0.35 + Math.sin(this.t * 4) * 0.25;
-    ctx.beginPath(); ctx.arc(cx, cy, r + 3 + Math.sin(this.t * 4), 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
   }
   bookRect() { const [cx] = this.camRect(); return [cx - 19, this.H - 17, 15, 14]; }
   model() { return MODELS[this.cam.model] || MODELS.instant; }
@@ -589,10 +586,8 @@ export class PhotoMode {
         ctx.fillRect(x + sx + ox, y + sy + oy, 2, 2);
       }
     }
-    // centre reticle: a turning dotted ring with a tiny heart in it
+    // centre mark: just a tiny heart
     const cx = Math.round(fx + fw / 2), cy = Math.round(fy + fh / 2);
-    ctx.fillStyle = '#fff4dc';
-    for (let i = 0; i < 24; i += 2) { const a = (i / 24) * TAU + this.t * 0.4; ctx.fillRect(Math.round(cx + Math.cos(a) * 9), Math.round(cy + Math.sin(a) * 9), 1, 1); }
     ctx.fillStyle = '#ff8ab0';
     for (const [hx, hy] of [[-1, -1], [1, -1], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [-1, 1], [0, 1], [1, 1], [0, 2]]) ctx.fillRect(cx + hx, cy + hy - 1, 1, 1);
     // focus lock on the best subject: a pink box that snaps in around it
@@ -630,7 +625,7 @@ export class PhotoMode {
   }
 
   // The camera flash: a hard white pop over everything, then a starburst of
-  // light rays and a ring from the lens that spread and fade.
+  // light rays from the lens that spread and fade.
   drawFlash(ctx) {
     const W = this.W, H = this.H, t = this.flashT;
     const [fx, fy, fw, fh] = this.frameRect(), ox = fx + fw / 2, oy = fy + fh / 2;
@@ -649,9 +644,7 @@ export class PhotoMode {
       const d0 = fw * 0.35 + k * len * 0.6, d1 = d0 + len * 0.35 * fade + 4;
       for (let d = d0; d < d1; d += 2) ctx.fillRect(Math.round(ox + Math.cos(a) * d), Math.round(oy + Math.sin(a) * d), i % 2 ? 1 : 2, i % 2 ? 1 : 2);
     }
-    // ring
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.globalAlpha = fade * 0.7;
-    ctx.beginPath(); ctx.arc(ox, oy, fw * 0.3 + k * Math.max(W, H) * 0.5, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = fade * 0.7;
     // sparkles
     for (let i = 0; i < 8; i++) {
       const a = i * 2.4, d = fw * 0.4 + k * (60 + i * 14), x = Math.round(ox + Math.cos(a) * d), y = Math.round(oy + Math.sin(a) * d * 0.7);

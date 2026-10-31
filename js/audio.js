@@ -6,6 +6,18 @@ import { ENERGY, ENERGY_HZ } from './energy.js';
 
 const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
+// Inside a tap: play an element and pause it straight away. Phones then
+// let it play (with sound) later, outside a tap.
+export function wake(el, enabled = true) {
+  if (!el || !el.paused) return;
+  try {
+    el.muted = !enabled;
+    const pr = el.play();
+    el.pause();
+    if (pr && pr.catch) pr.catch(() => {});
+  } catch (e) { /* fine */ }
+}
+
 
 export class SoundEngine {
   constructor(enabled = true, src = 'audio/always.mp3') {
@@ -80,9 +92,7 @@ export class SoundEngine {
       // play a silent moment inside the tap so the song may start later
       // without one
       this.primed = true;
-      this.el.muted = true;
-      const pr = this.el.play();
-      if (pr && pr.then) pr.then(() => { if (!this.playing) { this.el.pause(); this.el.currentTime = 0; } }).catch(() => {});
+      wake(this.el, this.enabled);
     }
   }
 
@@ -114,7 +124,7 @@ export class SoundEngine {
       const pr = it.play();
       if (pr && pr.catch) pr.catch((e) => { console.warn('play blocked:', e.message); this.blocked = true; });
       this.source = it;
-      if (this.el) { const el = this.el; el.muted = true; const p2 = el.play(); if (p2 && p2.then) p2.then(() => { if (this.source !== el) el.pause(); }).catch(() => {}); }
+      if (this.el) wake(this.el, this.enabled);
       return;
     }
     if (this.el) {
@@ -126,8 +136,7 @@ export class SoundEngine {
       if (pr && pr.catch) pr.catch((e) => { console.warn('play blocked:', e.message); this.blocked = true; });
       this.source = el;
       // wake the twin inside the same tap, silently
-      const tw = this.el2;
-      if (tw) { tw.muted = true; const p2 = tw.play(); if (p2 && p2.then) p2.then(() => { if (this.source !== tw) tw.pause(); }).catch(() => {}); }
+      if (this.el2) wake(this.el2, this.enabled);
     }
   }
 
@@ -140,19 +149,27 @@ export class SoundEngine {
     if (el) {
       try { el.currentTime = at; } catch (e) { /* ignore */ }
       el.muted = !this.enabled; el.volume = 1;
-      el.play().catch(() => { this.blocked = true; });
       this.source = el;
-    }
-    if (it && !it.paused) this.fading = it;
+      const pr = el.play();
+      const ok = () => { if (it && !it.paused) this.fading = it; };
+      if (pr && pr.then) pr.then(ok).catch(() => { this.blocked = true; this.source = it || el; }); // keep the instrumental going until a tap lets the song start
+      else ok();
+    } else if (it && !it.paused) this.fading = it;
   }
 
   // A later tap retries if the browser refused the first play().
   retry() {
     if (this.blocked && this.el) {
       this.blocked = false;
-      const t = this.free;
-      try { this.el.currentTime = t; } catch (e) { /* ignore */ }
-      this.el.play().catch(() => { this.blocked = true; });
+      const el = this.el, it = this.intro;
+      if (it && this.source === it && !this.useIntro) {
+        // the song was refused when the vocals came in: start it now, from
+        // the top, and let the instrumental go
+        try { el.currentTime = 0; } catch (e) { /* ignore */ }
+        this.free = 0;
+      } else { try { el.currentTime = this.free; } catch (e) { /* ignore */ } }
+      el.muted = !this.enabled;
+      el.play().then(() => { this.source = el; if (it && !it.paused && !this.useIntro) this.fading = it; }).catch(() => { this.blocked = true; });
     }
   }
 
@@ -263,6 +280,15 @@ export class SoundEngine {
     o.start(t); o.stop(t + 0.12);
   }
 
+  // one low soft thump of a heartbeat
+  thump(t, vol) {
+    const ctx = this.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    o.connect(g).connect(this.sfxBus); o.start(t); o.stop(t + 0.25);
+  }
+
   noise(t, dur, f0, f1, vol, q = 1.2) {
     const ctx = this.ctx;
     const len = Math.ceil(ctx.sampleRate * dur);
@@ -340,6 +366,9 @@ export class SoundEngine {
         break;
       case 'blub':
         for (let i = 0; i < 3; i++) this.bubble(t + i * (0.08 + Math.random() * 0.1), 0.35);
+        break;
+      case 'heartbeat':
+        this.thump(t, 0.55); this.thump(t + 0.2, 0.38);
         break;
       case 'talk':
         this.note(88 + ((Math.random() * 7) | 0), t, 0.07, 0.12);
